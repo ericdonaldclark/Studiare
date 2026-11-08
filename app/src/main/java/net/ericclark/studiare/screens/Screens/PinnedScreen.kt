@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -26,8 +27,11 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.draw.clip
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DeleteForever
+import androidx.compose.material.icons.filled.SelectAll
 import androidx.compose.material.icons.filled.Sort
+import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -139,10 +143,6 @@ fun PinnedScreen(navController: NavController, viewModel: FlashcardViewModel) {
     }
 
     var showSortDialog by remember { mutableStateOf(false) }
-    // No entry point calls this anymore (the overflow menu was removed along with its "Unpin
-    // all" item — user-requested, "we will add that back in later"), but the dialog itself is
-    // kept intact/untouched so it's ready to wire back up.
-    var showUnpinAllDialog by remember { mutableStateOf(false) }
     var editingCard by remember { mutableStateOf<Card?>(null) }
     var showRestartDialog by remember { mutableStateOf<ActiveSession?>(null) }
     var showDeleteSessionDialog by remember { mutableStateOf<ActiveSession?>(null) }
@@ -168,6 +168,16 @@ fun PinnedScreen(navController: NavController, viewModel: FlashcardViewModel) {
     val snackbarHostState = remember { SnackbarHostState() }
     val coroutineScope = rememberCoroutineScope()
     val context = androidx.compose.ui.platform.LocalContext.current
+
+    // Multi-select (see the roadmap plan file's "App-wide multi-select" section). Mixed-type
+    // selection across every carousel is deliberately allowed — Pinned's whole point is a
+    // cross-cutting view, and Unpin applies identically to every type here. This also resolves
+    // the old "Unpin All" promise the overflow-menu removal left orphaned (see history): Select
+    // All + Unpin is a strictly better replacement (selective, not all-or-nothing), so the
+    // now-dead showUnpinAllDialog state/dialog that was kept "ready for whatever this turns out
+    // to be" was removed rather than left orphaned now that it's clear what that is.
+    val selection = net.ericclark.studiare.screens.UI_Components.rememberSelectionController()
+    androidx.activity.compose.BackHandler(enabled = selection.inSelectionMode) { selection.exit() }
 
     fun showUndoSnackbar(onUndo: () -> Unit) {
         coroutineScope.launch {
@@ -196,6 +206,43 @@ fun PinnedScreen(navController: NavController, viewModel: FlashcardViewModel) {
         viewModel.setPresetDeleted(preset, true)
         showUndoSnackbar { viewModel.setPresetDeleted(preset, false) }
     }
+    // Bulk version of the four functions above — one undo snackbar for the whole selection
+    // instead of each selected item's own unpin triggering (and immediately dismissing) its own.
+    fun unpinSelectedWithUndo() {
+        val ids = selection.selected
+        val undos = mutableListOf<() -> Unit>()
+        pinnedDeckSummaries.filter { "deck-${it.deck.id}" in ids }.forEach { summary ->
+            viewModel.setDeckPinned(summary.deck, false)
+            undos.add { viewModel.setDeckPinned(summary.deck, true) }
+        }
+        sortedPinnedCards.filter { "card-${it.id}" in ids }.forEach { card ->
+            viewModel.setCardPinned(card, false)
+            undos.add { viewModel.setCardPinned(card, true) }
+        }
+        pinnedSessions.filter { "session-${it.id}" in ids }.forEach { session ->
+            viewModel.unpinSession(session)
+            undos.add { viewModel.pinSession(session, session.name ?: "") }
+        }
+        presets.filter { "preset-${it.id}" in ids }.forEach { preset ->
+            viewModel.setPresetDeleted(preset, true)
+            undos.add { viewModel.setPresetDeleted(preset, false) }
+        }
+        selection.exit()
+        if (undos.isNotEmpty()) showUndoSnackbar { undos.forEach { it() } }
+    }
+
+    // Every selectable key currently on screen, across all five sections — Select All's scope.
+    // Keyed the same way each section's own LazyColumn item key already is ("deck-$id" doubles
+    // for both decks and sets, same as PinnedCarouselSection's own key lambdas below).
+    val allVisiblePinnedKeys = remember(presets, pinnedSessions, pinnedDecksOnly, pinnedSetsOnly, sortedPinnedCards) {
+        buildSet {
+            presets.forEach { add("preset-${it.id}") }
+            pinnedSessions.forEach { add("session-${it.id}") }
+            pinnedDecksOnly.forEach { add("deck-${it.deck.id}") }
+            pinnedSetsOnly.forEach { add("deck-${it.deck.id}") }
+            sortedPinnedCards.forEach { add("card-${it.id}") }
+        }
+    }
 
     val hasAnyPinnedContent = pinnedDeckSummaries.isNotEmpty() || sortedPinnedCards.isNotEmpty() || pinnedSessions.isNotEmpty() || presets.isNotEmpty()
 
@@ -212,7 +259,56 @@ fun PinnedScreen(navController: NavController, viewModel: FlashcardViewModel) {
                 }
             )
         },
-        snackbarHost = { SnackbarHost(snackbarHostState) }
+        snackbarHost = { SnackbarHost(snackbarHostState) },
+        floatingActionButton = {
+            if (selection.inSelectionMode) {
+                val selectAll = net.ericclark.studiare.screens.UI_Components.SelectionAction(
+                    id = "selectAll",
+                    icon = androidx.compose.material.icons.Icons.Default.SelectAll,
+                    label = getText(context, R.string.select_all),
+                    onClick = { selection.toggleAllWithin(allVisiblePinnedKeys) }
+                )
+                val cardActions = remember(selection.selected, allVisiblePinnedKeys) {
+                    if (selection.selected.isEmpty()) {
+                        listOf(selectAll)
+                    } else {
+                        listOf(
+                            net.ericclark.studiare.screens.UI_Components.SelectionAction(
+                                id = "unpin",
+                                icon = androidx.compose.material.icons.Icons.Outlined.PushPin,
+                                label = getText(context, R.string.unpin),
+                                onClick = { unpinSelectedWithUndo() }
+                            ),
+                            selectAll
+                        )
+                    }
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.Top,
+                    horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)
+                ) {
+                    net.ericclark.studiare.screens.UI_Components.SelectionActionBar(
+                        actions = cardActions,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Box {
+                        androidx.compose.material3.FloatingActionButton(
+                            onClick = { selection.exit() },
+                            containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onTertiaryContainer
+                        ) {
+                            Icon(Icons.Default.Close, contentDescription = getText(R.string.cancel))
+                        }
+                        net.ericclark.studiare.screens.UI_Components.SelectionCountTile(
+                            selectedCount = selection.selected.size,
+                            totalCount = allVisiblePinnedKeys.size,
+                            modifier = Modifier.align(Alignment.TopCenter).offset(y = (-32).dp)
+                        )
+                    }
+                }
+            }
+        }
     ) { padding ->
         if (!hasAnyPinnedContent) {
             Box(modifier = Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
@@ -289,7 +385,11 @@ fun PinnedScreen(navController: NavController, viewModel: FlashcardViewModel) {
                                         }
                                     },
                                     onChangeDeckSave = { newDeckId -> viewModel.updatePresetDeck(preset, newDeckId) },
-                                    onChangeDeckPinAsNew = { newDeckId, name -> viewModel.pinPresetWithNewDeck(preset, newDeckId, name) }
+                                    onChangeDeckPinAsNew = { newDeckId, name -> viewModel.pinPresetWithNewDeck(preset, newDeckId, name) },
+                                    selected = selection.isSelected("preset-${preset.id}"),
+                                    selectionMode = selection.inSelectionMode,
+                                    onToggleSelect = { selection.toggle("preset-${preset.id}") },
+                                    onLongClick = { selection.enterWith("preset-${preset.id}") }
                                 )
                             }
                         }
@@ -331,7 +431,11 @@ fun PinnedScreen(navController: NavController, viewModel: FlashcardViewModel) {
                                     onRename = { name -> viewModel.renameSession(session, name) },
                                     showModeName = true,
                                     showCategoryNameIcon = true,
-                                    showDeckNameInTitle = true
+                                    showDeckNameInTitle = true,
+                                    selected = selection.isSelected("session-${session.id}"),
+                                    selectionMode = selection.inSelectionMode,
+                                    onToggleSelect = { selection.toggle("session-${session.id}") },
+                                    onLongClick = { selection.enterWith("session-${session.id}") }
                                 )
                             }
                         }
@@ -357,7 +461,11 @@ fun PinnedScreen(navController: NavController, viewModel: FlashcardViewModel) {
                                     activeSession = sessionActions.latestFor(summary.deck.id),
                                     onResumeSession = { sessionActions.resume(it) },
                                     onRestartSession = { sessionActions.restart(it) },
-                                    onCreateSession = { sessionActions.startNewSession(summary.deck.id) }
+                                    onCreateSession = { sessionActions.startNewSession(summary.deck.id) },
+                                    selected = selection.isSelected("deck-${summary.deck.id}"),
+                                    selectionMode = selection.inSelectionMode,
+                                    onToggleSelect = { selection.toggle("deck-${summary.deck.id}") },
+                                    onLongClick = { selection.enterWith("deck-${summary.deck.id}") }
                                 )
                             }
                         }
@@ -401,7 +509,11 @@ fun PinnedScreen(navController: NavController, viewModel: FlashcardViewModel) {
                                     onRestartSession = { sessionActions.restart(it) },
                                     onCreateSession = { sessionActions.startNewSession(summary.deck.id) },
                                     displayName = setDisplayName,
-                                    fullPathTooltip = setFullPathTooltip
+                                    fullPathTooltip = setFullPathTooltip,
+                                    selected = selection.isSelected("deck-${summary.deck.id}"),
+                                    selectionMode = selection.inSelectionMode,
+                                    onToggleSelect = { selection.toggle("deck-${summary.deck.id}") },
+                                    onLongClick = { selection.enterWith("deck-${summary.deck.id}") }
                                 )
                             }
                         }
@@ -430,7 +542,9 @@ fun PinnedScreen(navController: NavController, viewModel: FlashcardViewModel) {
                                 totalCards = 1,
                                 allTags = allTagDefinitions,
                                 toEditorState = { it.toEditorState() },
-                                onClick = { editingCard = card }
+                                onClick = { if (selection.inSelectionMode) selection.toggle("card-${card.id}") else editingCard = card },
+                                selected = selection.isSelected("card-${card.id}"),
+                                onLongClick = { selection.enterWith("card-${card.id}") }
                             )
                         }
                     }
@@ -458,20 +572,6 @@ fun PinnedScreen(navController: NavController, viewModel: FlashcardViewModel) {
         )
     }
 
-    if (showUnpinAllDialog) {
-        ConfirmationDialog(
-            title = getText(R.string.unpin_all_title),
-            text = getText(R.string.unpin_all_desc),
-            onConfirm = {
-                pinnedDeckSummaries.forEach { viewModel.setDeckPinned(it.deck, false) }
-                sortedPinnedCards.forEach { viewModel.setCardPinned(it, false) }
-                pinnedSessions.forEach { viewModel.unpinSession(it) }
-                presets.forEach { viewModel.setPresetDeleted(it, true) }
-                showUnpinAllDialog = false
-            },
-            onDismiss = { showUnpinAllDialog = false }
-        )
-    }
 
     showRestartDialog?.let { session ->
         ConfirmationDialog(

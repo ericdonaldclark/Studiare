@@ -5,6 +5,7 @@ import net.ericclark.studiare.R
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.rememberScrollState
@@ -74,7 +75,8 @@ internal fun SessionTileCarousel(
     onDelete: (ActiveSession) -> Unit,
     onPin: (ActiveSession, String) -> Unit,
     onUnpin: (ActiveSession) -> Unit,
-    onRename: (ActiveSession, String?) -> Unit
+    onRename: (ActiveSession, String?) -> Unit,
+    selection: SelectionController
 ) {
     val dimensions = LocalStudiareDimensions.current
     Column(modifier = Modifier.fillMaxWidth().padding(bottom = dimensions.paddingSmall)) {
@@ -105,7 +107,11 @@ internal fun SessionTileCarousel(
                         onRename = { newName -> onRename(session, newName) },
                         showModeName = showModeName,
                         showCategoryNameIcon = showCategoryNameIcon,
-                        enableSharedTransition = true
+                        enableSharedTransition = true,
+                        selected = selection.isSelected("session-${session.id}"),
+                        selectionMode = selection.inSelectionMode,
+                        onToggleSelect = { selection.toggle("session-${session.id}") },
+                        onLongClick = { selection.enterWith("session-${session.id}") }
                     )
                 }
             }
@@ -167,7 +173,8 @@ internal fun SessionTileGrid(
     onDelete: (ActiveSession) -> Unit,
     onPin: (ActiveSession, String) -> Unit,
     onUnpin: (ActiveSession) -> Unit,
-    onRename: (ActiveSession, String?) -> Unit
+    onRename: (ActiveSession, String?) -> Unit,
+    selection: SelectionController
 ) {
     val dimensions = LocalStudiareDimensions.current
     FlowRow(
@@ -194,7 +201,11 @@ internal fun SessionTileGrid(
                     onRename = { newName -> onRename(session, newName) },
                     showModeName = showModeName,
                     showCategoryNameIcon = showCategoryNameIcon,
-                    enableSharedTransition = true
+                    enableSharedTransition = true,
+                    selected = selection.isSelected("session-${session.id}"),
+                    selectionMode = selection.inSelectionMode,
+                    onToggleSelect = { selection.toggle("session-${session.id}") },
+                    onLongClick = { selection.enterWith("session-${session.id}") }
                 )
             }
         }
@@ -222,7 +233,8 @@ internal fun PresetCarousel(
     onChangeDeckStartSession: (SessionPreset, String) -> Unit,
     onChangeDeckSave: (SessionPreset, String) -> Unit,
     onChangeDeckPinAsNew: (SessionPreset, String, String?) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    selection: SelectionController
 ) {
     if (presets.isEmpty()) return
     val dimensions = LocalStudiareDimensions.current
@@ -248,7 +260,11 @@ internal fun PresetCarousel(
                         onRename = { newName -> onRename(preset, newName) },
                         onChangeDeckStartSession = { newDeckId -> onChangeDeckStartSession(preset, newDeckId) },
                         onChangeDeckSave = { newDeckId -> onChangeDeckSave(preset, newDeckId) },
-                        onChangeDeckPinAsNew = { newDeckId, name -> onChangeDeckPinAsNew(preset, newDeckId, name) }
+                        onChangeDeckPinAsNew = { newDeckId, name -> onChangeDeckPinAsNew(preset, newDeckId, name) },
+                        selected = selection.isSelected("preset-${preset.id}"),
+                        selectionMode = selection.inSelectionMode,
+                        onToggleSelect = { selection.toggle("preset-${preset.id}") },
+                        onLongClick = { selection.enterWith("preset-${preset.id}") }
                     )
                 }
             }
@@ -350,7 +366,11 @@ fun SessionTile(
     // Study Hub and one of those other top-level tabs while the same session is pinned made
     // SharedTransitionLayout match the two tiles' keys and morph one into the other, overriding the
     // plain fade those top-level switches are supposed to use.
-    enableSharedTransition: Boolean = false
+    enableSharedTransition: Boolean = false,
+    selected: Boolean = false,
+    selectionMode: Boolean = false,
+    onToggleSelect: () -> Unit = {},
+    onLongClick: () -> Unit = {}
 ) {
     val dimensions = LocalStudiareDimensions.current
     var showMenu by remember { mutableStateOf(false) }
@@ -384,13 +404,18 @@ fun SessionTile(
         )
     }
 
+    SelectableTileOverlay(selected = selected, modifier = modifier.fillMaxWidth(), shape = RoundedCornerShape(dimensions.cornerRadiusMedium)) {
     ElevatedCard(
-        onClick = onResume,
-        modifier = modifier
+        modifier = Modifier
             .fillMaxWidth()
             .pressSquish(interactionSource)
-            .border(if (isFocused) 6.dp else 0.dp, borderColor, RoundedCornerShape(dimensions.cornerRadiusMedium)),
-        interactionSource = interactionSource,
+            .border(if (isFocused) 6.dp else 0.dp, borderColor, RoundedCornerShape(dimensions.cornerRadiusMedium))
+            .clip(RoundedCornerShape(dimensions.cornerRadiusMedium))
+            .combinedClickable(
+                interactionSource = interactionSource,
+                indication = androidx.compose.foundation.LocalIndication.current,
+                onLongClick = onLongClick
+            ) { if (selectionMode) onToggleSelect() else onResume() },
         elevation = CardDefaults.elevatedCardElevation(defaultElevation = dimensions.cardElevation, pressedElevation = 8.dp),
         shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
         colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
@@ -656,6 +681,7 @@ fun SessionTile(
             }
         }
     }
+    }
 }
 
 /**
@@ -687,7 +713,11 @@ fun SessionPresetCard(
     onChangeDeckStartSession: (newDeckId: String) -> Unit,
     onChangeDeckSave: (newDeckId: String) -> Unit,
     onChangeDeckPinAsNew: (newDeckId: String, name: String?) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    selected: Boolean = false,
+    selectionMode: Boolean = false,
+    onToggleSelect: () -> Unit = {},
+    onLongClick: () -> Unit = {}
 ) {
     val dimensions = LocalStudiareDimensions.current
 
@@ -783,9 +813,12 @@ fun SessionPresetCard(
             onUnpin = { showChangeDeckDialog = false; onUnpin() }
         )
     }
+    SelectableTileOverlay(selected = selected, modifier = modifier.fillMaxWidth(), shape = RoundedCornerShape(dimensions.cornerRadiusMedium)) {
     ElevatedCard(
-        onClick = onCreateSession,
-        modifier = modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(dimensions.cornerRadiusMedium))
+            .combinedClickable(onLongClick = onLongClick) { if (selectionMode) onToggleSelect() else onCreateSession() },
         elevation = CardDefaults.elevatedCardElevation(defaultElevation = dimensions.cardElevation),
         shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
         colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
@@ -822,6 +855,7 @@ fun SessionPresetCard(
             // Full card width now, capped at a single row.
             SessionTileChipGrid(chipData, modifier = Modifier.fillMaxWidth(), maxRows = 1)
         }
+    }
     }
 }
 

@@ -62,7 +62,8 @@ fun DeckHierarchyTree(
     orderedSetIds: Map<String, List<String>> = emptyMap(),
     // Settings: the desktop column browser (off = original accordion) and loading indicator (off = skeleton).
     useLargeScreenLayout: Boolean = true,
-    useLoadingIndicator: Boolean = true
+    useLoadingIndicator: Boolean = true,
+    selection: SelectionController
 ) {
     val windowWidthSizeClass = LocalWindowWidthSizeClass.current
     val motionScheme = MaterialTheme.motionScheme
@@ -93,7 +94,8 @@ fun DeckHierarchyTree(
             allSessions = sessions,
             navController = navController,
             viewModel = viewModel,
-            orderedSetIds = orderedSetIds
+            orderedSetIds = orderedSetIds,
+            selection = selection
         )
     } else {
         // Cap the width and center it so the tree doesn't stretch across wide screens.
@@ -112,6 +114,7 @@ fun DeckHierarchyTree(
                     orderedSetIds = orderedSetIds,
                     // 1-9 open root decks, matching the grid's own numbered shortcuts.
                     shortcutIndex = index,
+                    selection = selection,
                     modifier = Modifier.animateItem(
                         fadeInSpec = motionScheme.defaultEffectsSpec(),
                         fadeOutSpec = motionScheme.defaultEffectsSpec(),
@@ -138,7 +141,8 @@ internal fun DeckHierarchyColumns(
     allSessions: List<ActiveSession>,
     navController: NavController,
     viewModel: net.ericclark.studiare.FlashcardViewModel,
-    orderedSetIds: Map<String, List<String>>
+    orderedSetIds: Map<String, List<String>>,
+    selection: SelectionController
 ) {
     // selectedPath[d] = the id selected in column d; column d+1 (if present) shows its content.
     // Lives on the ViewModel (not remember) so it survives navigating to another screen and back.
@@ -205,7 +209,8 @@ internal fun DeckHierarchyColumns(
                     onSelectChild = { id ->
                         if (selectedPath.getOrNull(0) == id) selectedPath.clear()
                         else { selectedPath.clear(); selectedPath.add(id) }
-                    }
+                    },
+                    selection = selection
                 )
                 var depth = 0
                 while (depth < selectedPath.size) {
@@ -244,7 +249,8 @@ internal fun DeckHierarchyColumns(
                                             while (selectedPath.size > atDepth + 1) selectedPath.removeAt(selectedPath.size - 1)
                                             selectedPath.add(id)
                                         }
-                                    }
+                                    },
+                                    selection = selection
                                 )
                             }
                         }
@@ -272,7 +278,8 @@ internal fun TreeColumn(
     allSessions: List<ActiveSession>,
     navController: NavController,
     viewModel: net.ericclark.studiare.FlashcardViewModel,
-    onSelectChild: (String) -> Unit
+    onSelectChild: (String) -> Unit,
+    selection: SelectionController
 ) {
     val motionScheme = MaterialTheme.motionScheme
     Column(modifier = Modifier.width(width).fillMaxHeight()) {
@@ -313,7 +320,11 @@ internal fun TreeColumn(
                             fadeInSpec = motionScheme.defaultEffectsSpec(),
                             fadeOutSpec = motionScheme.defaultEffectsSpec(),
                             placementSpec = motionScheme.defaultSpatialSpec()
-                        )
+                        ),
+                        multiSelected = selection.isSelected(child.deck.id),
+                        selectionMode = selection.inSelectionMode,
+                        onToggleSelect = { selection.toggle(child.deck.id) },
+                        onLongClick = { selection.enterWith(child.deck.id) }
                     )
                 }
             }
@@ -531,7 +542,11 @@ internal fun TreeChildRow(
     isSelected: Boolean,
     onClick: () -> Unit,
     shortcutIndex: Int = -1,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    multiSelected: Boolean = false,
+    selectionMode: Boolean = false,
+    onToggleSelect: () -> Unit = {},
+    onLongClick: () -> Unit = {}
 ) {
     var showOverflow by remember { mutableStateOf(false) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
@@ -602,24 +617,35 @@ internal fun TreeChildRow(
         Key.One, Key.Two, Key.Three, Key.Four, Key.Five,
         Key.Six, Key.Seven, Key.Eight, Key.Nine
     )
+    SelectableTileOverlay(selected = multiSelected, modifier = modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp)) {
     ElevatedCard(
-        interactionSource = interactionSource,
-        modifier = modifier
+        modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 12.dp, vertical = 4.dp)
             .let {
                 if (shortcutIndex in 0..8) it.withShortcut(keyMap[shortcutIndex], "${shortcutIndex + 1}") { onClick() } else it
-            },
+            }
+            .clip(RoundedCornerShape(12.dp))
+            .combinedClickable(
+                interactionSource = interactionSource,
+                indication = androidx.compose.foundation.LocalIndication.current,
+                onLongClick = onLongClick
+            ) { if (selectionMode) onToggleSelect() else onClick() },
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.elevatedCardColors(
             containerColor = if (isSelected) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceContainer
-        ),
-        onClick = onClick
+        )
     ) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            androidx.compose.animation.AnimatedVisibility(visible = selectionMode) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Checkbox(checked = multiSelected, onCheckedChange = { onToggleSelect() })
+                    Spacer(Modifier.width(4.dp))
+                }
+            }
             Text(
                 text = deckWithCards.deck.name,
                 style = MaterialTheme.typography.bodyLarge,
@@ -668,11 +694,17 @@ internal fun TreeChildRow(
                     )
                 }
             }
-            Icon(
-                Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            // Its own tappable target, independent of the row's own click (which toggles
+            // selection while selectionMode is on) — the only way left to open a still-closed
+            // column for a row while selecting, since the row itself can't do both at once.
+            TooltipIconButton(description = getText(R.string.open), onClick = onClick, modifier = Modifier.size(36.dp)) {
+                Icon(
+                    Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                    contentDescription = getText(R.string.open),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         }
+    }
     }
 }

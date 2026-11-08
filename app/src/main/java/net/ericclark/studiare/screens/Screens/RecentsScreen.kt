@@ -4,9 +4,20 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.EnterExitState
 import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.fadeIn
+import androidx.compose.ui.draw.alpha
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.PushPin
+import androidx.compose.material.icons.filled.RestartAlt
+import androidx.compose.material.icons.filled.SelectAll
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.livedata.observeAsState
@@ -22,12 +33,17 @@ import net.ericclark.studiare.ConfirmationDialog
 import net.ericclark.studiare.FlashcardViewModel
 import net.ericclark.studiare.LocalNavAnimatedVisibilityScope
 import net.ericclark.studiare.R
+import net.ericclark.studiare.TooltipIconButton
 import net.ericclark.studiare.components.getText
 import net.ericclark.studiare.data.ActiveSession
 import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
 import net.ericclark.studiare.withShortcut
 import net.ericclark.studiare.screens.Dialogs.studyRouteFor
+import net.ericclark.studiare.screens.UI_Components.SelectionAction
+import net.ericclark.studiare.screens.UI_Components.SelectionActionBar
+import net.ericclark.studiare.screens.UI_Components.SelectionCountTile
 import net.ericclark.studiare.screens.UI_Components.SessionTile
+import net.ericclark.studiare.screens.UI_Components.rememberSelectionController
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -69,13 +85,26 @@ fun RecentsScreen(
         }
     }
     val dimensions = LocalStudiareDimensions.current
+    val context = androidx.compose.ui.platform.LocalContext.current
 
     var showRestartDialog by remember { mutableStateOf<ActiveSession?>(null) }
     var showDeleteDialog by remember { mutableStateOf<ActiveSession?>(null) }
+    var showBulkRestartDialog by remember { mutableStateOf<List<ActiveSession>?>(null) }
+    var showBulkDeleteDialog by remember { mutableStateOf<List<ActiveSession>?>(null) }
+
+    // Multi-select (see the roadmap plan file's "App-wide multi-select" section).
+    val selection = rememberSelectionController()
+    androidx.activity.compose.BackHandler(enabled = selection.inSelectionMode) { selection.exit() }
+
+    // "Hide from Recents" — a session stays active/pinned, just excluded from this one list by
+    // default. The toggle to reveal them only ever appears once something's actually hidden.
+    var showHidden by remember { mutableStateOf(false) }
+    val hasHiddenSessions = remember(activeSessions) { activeSessions.any { it.hiddenFromRecents } }
+    LaunchedEffect(hasHiddenSessions) { if (!hasHiddenSessions) showHidden = false }
 
     // Sort active sessions by the most recently accessed
-    val sortedSessions = remember(activeSessions) {
-        activeSessions.sortedByDescending { it.lastAccessed }
+    val sortedSessions = remember(activeSessions, showHidden) {
+        activeSessions.filter { showHidden || !it.hiddenFromRecents }.sortedByDescending { it.lastAccessed }
     }
 
     Scaffold(
@@ -84,10 +113,113 @@ fun RecentsScreen(
             net.ericclark.studiare.CustomTopAppBar(
                 viewModel = viewModel,
                 screenId = net.ericclark.studiare.ShortcutScreen.RECENTS,
+                actions = {
+                    if (hasHiddenSessions) {
+                        TooltipIconButton(
+                            description = if (showHidden) getText(R.string.hide_hidden_sessions) else getText(R.string.show_hidden_sessions),
+                            onClick = { showHidden = !showHidden }
+                        ) {
+                            Icon(
+                                if (showHidden) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                contentDescription = if (showHidden) getText(R.string.hide_hidden_sessions) else getText(R.string.show_hidden_sessions)
+                            )
+                        }
+                    }
+                },
                 title = {
                     Text(getText(R.string.recent_sessions), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
                 }
             )
+        },
+        floatingActionButton = {
+            if (selection.inSelectionMode) {
+                val selectedSessions = remember(selection.selected, sortedSessions) {
+                    sortedSessions.filter { it.id in selection.selected }
+                }
+                val selectAll = SelectionAction(
+                    id = "selectAll",
+                    icon = Icons.Default.SelectAll,
+                    label = getText(context, R.string.select_all),
+                    onClick = { selection.toggleAllWithin(sortedSessions.map { it.id }.toSet()) }
+                )
+                val cardActions = remember(selection.selected, sortedSessions) {
+                    if (selection.selected.isEmpty()) {
+                        listOf(selectAll)
+                    } else {
+                        listOf(
+                            SelectionAction(
+                                id = "copy",
+                                icon = Icons.Default.ContentCopy,
+                                label = getText(context, R.string.copy),
+                                onClick = { selectedSessions.forEach { viewModel.copySession(it) }; selection.exit() }
+                            ),
+                            SelectionAction(
+                                id = "restart",
+                                icon = Icons.Default.RestartAlt,
+                                label = getText(context, R.string.restart),
+                                onClick = { showBulkRestartDialog = selectedSessions }
+                            ),
+                            SelectionAction(
+                                id = "hide",
+                                icon = Icons.Default.VisibilityOff,
+                                label = getText(context, R.string.hide_from_recents),
+                                onClick = { selectedSessions.forEach { viewModel.setSessionHiddenFromRecents(it, true) } }
+                            ),
+                            SelectionAction(
+                                id = "unhide",
+                                icon = Icons.Default.Visibility,
+                                label = getText(context, R.string.show_in_recents),
+                                onClick = { selectedSessions.forEach { viewModel.setSessionHiddenFromRecents(it, false) } }
+                            ),
+                            SelectionAction(
+                                id = "unpin",
+                                icon = Icons.Outlined.PushPin,
+                                label = getText(context, R.string.unpin),
+                                onClick = { selectedSessions.forEach { viewModel.unpinSession(it) } }
+                            ),
+                            SelectionAction(
+                                id = "pin",
+                                icon = Icons.Default.PushPin,
+                                label = getText(context, R.string.pin),
+                                onClick = {
+                                    selectedSessions.forEach { session ->
+                                        viewModel.pinSession(session, session.name ?: "")
+                                    }
+                                }
+                            ),
+                            SelectionAction(
+                                id = "delete",
+                                icon = Icons.Default.Delete,
+                                label = getText(context, R.string.delete),
+                                isDestructive = true,
+                                onClick = { showBulkDeleteDialog = selectedSessions }
+                            ),
+                            selectAll
+                        )
+                    }
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.Top,
+                    horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)
+                ) {
+                    SelectionActionBar(actions = cardActions, modifier = Modifier.weight(1f))
+                    Box {
+                        FloatingActionButton(
+                            onClick = { selection.exit() },
+                            containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onTertiaryContainer
+                        ) {
+                            Icon(Icons.Default.Close, contentDescription = getText(R.string.cancel))
+                        }
+                        SelectionCountTile(
+                            selectedCount = selection.selected.size,
+                            totalCount = sortedSessions.size,
+                            modifier = Modifier.align(Alignment.TopCenter).offset(y = (-32).dp)
+                        )
+                    }
+                }
+            }
         }
     ) { padding ->
         // Gated on mainContentReady (see the comment above) so this screen's first composition
@@ -111,8 +243,11 @@ fun RecentsScreen(
                 )
             }
         } else {
+            // Capped and centered — unbounded tiles stretched edge-to-edge and looked thin/sparse
+            // on wide screens, same reasoning as other single-column lists elsewhere in the app.
+            Box(modifier = Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.TopCenter) {
             LazyColumn(
-                modifier = Modifier.fillMaxSize().padding(padding),
+                modifier = Modifier.fillMaxHeight().widthIn(max = 640.dp).fillMaxWidth(),
                 contentPadding = PaddingValues(
                     start = dimensions.paddingLarge,
                     end = dimensions.paddingLarge,
@@ -161,7 +296,10 @@ fun RecentsScreen(
                             )
                             .let {
                                 if (index in 0..8) it.withShortcut(keyMap[index], "${index + 1}") { onOpen() } else it
-                            },
+                            }
+                            // Only ever non-1 when showHidden has revealed it — a quiet visual cue
+                            // for which tiles are hidden, distinct from the selection highlight.
+                            .alpha(if (session.hiddenFromRecents) 0.6f else 1f),
                         onResume = onOpen,
                         onCopy = { viewModel.copySession(session) },
                         onRestart = { showRestartDialog = session },
@@ -174,9 +312,14 @@ fun RecentsScreen(
                         // header that could already be identifying this tile's category or mode.
                         showCategoryNameIcon = true,
                         showModeName = true,
-                        showDeckNameInTitle = true
+                        showDeckNameInTitle = true,
+                        selected = selection.isSelected(session.id),
+                        selectionMode = selection.inSelectionMode,
+                        onToggleSelect = { selection.toggle(session.id) },
+                        onLongClick = { selection.enterWith(session.id) }
                     )
                 }
+            }
             }
         }
         }
@@ -203,6 +346,32 @@ fun RecentsScreen(
             text = getText(R.string.delete_session_desc),
             onConfirm = { viewModel.deleteSession(session); showDeleteDialog = null },
             onDismiss = { showDeleteDialog = null }
+        )
+    }
+
+    showBulkRestartDialog?.let { sessions ->
+        ConfirmationDialog(
+            title = getText(R.string.restart_session_title),
+            text = getText(R.string.restart_session_desc),
+            onConfirm = {
+                sessions.forEach { viewModel.restartSession(it) }
+                showBulkRestartDialog = null
+                selection.exit()
+            },
+            onDismiss = { showBulkRestartDialog = null }
+        )
+    }
+
+    showBulkDeleteDialog?.let { sessions ->
+        ConfirmationDialog(
+            title = getText(R.string.delete_session_title),
+            text = androidx.compose.ui.res.stringResource(R.string.delete_sessions_confirm_format, sessions.size),
+            onConfirm = {
+                sessions.forEach { viewModel.deleteSession(it) }
+                showBulkDeleteDialog = null
+                selection.exit()
+            },
+            onDismiss = { showBulkDeleteDialog = null }
         )
     }
 }

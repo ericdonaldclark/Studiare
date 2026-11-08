@@ -22,6 +22,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -69,6 +71,7 @@ import java.util.UUID
 import net.ericclark.studiare.data.*
 import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FabPosition
 import androidx.compose.material3.FloatingActionButton
@@ -88,12 +91,21 @@ import net.ericclark.studiare.screens.Dialogs.DuplicateWarningDialog
 import net.ericclark.studiare.screens.Dialogs.RichTextEditorDialog
 import net.ericclark.studiare.screens.Dialogs.UnsavedChangesDialog
 import net.ericclark.studiare.screens.UI_Components.CardEditor
+import net.ericclark.studiare.screens.UI_Components.CardSelectionTable
 import net.ericclark.studiare.screens.UI_Components.CustomVerticalScrollbar
 import net.ericclark.studiare.screens.UI_Components.DeckSettingsDialog
 import net.ericclark.studiare.screens.UI_Components.DeckInfoDialog
 import net.ericclark.studiare.screens.UI_Components.DeckStats
 import net.ericclark.studiare.screens.UI_Components.LinkageSettingsDialog
+import net.ericclark.studiare.screens.UI_Components.SelectionAction
+import net.ericclark.studiare.screens.UI_Components.SelectionActionBar
+import net.ericclark.studiare.screens.UI_Components.SelectionCountTile
+import net.ericclark.studiare.screens.UI_Components.SortCardsDialog
+import net.ericclark.studiare.screens.UI_Components.rememberSelectionController
 import net.ericclark.studiare.screens.UI_Components.sortCardStates
+import androidx.compose.material.icons.outlined.PushPin
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarResult
 
 /**
  * A screen for creating a new deck or editing an existing one.
@@ -169,6 +181,22 @@ fun DeckEditorScreen(
     var showFilterOverlay by remember { mutableStateOf(false) }
     val lazyListState = rememberLazyListState()
     val coroutineScope = rememberCoroutineScope()
+    val snackbarHostState = remember { androidx.compose.material3.SnackbarHostState() }
+
+    // Multi-select (see the roadmap plan file's "App-wide multi-select" section). This screen's
+    // cards are too large to usably select against one at a time, so it enters via a toolbar
+    // button (see the floating toolbar below) into a compact table, not via long-press on a card
+    // like every other multi-select screen.
+    val selection = rememberSelectionController()
+    BackHandler(enabled = selection.inSelectionMode) { selection.exit() }
+    // Sort/filter while the selection table is open — deliberately separate from the deck's own
+    // sortType/filterText above: these only reorder/narrow that table and reset once selection
+    // mode is left, they never touch the deck's actual saved sort order.
+    var selectionSortType by remember { mutableStateOf(sortType) }
+    var selectionSortPinnedCardsFirst by remember { mutableStateOf(sortPinnedCardsFirst) }
+    var selectionFilterText by remember { mutableStateOf("") }
+    var showSelectionSortDialog by remember { mutableStateOf(false) }
+    var showSelectionFilterOverlay by remember { mutableStateOf(false) }
     // State for Language Dialog
 
     // State for the duplicate card warning dialog
@@ -394,6 +422,39 @@ fun DeckEditorScreen(
         cards.clear()
         cards.addAll(sorted)
         cards.addAll(blank)
+    }
+
+    // --- Card deletion with undo (shared by the single-card delete button on every CardEditor and
+    // the multi-select table's bulk/per-row delete, instead of three copies of the same snackbar
+    // logic) ---
+    fun deleteCardsWithUndo(toDelete: List<CardEditorState>) {
+        if (toDelete.isEmpty()) return
+        val removed = toDelete.map { it to cards.indexOf(it) }.sortedBy { it.second }
+        cards.removeAll(toDelete)
+        coroutineScope.launch {
+            snackbarHostState.currentSnackbarData?.dismiss()
+            val snackbarJob = launch {
+                val message = if (removed.size == 1) getText(context, R.string.card_deleted) else context.getString(R.string.cards_deleted_format, removed.size)
+                val result = snackbarHostState.showSnackbar(
+                    message = message,
+                    actionLabel = getText(context, R.string.undo),
+                    duration = SnackbarDuration.Indefinite
+                )
+                if (result == SnackbarResult.ActionPerformed) {
+                    removed.forEach { (card, index) -> cards.add(index.coerceIn(0, cards.size), card) }
+                }
+            }
+            kotlinx.coroutines.delay(5000)
+            snackbarJob.cancel()
+        }
+    }
+
+    fun setKnownForSelection(ids: Set<String>, known: Boolean) {
+        cards.filter { it.id in ids }.forEach { it.isKnown.value = known }
+    }
+
+    fun setPinnedForSelection(ids: Set<String>, pinned: Boolean) {
+        cards.filter { it.id in ids }.forEach { it.isPinned.value = pinned }
     }
 
     // --- Save Action ---
@@ -713,7 +774,18 @@ fun DeckEditorScreen(
         cards.flatMap { it.tags.value }.toSet()
     }
 
-    val snackbarHostState = remember { androidx.compose.material3.SnackbarHostState() }
+    // Selection table's own filtered/sorted list — see selectionSortType/selectionFilterText
+    // above. Hoisted here (not local to the table's own render block) since the toolbar's Select
+    // All button and count tile need it too.
+    val totalRealCards = remember(cards.toList()) { cards.count { it.front.value.isNotBlank() || it.back.value.isNotBlank() } }
+    val selectionCards = remember(cards.toList(), selectionFilterText.trim(), selectionSortType, selectionSortPinnedCardsFirst) {
+        val base = cards.filter { it.front.value.isNotBlank() || it.back.value.isNotBlank() }
+        val trimmed = selectionFilterText.trim()
+        val filtered = if (trimmed.isBlank()) base else base.filter {
+            it.front.value.contains(trimmed, ignoreCase = true) || it.back.value.contains(trimmed, ignoreCase = true)
+        }
+        sortCardStates(filtered, selectionSortType, selectionSortPinnedCardsFirst)
+    }
 
     Scaffold(
         snackbarHost = { androidx.compose.material3.SnackbarHost(snackbarHostState) },
@@ -794,45 +866,179 @@ fun DeckEditorScreen(
             val fabContainerColor = if (canSave) FloatingActionButtonDefaults.containerColor else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)
             val fabContentColor = if (canSave) contentColorFor(fabContainerColor) else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
             val isCompactLayout = windowWidthSizeClass == WindowWidthSizeClass.Compact
-            HorizontalFloatingToolbar(
-                expanded = true,
-                // "Vibrant" toolbar colors tint the bar with primaryContainer instead of the
-                // standard variant's surfaceContainer — the latter sat too close in tone to the
-                // cards behind it in dark mode; this stays theme/dynamic-color-aware either way.
-                colors = FloatingToolbarDefaults.vibrantFloatingToolbarColors(),
-                floatingActionButton = {
-                    FloatingActionButton(
-                        onClick = { if (canSave) saveAction() },
-                        modifier = Modifier.withShortcut(Key.N, "N", id = "deck_editor.add_card") { if (canSave) saveAction() },
-                        containerColor = fabContainerColor,
-                        contentColor = fabContentColor
+
+            if (selection.inSelectionMode) {
+                // Ordered least- to most-important, left to right — the end of this list sits
+                // immediately next to Close on the right, so the most-used actions are the ones
+                // that never need a scroll to reach. "Select All" is always present (it applies
+                // equally with nothing selected) and stays rightmost, nearest Close; "Edit" only
+                // ever applies to exactly one selected card, so it's the one action that animates
+                // in/out as the selection count crosses between 1 and 2+ — kept close to the right
+                // edge too, so it surfaces right next to Select All/Close instead of appearing
+                // off-screen at a scrolled-away end of the list.
+                val cardActions = remember(selection.selected, filteredCards.toList(), selectionCards) {
+                    val selectAll = SelectionAction(
+                        id = "selectAll",
+                        icon = Icons.Default.SelectAll,
+                        label = getText(context, R.string.select_all),
+                        onClick = { selection.toggleAllWithin(selectionCards.map { it.id }.toSet()) }
+                    )
+                    if (selection.selected.isEmpty()) {
+                        listOf(selectAll)
+                    } else {
+                        val others = listOf(
+                            SelectionAction(
+                                id = "unpin",
+                                icon = Icons.Outlined.PushPin,
+                                label = getText(context, R.string.mark_as_not_pinned),
+                                onClick = { setPinnedForSelection(selection.selected, false) }
+                            ),
+                            SelectionAction(
+                                id = "pin",
+                                icon = Icons.Default.PushPin,
+                                label = getText(context, R.string.mark_as_pinned),
+                                onClick = { setPinnedForSelection(selection.selected, true) }
+                            ),
+                            SelectionAction(
+                                id = "unknown",
+                                icon = Icons.Default.Close,
+                                label = getText(context, R.string.mark_as_not_known),
+                                onClick = { setKnownForSelection(selection.selected, false) }
+                            ),
+                            SelectionAction(
+                                id = "known",
+                                icon = Icons.Default.Check,
+                                label = getText(context, R.string.mark_as_known),
+                                onClick = { setKnownForSelection(selection.selected, true) }
+                            ),
+                            SelectionAction(
+                                id = "edit",
+                                icon = Icons.Default.Edit,
+                                label = getText(context, R.string.edit),
+                                onClick = {
+                                    val targetId = selection.selected.firstOrNull()
+                                    selection.exit()
+                                    val index = filteredCards.indexOfFirst { it.id == targetId }
+                                    if (index >= 0) coroutineScope.launch { lazyListState.jumpThenAnimateTo(index) }
+                                }
+                            ),
+                            SelectionAction(
+                                id = "delete",
+                                icon = Icons.Default.Delete,
+                                label = getText(context, R.string.delete),
+                                isDestructive = true,
+                                onClick = {
+                                    val toDelete = cards.filter { it.id in selection.selected }
+                                    selection.exit()
+                                    deleteCardsWithUndo(toDelete)
+                                }
+                            )
+                        )
+                        // "Edit" only once exactly one card is selected; everything else needs ≥1.
+                        others.filter { it.id != "edit" || selection.selected.size == 1 } + selectAll
+                    }
+                }
+                Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)) {
+                    // Same mini toolbar as the normal screen's — scroll-to-top/bottom and search —
+                    // minus Save/Deck-Info/Deck-Settings, plus a Sort icon in their place: sorting
+                    // and filtering here only rearrange/narrow this table (see
+                    // selectionSortType/selectionFilterText above), never the deck's own saved sort.
+                    HorizontalFloatingToolbar(
+                        expanded = true,
+                        colors = FloatingToolbarDefaults.vibrantFloatingToolbarColors()
                     ) {
-                        Icon(Icons.Default.Check, contentDescription = getText(R.string.save))
+                        TooltipIconButton(
+                            description = getText(R.string.scroll_to_bottom),
+                            onClick = { coroutineScope.launch { lazyListState.jumpThenAnimateTo((filteredCards.size - 1).coerceAtLeast(0), scrollOffset = Int.MAX_VALUE) } }
+                        ) {
+                            Icon(Icons.Default.ArrowDownward, contentDescription = getText(R.string.scroll_to_bottom))
+                        }
+                        TooltipIconButton(
+                            description = getText(R.string.scroll_to_top),
+                            onClick = { coroutineScope.launch { lazyListState.jumpThenAnimateTo(0) } }
+                        ) {
+                            Icon(Icons.Default.ArrowUpward, contentDescription = getText(R.string.scroll_to_top))
+                        }
+                        TooltipIconButton(description = getText(R.string.cards_filter_), onClick = { showSelectionFilterOverlay = !showSelectionFilterOverlay }) {
+                            Icon(Icons.Default.Search, contentDescription = getText(R.string.cards_filter_))
+                        }
+                        TooltipIconButton(description = getText(R.string.sort_and_priority), onClick = { showSelectionSortDialog = true }) {
+                            Icon(Icons.AutoMirrored.Filled.Sort, contentDescription = getText(R.string.sort_and_priority))
+                        }
+                    }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.Top,
+                        horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)
+                    ) {
+                        SelectionActionBar(
+                            actions = cardActions,
+                            modifier = Modifier.weight(1f)
+                        )
+                        // The count tile floats above Close via a pure visual offset (doesn't add
+                        // to this Box's measured size), so Close/the action bar's top edges stay
+                        // aligned with each other. Select All now lives inside the scrollable bar
+                        // itself (see cardActions above), always rightmost next to Close.
+                        Box {
+                            FloatingActionButton(
+                                onClick = { selection.exit() },
+                                containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                                contentColor = MaterialTheme.colorScheme.onTertiaryContainer
+                            ) {
+                                Icon(Icons.Default.Close, contentDescription = getText(R.string.cancel))
+                            }
+                            SelectionCountTile(
+                                selectedCount = selection.selected.size,
+                                totalCount = totalRealCards,
+                                modifier = Modifier.align(Alignment.TopCenter).offset(y = (-32).dp)
+                            )
+                        }
                     }
                 }
-            ) {
-                TooltipIconButton(
-                    description = getText(R.string.scroll_to_bottom),
-                    onClick = { coroutineScope.launch { lazyListState.jumpThenAnimateTo((filteredCards.size - 1).coerceAtLeast(0), scrollOffset = Int.MAX_VALUE) } }
-                ) {
-                    Icon(Icons.Default.ArrowDownward, contentDescription = getText(R.string.scroll_to_bottom))
-                }
-                TooltipIconButton(
-                    description = getText(R.string.scroll_to_top),
-                    onClick = { coroutineScope.launch { lazyListState.jumpThenAnimateTo(0) } }
-                ) {
-                    Icon(Icons.Default.ArrowUpward, contentDescription = getText(R.string.scroll_to_top))
-                }
-                if (isCompactLayout && deckWithCards != null) {
-                    TooltipIconButton(description = getText(R.string.deck_statistics), onClick = { showDeckInfo = true }) {
-                        Icon(Icons.Default.Info, contentDescription = getText(R.string.deck_statistics))
+            } else {
+                HorizontalFloatingToolbar(
+                    expanded = true,
+                    // "Vibrant" toolbar colors tint the bar with primaryContainer instead of the
+                    // standard variant's surfaceContainer — the latter sat too close in tone to the
+                    // cards behind it in dark mode; this stays theme/dynamic-color-aware either way.
+                    colors = FloatingToolbarDefaults.vibrantFloatingToolbarColors(),
+                    floatingActionButton = {
+                        FloatingActionButton(
+                            onClick = { if (canSave) saveAction() },
+                            modifier = Modifier.withShortcut(Key.N, "N", id = "deck_editor.add_card") { if (canSave) saveAction() },
+                            containerColor = fabContainerColor,
+                            contentColor = fabContentColor
+                        ) {
+                            Icon(Icons.Default.Check, contentDescription = getText(R.string.save))
+                        }
                     }
-                }
-                TooltipIconButton(description = getText(R.string.cards_filter_), onClick = { showFilterOverlay = !showFilterOverlay }) {
-                    Icon(Icons.Default.Search, contentDescription = getText(R.string.cards_filter_))
-                }
-                TooltipIconButton(description = getText(R.string.deck_settings), onClick = { showSettingsDialog = true }) {
-                    Icon(Icons.Default.Settings, getText(R.string.deck_settings))
+                ) {
+                    TooltipIconButton(
+                        description = getText(R.string.scroll_to_bottom),
+                        onClick = { coroutineScope.launch { lazyListState.jumpThenAnimateTo((filteredCards.size - 1).coerceAtLeast(0), scrollOffset = Int.MAX_VALUE) } }
+                    ) {
+                        Icon(Icons.Default.ArrowDownward, contentDescription = getText(R.string.scroll_to_bottom))
+                    }
+                    TooltipIconButton(
+                        description = getText(R.string.scroll_to_top),
+                        onClick = { coroutineScope.launch { lazyListState.jumpThenAnimateTo(0) } }
+                    ) {
+                        Icon(Icons.Default.ArrowUpward, contentDescription = getText(R.string.scroll_to_top))
+                    }
+                    if (isCompactLayout && deckWithCards != null) {
+                        TooltipIconButton(description = getText(R.string.deck_statistics), onClick = { showDeckInfo = true }) {
+                            Icon(Icons.Default.Info, contentDescription = getText(R.string.deck_statistics))
+                        }
+                    }
+                    TooltipIconButton(description = getText(R.string.cards_filter_), onClick = { showFilterOverlay = !showFilterOverlay }) {
+                        Icon(Icons.Default.Search, contentDescription = getText(R.string.cards_filter_))
+                    }
+                    TooltipIconButton(description = getText(R.string.select_cards), onClick = { selection.enter() }) {
+                        Icon(Icons.Default.Checklist, contentDescription = getText(R.string.select_cards))
+                    }
+                    TooltipIconButton(description = getText(R.string.deck_settings), onClick = { showSettingsDialog = true }) {
+                        Icon(Icons.Default.Settings, getText(R.string.deck_settings))
+                    }
                 }
             }
         }
@@ -847,7 +1053,35 @@ fun DeckEditorScreen(
                 exit = ExitTransition.None,
                 modifier = Modifier.fillMaxSize()
             ) {
-                if (windowWidthSizeClass != WindowWidthSizeClass.Compact) {
+                if (selection.inSelectionMode) {
+                    // Same compact table regardless of window width — it's already dense enough
+                    // not to need a separate wide-screen arrangement like the normal card list has.
+                    // selectionCards (sorted/filtered by the selection-local state, not the deck's
+                    // own) is hoisted to the outer function body — the toolbar below needs it too.
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        CardSelectionTable(
+                            cards = selectionCards,
+                            selected = selection.selected,
+                            onToggle = { id -> selection.toggle(id) },
+                            onDeleteOne = { card -> deleteCardsWithUndo(listOf(card)) },
+                            onToggleKnownOne = { card -> card.isKnown.value = !card.isKnown.value },
+                            onTogglePinOne = { card -> card.isPinned.value = !card.isPinned.value },
+                            listState = lazyListState,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                        if (selectionCards.size > 3) {
+                            // Same grabbable fast-scroll slider the normal card list uses.
+                            CustomVerticalScrollbar(
+                                listState = lazyListState,
+                                modifier = Modifier
+                                    .align(Alignment.CenterEnd)
+                                    .width(30.dp)
+                                    .fillMaxHeight()
+                                    .padding(vertical = dimensions.paddingMedium)
+                            )
+                        }
+                    }
+                } else if (windowWidthSizeClass != WindowWidthSizeClass.Compact) {
                     // WIDE SCREEN LAYOUT
                     Row(
                         modifier = Modifier.padding(dimensions.paddingMedium),
@@ -878,27 +1112,7 @@ fun DeckEditorScreen(
                                             cardNumber = index + 1,
                                             totalCards = filteredCards.count { it.front.value.isNotBlank() || it.back.value.isNotBlank() },
                                             canDelete = cardState.front.value.isNotBlank() || cardState.back.value.isNotBlank(),
-                                            onDelete = {
-                                                if (cards.size > 1) {
-                                                    val removedIndex = cards.indexOf(cardState)
-                                                    cards.remove(cardState)
-                                                    coroutineScope.launch {
-                                                        snackbarHostState.currentSnackbarData?.dismiss()
-                                                        val snackbarJob = launch {
-                                                            val result = snackbarHostState.showSnackbar(
-                                                                message = getText(context, R.string.card_deleted),
-                                                                actionLabel = getText(context, R.string.undo),
-                                                                duration = androidx.compose.material3.SnackbarDuration.Indefinite
-                                                            )
-                                                            if (result == androidx.compose.material3.SnackbarResult.ActionPerformed) {
-                                                                cards.add(removedIndex.coerceIn(0, cards.size), cardState)
-                                                            }
-                                                        }
-                                                        kotlinx.coroutines.delay(5000)
-                                                        snackbarJob.cancel()
-                                                    }
-                                                }
-                                            },
+                                            onDelete = { deleteCardsWithUndo(listOf(cardState)) },
                                             onKnownClick = {
                                                 cardState.isKnown.value = !cardState.isKnown.value
                                             },
@@ -978,27 +1192,7 @@ fun DeckEditorScreen(
                                         cardNumber = index + 1,
                                         totalCards = filteredCards.count { it.front.value.isNotBlank() || it.back.value.isNotBlank() },
                                         canDelete = cardState.front.value.isNotBlank() || cardState.back.value.isNotBlank(),
-                                        onDelete = {
-                                            if (cards.size > 1) {
-                                                val removedIndex = cards.indexOf(cardState)
-                                                cards.remove(cardState)
-                                                coroutineScope.launch {
-                                                    snackbarHostState.currentSnackbarData?.dismiss()
-                                                    val snackbarJob = launch {
-                                                        val result = snackbarHostState.showSnackbar(
-                                                            message = "Card deleted",
-                                                            actionLabel = "Undo",
-                                                            duration = androidx.compose.material3.SnackbarDuration.Indefinite
-                                                        )
-                                                        if (result == androidx.compose.material3.SnackbarResult.ActionPerformed) {
-                                                            cards.add(removedIndex.coerceIn(0, cards.size), cardState)
-                                                        }
-                                                    }
-                                                    kotlinx.coroutines.delay(5000)
-                                                    snackbarJob.cancel()
-                                                }
-                                            }
-                                        },
+                                        onDelete = { deleteCardsWithUndo(listOf(cardState)) },
                                         onKnownClick = { cardState.isKnown.value = !cardState.isKnown.value },
                                         onPinClick = { cardState.isPinned.value = !cardState.isPinned.value },
                                         allTags = allTags,
@@ -1055,4 +1249,21 @@ fun DeckEditorScreen(
         onFilterTextChange = { filterText = it },
         onDismiss = { showFilterOverlay = false }
     )
+
+    FloatingFilterOverlay(
+        visible = showSelectionFilterOverlay,
+        filterText = selectionFilterText,
+        onFilterTextChange = { selectionFilterText = it },
+        onDismiss = { showSelectionFilterOverlay = false }
+    )
+
+    if (showSelectionSortDialog) {
+        SortCardsDialog(
+            sortType = selectionSortType,
+            sortPinnedCardsFirst = selectionSortPinnedCardsFirst,
+            onDismiss = { showSelectionSortDialog = false },
+            onSortTypeChange = { selectionSortType = it },
+            onSortPinnedCardsFirstChange = { selectionSortPinnedCardsFirst = it }
+        )
+    }
 }

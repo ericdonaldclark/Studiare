@@ -1549,6 +1549,7 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
     fun deleteSession(session: ActiveSession) { studySessionManager.deleteSession(session) }
     fun pinSession(session: ActiveSession, name: String) { studySessionManager.pinSession(session, name) }
     fun unpinSession(session: ActiveSession) { studySessionManager.unpinSession(session) }
+    fun setSessionHiddenFromRecents(session: ActiveSession, hidden: Boolean) { studySessionManager.setSessionHiddenFromRecents(session, hidden) }
     fun renameSession(session: ActiveSession, name: String?) { studySessionManager.renameSession(session, name) }
     fun copySession(session: ActiveSession) { studySessionManager.copySession(session) }
     fun restartSession(session: ActiveSession): ActiveSession = studySessionManager.restartSession(session)

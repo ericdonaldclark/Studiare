@@ -70,7 +70,7 @@
     <string name="tree_view">Tree View</string>
     <string name="collapse_to_top_level">Collapse to top level</string>
     <string name="edit_name">Edit Name</string>
-    <string name="advanced_settings">Advanced Settings</string>
+    <string name="full_editor">Full Editor</string>
     <string name="add_custom_text">Add Custom Text</string>
     <string name="add_custom_text_placeholder">Text (e.g. \'Artist?\')</string>
     <string name="add">Add</string>
@@ -541,11 +541,15 @@
     <string name="app_logo">App Logo</string>
     <string name="decks_all">All Decks</string>
     <string name="options_more">More Options</string>
+    <string name="open">Open</string>
+    <string name="advanced_selection">Advanced Select</string>
+    <string name="advanced_selection_title">Advanced Select</string>
     <string name="export_decks">All Decks</string>
     <string name="no_decks_yet">No decks yet.</string>
     <string name="create_or_import_to_start">Create one or import to start.</string>
     <string name="delete_deck_question">Delete Deck?</string>
     <string name="delete_deck_confirm">Are you sure you want to delete \"%1$s\"? This cannot be undone.</string>
+    <string name="delete_decks_confirm_format">Are you sure you want to delete these %1$d items? This cannot be undone.</string>
     <string name="delete">Delete</string>
     <string name="edit">Edit</string>
     <string name="manage_sets">Manage Sets</string>
@@ -958,10 +962,13 @@
     <string name="notification_channel_desc">Controls for audio flashcard study</string>
 
     <!-- CommonUiComponents -->
-    <string name="mark_as_not_known">Mark as not known</string>
-    <string name="mark_as_known">Mark as known</string>
-    <string name="mark_as_not_pinned">Unpin card</string>
-    <string name="mark_as_pinned">Pin card</string>
+    <string name="mark_as_not_known">Unknown</string>
+    <string name="mark_as_known">Known</string>
+    <string name="mark_as_not_pinned">Unpin</string>
+    <string name="mark_as_pinned">Pin</string>
+    <string name="select_cards">Select cards</string>
+    <string name="cards_deleted_format">%1$d cards deleted</string>
+    <string name="more_options">More options</string>
     <string name="pinned_label">Pinned</string>
     <string name="show_pinned_cards_first">Show pinned cards first</string>
     <string name="sort_and_priority">Sort &amp; Priority</string>
@@ -1049,6 +1056,11 @@
     <string name="create_session_label">Create Session</string>
     <string name="delete_session_title">Delete Session?</string>
     <string name="delete_session_desc">Are you sure you want to permanently delete this study session?</string>
+    <string name="delete_sessions_confirm_format">Are you sure you want to permanently delete these %1$d study sessions?</string>
+    <string name="hide_from_recents">Hide</string>
+    <string name="show_in_recents">Show</string>
+    <string name="show_hidden_sessions">Show hidden sessions</string>
+    <string name="hide_hidden_sessions">Hide hidden sessions</string>
     <string name="delete_all_sessions_title">Delete All Sessions?</string>
     <string name="delete_all_sessions_desc">Are you sure you want to delete all active study sessions for this deck?</string>
     <string name="spaced_repetition_label">Guided</string>

@@ -16,7 +16,6 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Check
@@ -32,7 +31,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.input.key.key
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -42,7 +40,6 @@ import net.ericclark.studiare.R
 import net.ericclark.studiare.components.getText
 import net.ericclark.studiare.data.*
 import net.ericclark.studiare.ui.theme.*
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.filled.Settings
@@ -356,7 +353,7 @@ fun ManualSetEditorDialog(
                         Icon(Icons.Default.Edit, contentDescription = getText(R.string.edit_name), modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
-                Spacer(Modifier.height(dimensions.spacingMedium))
+                Spacer(Modifier.height(dimensions.spacingSmall))
                 if (windowWidthSizeClass != WindowWidthSizeClass.Compact)
                 {
                     Row(
@@ -451,8 +448,8 @@ fun ManualSetEditorDialog(
                             }
                         }
                     }
-
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    Spacer(Modifier.height(dimensions.spacingSmall))
+                    //HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
 
                     // Bottom Section: Available Cards
                     Column(
@@ -498,7 +495,7 @@ fun ManualSetEditorDialog(
                             shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
                             Icon(Icons.Default.Settings, contentDescription = null, modifier = Modifier.size(18.dp))
                             Spacer(Modifier.width(8.dp))
-                            Text(getText(R.string.advanced_settings))
+                            Text(getText(R.string.full_editor))
                         }
 
                         Row {
@@ -532,7 +529,7 @@ fun ManualSetEditorDialog(
                         ) {
                             Icon(Icons.Default.Settings, contentDescription = null, modifier = Modifier.size(18.dp))
                             Spacer(Modifier.width(8.dp))
-                            Text(getText(R.string.advanced_settings))
+                            Text(getText(R.string.full_editor))
                         }
 
                         Row(

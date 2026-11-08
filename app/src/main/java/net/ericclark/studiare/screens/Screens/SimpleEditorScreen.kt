@@ -20,11 +20,17 @@ import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.SelectAll
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Speed
+import androidx.compose.material.icons.outlined.PushPin
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.Box
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -64,6 +70,7 @@ import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import kotlinx.coroutines.launch
 import net.ericclark.studiare.CustomTopAppBar
 import net.ericclark.studiare.FlashcardViewModel
@@ -105,6 +112,12 @@ import net.ericclark.studiare.screens.Dialogs.CardEditDialogMode
 import net.ericclark.studiare.screens.UI_Components.DeckInfoDialog
 import net.ericclark.studiare.screens.UI_Components.DeckSettingsDialog
 import net.ericclark.studiare.screens.UI_Components.FlowRow
+import net.ericclark.studiare.screens.UI_Components.SelectableTileOverlay
+import net.ericclark.studiare.screens.UI_Components.SelectionAction
+import net.ericclark.studiare.screens.UI_Components.SelectionActionBar
+import net.ericclark.studiare.screens.UI_Components.SelectionCountTile
+import net.ericclark.studiare.screens.UI_Components.rememberSelectionController
+import androidx.activity.compose.BackHandler
 
 /**
  * The default destination when editing an existing deck: a condensed grid of read-only card
@@ -167,6 +180,8 @@ fun SimpleEditorScreen(
     var showDeckOptions by remember { mutableStateOf(false) }
     var filterQuery by remember { mutableStateOf("") }
     val lazyGridState = rememberLazyGridState()
+    val selection = rememberSelectionController()
+    BackHandler(enabled = selection.inSelectionMode) { selection.exit() }
 
     val currentDeckTags = remember(deckWithCards?.cards) {
         deckWithCards?.cards?.flatMap { it.tags }?.toSet() ?: emptySet()
@@ -247,21 +262,35 @@ fun SimpleEditorScreen(
         }
     }
 
-    fun deleteCard(card: CardEntity) {
+    fun deleteCardsWithUndo(toDelete: List<CardEntity>) {
         val deck = deckWithCards ?: return
-        viewModel.deleteSingleCard(deck, card.id)
+        if (toDelete.isEmpty()) return
+        toDelete.forEach { viewModel.deleteSingleCard(deck, it.id) }
         editingCard = null
         coroutineScope.launch {
             snackbarHostState.currentSnackbarData?.dismiss()
+            val message = if (toDelete.size == 1) getText(context, R.string.card_deleted) else context.getString(R.string.cards_deleted_format, toDelete.size)
             val result = snackbarHostState.showSnackbar(
-                message = getText(context, R.string.card_deleted),
+                message = message,
                 actionLabel = getText(context, R.string.undo),
                 duration = SnackbarDuration.Short
             )
             if (result == SnackbarResult.ActionPerformed) {
-                viewModel.saveSingleCard(deck, card.toCardDataForSave())
+                toDelete.forEach { viewModel.saveSingleCard(deck, it.toCardDataForSave()) }
             }
         }
+    }
+
+    fun deleteCard(card: CardEntity) = deleteCardsWithUndo(listOf(card))
+
+    fun setPinnedForSelection(ids: Set<String>, pinned: Boolean) {
+        val deck = deckWithCards ?: return
+        deck.cards.filter { it.id in ids }.forEach { viewModel.saveSingleCard(deck, it.toCardDataForSave().copy(isPinned = pinned)) }
+    }
+
+    fun setKnownForSelection(ids: Set<String>, known: Boolean) {
+        val deck = deckWithCards ?: return
+        deck.cards.filter { it.id in ids }.forEach { viewModel.saveSingleCard(deck, it.toCardDataForSave().copy(isKnown = known)) }
     }
 
     Scaffold(
@@ -290,37 +319,127 @@ fun SimpleEditorScreen(
             )
         },
         floatingActionButton = {
-            HorizontalFloatingToolbar(
-                expanded = true,
-                // "Vibrant" toolbar colors tint the bar with primaryContainer instead of the
-                // standard variant's surfaceContainer — matches the Bulk Editor's toolbar.
-                colors = FloatingToolbarDefaults.vibrantFloatingToolbarColors(),
-                floatingActionButton = {
-                    FloatingActionButton(onClick = { createCardState = blankEditorState() }) {
-                        Icon(Icons.Default.Add, contentDescription = getText(R.string.card_add))
+            if (selection.inSelectionMode) {
+                // Same action set/ordering convention as the Bulk Editor's selection bar (see
+                // SelectionController.kt) — Select All always present and rightmost next to
+                // Close, "Edit" only once exactly one card is selected.
+                val cardActions = remember(selection.selected, displayedCards) {
+                    val selectAll = SelectionAction(
+                        id = "selectAll",
+                        icon = Icons.Default.SelectAll,
+                        label = getText(context, R.string.select_all),
+                        onClick = { selection.toggleAllWithin(displayedCards.map { it.id }.toSet()) }
+                    )
+                    if (selection.selected.isEmpty()) {
+                        listOf(selectAll)
+                    } else {
+                        val others = listOf(
+                            SelectionAction(
+                                id = "unpin",
+                                icon = Icons.Outlined.PushPin,
+                                label = getText(context, R.string.mark_as_not_pinned),
+                                onClick = { setPinnedForSelection(selection.selected, false) }
+                            ),
+                            SelectionAction(
+                                id = "pin",
+                                icon = Icons.Default.PushPin,
+                                label = getText(context, R.string.mark_as_pinned),
+                                onClick = { setPinnedForSelection(selection.selected, true) }
+                            ),
+                            SelectionAction(
+                                id = "unknown",
+                                icon = Icons.Default.Close,
+                                label = getText(context, R.string.mark_as_not_known),
+                                onClick = { setKnownForSelection(selection.selected, false) }
+                            ),
+                            SelectionAction(
+                                id = "known",
+                                icon = Icons.Default.Check,
+                                label = getText(context, R.string.mark_as_known),
+                                onClick = { setKnownForSelection(selection.selected, true) }
+                            ),
+                            SelectionAction(
+                                id = "edit",
+                                icon = Icons.Default.Edit,
+                                label = getText(context, R.string.edit),
+                                onClick = {
+                                    val targetId = selection.selected.firstOrNull()
+                                    editingCard = displayedCards.firstOrNull { it.id == targetId }
+                                    selection.exit()
+                                }
+                            ),
+                            SelectionAction(
+                                id = "delete",
+                                icon = Icons.Default.Delete,
+                                label = getText(context, R.string.delete),
+                                isDestructive = true,
+                                onClick = {
+                                    val toDelete = displayedCards.filter { it.id in selection.selected }
+                                    selection.exit()
+                                    deleteCardsWithUndo(toDelete)
+                                }
+                            )
+                        )
+                        others.filter { it.id != "edit" || selection.selected.size == 1 } + selectAll
                     }
                 }
-            ) {
-                TooltipIconButton(
-                    description = getText(R.string.scroll_to_bottom),
-                    onClick = { coroutineScope.launch { lazyGridState.jumpThenAnimateTo((displayedCards.size - 1).coerceAtLeast(0), scrollOffset = Int.MAX_VALUE) } }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.Top,
+                    horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(dimensions.spacingSmall)
                 ) {
-                    Icon(Icons.Default.ArrowDownward, contentDescription = getText(R.string.scroll_to_bottom))
+                    SelectionActionBar(
+                        actions = cardActions,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Box {
+                        FloatingActionButton(
+                            onClick = { selection.exit() },
+                            containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onTertiaryContainer
+                        ) {
+                            Icon(Icons.Default.Close, contentDescription = getText(R.string.cancel))
+                        }
+                        SelectionCountTile(
+                            selectedCount = selection.selected.size,
+                            totalCount = deckWithCards?.cards?.size ?: 0,
+                            modifier = Modifier.align(Alignment.TopCenter).offset(y = (-32).dp)
+                        )
+                    }
                 }
-                TooltipIconButton(
-                    description = getText(R.string.scroll_to_top),
-                    onClick = { coroutineScope.launch { lazyGridState.jumpThenAnimateTo(0) } }
+            } else {
+                HorizontalFloatingToolbar(
+                    expanded = true,
+                    // "Vibrant" toolbar colors tint the bar with primaryContainer instead of the
+                    // standard variant's surfaceContainer — matches the Bulk Editor's toolbar.
+                    colors = FloatingToolbarDefaults.vibrantFloatingToolbarColors(),
+                    floatingActionButton = {
+                        FloatingActionButton(onClick = { createCardState = blankEditorState() }) {
+                            Icon(Icons.Default.Add, contentDescription = getText(R.string.card_add))
+                        }
+                    }
                 ) {
-                    Icon(Icons.Default.ArrowUpward, contentDescription = getText(R.string.scroll_to_top))
-                }
-                TooltipIconButton(description = getText(R.string.cards_filter_), onClick = { showFilterOverlay = !showFilterOverlay }) {
-                    Icon(Icons.Default.Search, contentDescription = getText(R.string.cards_filter_))
-                }
-                TooltipIconButton(description = getText(R.string.deck_statistics), onClick = { showDeckInfo = true }) {
-                    Icon(Icons.Default.Info, contentDescription = getText(R.string.deck_statistics))
-                }
-                TooltipIconButton(description = getText(R.string.deck_settings), onClick = { showDeckOptions = true }) {
-                    Icon(Icons.Default.Settings, contentDescription = getText(R.string.deck_settings))
+                    TooltipIconButton(
+                        description = getText(R.string.scroll_to_bottom),
+                        onClick = { coroutineScope.launch { lazyGridState.jumpThenAnimateTo((displayedCards.size - 1).coerceAtLeast(0), scrollOffset = Int.MAX_VALUE) } }
+                    ) {
+                        Icon(Icons.Default.ArrowDownward, contentDescription = getText(R.string.scroll_to_bottom))
+                    }
+                    TooltipIconButton(
+                        description = getText(R.string.scroll_to_top),
+                        onClick = { coroutineScope.launch { lazyGridState.jumpThenAnimateTo(0) } }
+                    ) {
+                        Icon(Icons.Default.ArrowUpward, contentDescription = getText(R.string.scroll_to_top))
+                    }
+                    TooltipIconButton(description = getText(R.string.cards_filter_), onClick = { showFilterOverlay = !showFilterOverlay }) {
+                        Icon(Icons.Default.Search, contentDescription = getText(R.string.cards_filter_))
+                    }
+                    TooltipIconButton(description = getText(R.string.deck_statistics), onClick = { showDeckInfo = true }) {
+                        Icon(Icons.Default.Info, contentDescription = getText(R.string.deck_statistics))
+                    }
+                    TooltipIconButton(description = getText(R.string.deck_settings), onClick = { showDeckOptions = true }) {
+                        Icon(Icons.Default.Settings, contentDescription = getText(R.string.deck_settings))
+                    }
                 }
             }
         }
@@ -375,7 +494,9 @@ fun SimpleEditorScreen(
                             totalCards = displayedCards.size,
                             allTags = allTags,
                             toEditorState = { it.toEditorState() },
-                            onClick = { editingCard = card }
+                            onClick = { if (selection.inSelectionMode) selection.toggle(card.id) else editingCard = card },
+                            selected = selection.isSelected(card.id),
+                            onLongClick = { selection.enterWith(card.id) }
                         )
                     }
                 }
@@ -492,7 +613,11 @@ fun SimpleEditorScreen(
 }
 
 @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
-/** Reused as-is by [net.ericclark.studiare.screens.Screens.PinnedScreen]'s Cards section. */
+/**
+ * Reused as-is by [net.ericclark.studiare.screens.Screens.PinnedScreen]'s Cards section — that
+ * screen doesn't wire multi-select up yet, so it leaves [selected]/[onLongClick] at their defaults
+ * and behaves exactly as before.
+ */
 @Composable
 internal fun CardTile(
     card: CardEntity,
@@ -500,13 +625,15 @@ internal fun CardTile(
     totalCards: Int,
     allTags: List<TagDefinition>,
     toEditorState: (CardEntity) -> CardEditorState,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    selected: Boolean = false,
+    onLongClick: () -> Unit = {}
 ) {
     val dimensions = LocalStudiareDimensions.current
     var showInfo by remember { mutableStateOf(false) }
+    SelectableTileOverlay(selected = selected, modifier = Modifier.fillMaxWidth()) {
     Card(
-        onClick = onClick,
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().combinedClickable(onClick = onClick, onLongClick = onLongClick),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
     ) {
         FlippableCardShell(
@@ -615,6 +742,7 @@ internal fun CardTile(
                 }
             }
         )
+    }
     }
 }
 
