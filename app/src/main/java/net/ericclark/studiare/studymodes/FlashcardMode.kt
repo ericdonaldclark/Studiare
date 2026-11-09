@@ -95,6 +95,16 @@ fun FlashcardScreen(
     viewModel: FlashcardViewModel
 ) {
     val state = viewModel.studyState ?: return
+    // Defensive: a session should never be created with zero cards (startStudySession's own
+    // guard toasts and refuses to create one), but if one somehow reaches this screen anyway,
+    // bail out instead of indexing into an empty shuffledCards below and crashing.
+    if (state.shuffledCards.isEmpty()) {
+        LaunchedEffect(state.sessionId) {
+            viewModel.endStudySession()
+            navController.popBackStack()
+        }
+        return
+    }
     val mainContentReady = rememberMainContentReady()
     var showEditDialog by remember { mutableStateOf(false) }
 

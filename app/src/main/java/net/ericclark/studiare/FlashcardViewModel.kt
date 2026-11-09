@@ -12,6 +12,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.viewModelScope
+import androidx.room.withTransaction
 import net.ericclark.studiare.screens.Dialogs.pendingVoiceLanguagesFor
 import net.ericclark.studiare.data.*
 import net.ericclark.studiare.screens.UI_Components.ModeOption
@@ -1197,6 +1198,26 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         importExportManager.importDecksFromString(content, mimeType)
     }
 
+    /** Settings → About → Help's "Import Sample Deck" action — inserts (or re-inserts, in place,
+     * since it uses fixed ids) the hand-authored showcase deck + its session presets. */
+    fun importSampleDeck() {
+        viewModelScope.launch(Dispatchers.IO) {
+            // Single transaction: writing each deck's row and then its cards as separate DAO
+            // calls let Room's invalidation tracker fire in between them, so the decks/cards
+            // Flow combine (combineDecksAndCards) could briefly observe the deck with zero cards
+            // — and a session created from that exact snapshot would persist with a stale/empty
+            // card list forever after. Wrapping the whole import in one transaction means Room
+            // only notifies observers once, after every row above is already committed.
+            database.withTransaction {
+                SampleDeckProvider.buildDecksWithCards().forEach { deckWithCards ->
+                    deckDao.insertOrUpdate(deckWithCards.deck)
+                    cardDao.insertOrUpdateAll(deckWithCards.cards)
+                }
+                SampleDeckProvider.buildSessionPresets().forEach { sessionPresetDao.insertOrUpdate(it) }
+            }
+        }
+    }
+
     suspend fun analyzeAnkiPackage(context: Context, sourceUri: android.net.Uri): List<Pair<String, List<Pair<String, net.ericclark.studiare.data.MediaType>>>> {
         return importExportManager.analyzeAnkiPackage(context, sourceUri)
     }
@@ -2108,29 +2129,6 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
             decks.forEach { deckWithCards ->
                 deckDao.insertOrUpdate(deckWithCards.deck.copy(lastExportedAt = now, isPendingSync = true))
             }
-        }
-    }
-
-    fun deleteAllDecks() {
-        viewModelScope.launch(Dispatchers.IO) {
-            withContext(Dispatchers.Main) { isProcessing = true }
-            try {
-                val timestamp = System.currentTimeMillis()
-
-                val deckIds = localDecks.map { it.id }
-                val cardIds = localCards.map { it.id }
-
-                if (isUserAnonymous.value) {
-                    if (deckIds.isNotEmpty()) deckDao.hardDeleteDecks(deckIds)
-                    if (cardIds.isNotEmpty()) cardDao.hardDeleteCards(cardIds)
-                } else {
-                    if (deckIds.isNotEmpty()) deckDao.softDeleteDecks(deckIds, timestamp)
-                    if (cardIds.isNotEmpty()) cardDao.softDeleteCards(cardIds, timestamp)
-                }
-
-                preferenceManager.saveActiveSessions(emptyList())
-            } catch (e: Exception) { AppLogger.e(TAG, "deleteAllDecks failed", e) }
-            finally { withContext(Dispatchers.Main) { isProcessing = false } }
         }
     }
 

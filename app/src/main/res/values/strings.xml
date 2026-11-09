@@ -615,8 +615,6 @@
     <string name="merge_keep_cloud">Merge (Keep Cloud Matches)</string>
     <string name="use_local_wipe_cloud">Use Local (Delete All Cloud Data)</string>
     <string name="use_cloud_wipe_local">Use Cloud (Discard Local)</string>
-    <string name="delete_all_decks_question">Delete All Decks?</string>
-    <string name="delete_all_decks_confirm">Are you sure you want to delete ALL decks? This action cannot be undone.</string>
     <string name="download_language_question">Download Language?</string>
     <string name="download_language_later">You can download HD audio later in Settings</string>
     <string name="download_language_confirm">Download the high-definition model for %1$s?</string>
@@ -745,9 +743,10 @@
     <string name="display_sets_off">Off</string>
     <string name="display_sets_under_decks_option">Under Decks</string>
     <string name="display_sets_beside_decks_option">Beside Decks</string>
-    <string name="delete_all_decks">Delete All Decks</string>
     <string name="action_cannot_be_undone">This action cannot be undone.</string>
     <string name="debug">Debug</string>
+    <string name="app_tools_and_info">App Tools &amp; Info</string>
+    <string name="app_tools_and_info_subtitle">Debug, info, help &amp; about</string>
     <string name="window_size">Window size</string>
     <string name="notification_explainer_title">Notifications (optional)</string>
     <string name="notification_explainer_desc">Audio study can show playback controls in your notification shade and on the lock screen. This is optional: audio study works fully inside the app without notifications, so you can choose Not now.</string>
@@ -780,7 +779,10 @@
     <string name="developer_tools">Developer Tools</string>
     <string name="about">About</string>
     <string name="help">Help</string>
+    <string name="help_subtitle">Tutorial and sample deck</string>
     <string name="replay_tutorial">Replay Tutorial</string>
+    <string name="import_sample_deck">Import Sample Deck</string>
+    <string name="import_sample_deck_confirmation">Sample deck imported — check your Decks screen.</string>
     <string name="tutorial_welcome_title">Welcome to Studiare</string>
     <string name="tutorial_decks_title">Add a Deck</string>
     <string name="tutorial_decks_body">Tap the + button in the bottom right, then choose \"Add Deck.\" Give it a name and you\'re ready to add cards.</string>

@@ -121,7 +121,21 @@ fun TextWithOverflowTooltip(
     fontWeight: androidx.compose.ui.text.font.FontWeight? = null
 ) {
     var isOverflowing by remember(text) { mutableStateOf(false) }
-    val textContent: @Composable () -> Unit = {
+    // TooltipBox is always present now, never conditionally swapped for a plain Box: switching
+    // the composable structure based on isOverflowing — which is itself derived from this Text's
+    // measured layout — let TooltipBox's own wrapping change what width the Text measured against
+    // from one recomposition to the next, flipping isOverflowing back and forth forever. With the
+    // structure fixed, only enableUserInput reacts to isOverflowing (no tooltip trigger when the
+    // text already fits), so the Text is always measured the same way.
+    TooltipBox(
+        positionProvider = TooltipDefaults.rememberTooltipPositionProvider(
+            positioning = TooltipAnchorPosition.Below
+        ),
+        tooltip = { PlainTooltip { Text(text) } },
+        state = rememberTooltipState(isPersistent = true),
+        enableUserInput = isOverflowing,
+        modifier = modifier
+    ) {
         Text(
             text = text,
             style = style,
@@ -129,21 +143,9 @@ fun TextWithOverflowTooltip(
             color = color,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
-            modifier = modifier,
+            modifier = Modifier.fillMaxWidth(),
             onTextLayout = { isOverflowing = it.hasVisualOverflow }
         )
-    }
-    if (isOverflowing) {
-        TooltipBox(
-            positionProvider = TooltipDefaults.rememberTooltipPositionProvider(
-                positioning = TooltipAnchorPosition.Below
-            ),
-            tooltip = { PlainTooltip { Text(text) } },
-            state = rememberTooltipState(isPersistent = true),
-            content = textContent
-        )
-    } else {
-        textContent()
     }
 }
 
