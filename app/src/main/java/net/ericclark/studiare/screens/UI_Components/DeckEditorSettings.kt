@@ -30,6 +30,7 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.MenuDefaults
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
@@ -324,7 +325,11 @@ fun DeckSettingsDialog(
     // exposes to Settings' Customization > Editor section, shown here too as a shortcut so it
     // doesn't need its own trip to Settings.
     alwaysOpenBulkEditor: Boolean = false,
-    onSetAlwaysOpenBulkEditor: (Boolean) -> Unit = {}
+    onSetAlwaysOpenBulkEditor: (Boolean) -> Unit = {},
+    // Non-null only when this dialog was auto-opened right after a multi-select Merge — shows a
+    // one-tap "put it back" section at the top, since this is the one moment undoing is simple
+    // (nothing else has touched the survivor deck yet).
+    onRevertMerge: (() -> Unit)? = null
 ) {
     val dimensions = LocalStudiareDimensions.current
     var deckName by remember { mutableStateOf(initialDeckName) }
@@ -400,6 +405,28 @@ fun DeckSettingsDialog(
                         .weight(1f, fill = false) // Allows scrolling without forcing full screen height
                         .verticalScroll(rememberScrollState())
                 ) {
+                    if (onRevertMerge != null) {
+                        DialogSection(title = getText(R.string.revert_merge_section_title), contentTopSpacing = 0.dp, titleColor = MaterialTheme.colorScheme.primary) {
+                            Text(
+                                getText(R.string.revert_merge_message),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Spacer(Modifier.height(dimensions.spacingSmall))
+                            FilledTonalButton(
+                                onClick = onRevertMerge,
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(dimensions.cornerRadiusButton),
+                                colors = androidx.compose.material3.ButtonDefaults.filledTonalButtonColors(
+                                    containerColor = MaterialTheme.colorScheme.errorContainer,
+                                    contentColor = MaterialTheme.colorScheme.onErrorContainer
+                                )
+                            ) {
+                                Text(getText(R.string.revert_merge))
+                            }
+                        }
+                    }
+
                     // Deck Name Section
                     DialogSection(title = getText(R.string.deck_name), contentTopSpacing = 0.dp, titleColor = MaterialTheme.colorScheme.primary) {
                         Text(

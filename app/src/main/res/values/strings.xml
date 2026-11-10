@@ -375,6 +375,8 @@
     <string name="tags_in_this_deck">In This Deck</string>
     <string name="tags_from_other_decks">From Other Decks</string>
     <string name="tags_none_found">No tags found.</string>
+    <string name="tag_multi_select_hint">Tap a tag to add it to every selected card; tap again to remove it from all. A dash means only some of the selected cards currently have it.</string>
+    <string name="tag_partially_selected">On some selected cards</string>
     <string name="default_hex_color">#0D47A1</string>
 
     <!-- StudySessionDialog -->
@@ -542,8 +544,15 @@
     <string name="decks_all">All Decks</string>
     <string name="options_more">More Options</string>
     <string name="open">Open</string>
-    <string name="advanced_selection">Advanced Select</string>
-    <string name="advanced_selection_title">Advanced Select</string>
+    <string name="advanced_selection">Pro Select</string>
+    <string name="advanced_selection_title">Pro Select</string>
+    <string name="clone">Clone</string>
+    <string name="clone_name_format">%1$s (Copy)</string>
+    <string name="merge">Merge</string>
+    <string name="merge_same_level_required">Can only merge items at the same level</string>
+    <string name="revert_merge_section_title">Undo Merge</string>
+    <string name="revert_merge_message">This deck was just created by merging the selected items together.</string>
+    <string name="revert_merge">Revert Merge</string>
     <string name="export_decks">All Decks</string>
     <string name="no_decks_yet">No decks yet.</string>
     <string name="create_or_import_to_start">Create one or import to start.</string>

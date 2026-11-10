@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -23,6 +24,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Label
 import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SelectAll
@@ -63,6 +65,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
@@ -173,6 +176,7 @@ fun SimpleEditorScreen(
     val context = LocalContext.current
 
     var editingCard by remember { mutableStateOf<CardEntity?>(null) }
+    var showTagDialogForSelection by remember { mutableStateOf<Set<String>?>(null) }
     var createCardState by remember { mutableStateOf<CardEditorState?>(null) }
     var showTemplateEditor by remember { mutableStateOf(false) }
     var showFilterOverlay by remember { mutableStateOf(false) }
@@ -293,6 +297,14 @@ fun SimpleEditorScreen(
         deck.cards.filter { it.id in ids }.forEach { viewModel.saveSingleCard(deck, it.toCardDataForSave().copy(isKnown = known)) }
     }
 
+    fun applyTagsForSelection(ids: Set<String>, addTags: Set<String>, removeTags: Set<String>) {
+        val deck = deckWithCards ?: return
+        deck.cards.filter { it.id in ids }.forEach { card ->
+            val newTags = (card.tags.toSet() + addTags - removeTags).toList()
+            viewModel.saveSingleCard(deck, card.toCardDataForSave().copy(tags = newTags))
+        }
+    }
+
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         floatingActionButtonPosition = FabPosition.Center,
@@ -357,6 +369,12 @@ fun SimpleEditorScreen(
                                 icon = Icons.Default.Check,
                                 label = getText(context, R.string.mark_as_known),
                                 onClick = { setKnownForSelection(selection.selected, true) }
+                            ),
+                            SelectionAction(
+                                id = "tag",
+                                icon = Icons.Default.Label,
+                                label = getText(context, R.string.tag),
+                                onClick = { showTagDialogForSelection = selection.selected }
                             ),
                             SelectionAction(
                                 id = "edit",
@@ -474,6 +492,7 @@ fun SimpleEditorScreen(
                 exit = ExitTransition.None,
                 modifier = Modifier.fillMaxSize()
             ) {
+                Box(modifier = Modifier.fillMaxSize()) {
                 LazyVerticalGrid(
                     state = lazyGridState,
                     columns = GridCells.Adaptive(minSize = 260.dp),
@@ -500,7 +519,40 @@ fun SimpleEditorScreen(
                         )
                     }
                 }
+                // Same grabbable fast-scroll slider the Bulk Editor's card list uses — stops
+                // short of the bottom (matching the grid's own 120dp bottom content padding) so
+                // it doesn't sit behind the selection action bar/Close FAB that floats over this
+                // screen while selecting.
+                if (displayedCards.size > 3) {
+                    net.ericclark.studiare.screens.UI_Components.CustomVerticalScrollbar(
+                        gridState = lazyGridState,
+                        bottomClearance = 120.dp,
+                        modifier = Modifier
+                            .align(Alignment.CenterEnd)
+                            .width(30.dp)
+                            .fillMaxHeight()
+                            .padding(top = dimensions.paddingMedium)
+                    )
+                }
+                }
             }
+        }
+    }
+
+    showTagDialogForSelection?.let { ids ->
+        val deck = deckWithCards
+        if (deck != null) {
+            net.ericclark.studiare.components.MultiCardTagSelectionDialog(
+                selectedCardsTags = deck.cards.filter { it.id in ids }.map { it.tags.toSet() },
+                allTags = allTags,
+                currentDeckTags = currentDeckTags,
+                onDismiss = { showTagDialogForSelection = null },
+                onSave = { addTags, removeTags ->
+                    applyTagsForSelection(ids, addTags, removeTags)
+                    showTagDialogForSelection = null
+                },
+                onCreateTag = { name, color -> viewModel.saveTagDefinition(TagDefinition(name = name, color = color)) }
+            )
         }
     }
 
@@ -612,6 +664,19 @@ fun SimpleEditorScreen(
     }
 }
 
+/** A note's content as shown in [CardTile]'s preview text. Media notes (image/video/audio) hold a
+ * full internal-storage file path there — truncated to the last 3 segments via
+ * [MediaStorageUtils.truncatedDisplayPath]. Checked by content, not just [NoteField.type]: a note
+ * can end up holding an internal media path while still tagged [MediaType.PLAIN_TEXT] (e.g.
+ * imported/legacy data whose type never got corrected), and that path is just as unreadable
+ * untruncated regardless of what the field is nominally tagged. */
+private fun noteDisplayContent(note: NoteField, internalFilesDir: String): String =
+    // Just the filename here, not DeckEditorCards.kt's 3-segment truncatedDisplayPath — this tile
+    // preview has far less room than the note-field editor (Bulk Editor, and the dialog this
+    // screen opens when a tile is tapped, both still show the fuller 3-segment path).
+    if (note.content.startsWith(internalFilesDir)) note.content.substringAfterLast('/')
+    else note.content
+
 @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 /**
  * Reused as-is by [net.ericclark.studiare.screens.Screens.PinnedScreen]'s Cards section — that
@@ -686,22 +751,31 @@ internal fun CardTile(
 
                 Column(modifier = Modifier.fillMaxWidth()) {
                     val dimColor = MaterialTheme.colorScheme.onSurfaceVariant
+                    val internalFilesDir = LocalContext.current.filesDir.absolutePath
                     val paragraph = buildAnnotatedString {
                         withStyle(SpanStyle(fontSize = MaterialTheme.typography.titleMedium.fontSize, fontWeight = FontWeight.Bold)) {
                             append(card.front)
                         }
                         card.frontNotes.filter { it.content.isNotBlank() }.forEach { note ->
+                            withStyle(SpanStyle(color = dimColor, fontStyle = FontStyle.Italic)) {
+                                append(" ${note.name}")
+                            }
                             withStyle(SpanStyle(color = dimColor)) {
-                                append(" ${note.name}: ${note.content}")
+                                append(": ${noteDisplayContent(note, internalFilesDir)}")
                             }
                         }
                         withStyle(SpanStyle(color = dimColor)) {
                             append(" → ")
+                        }
+                        withStyle(SpanStyle(fontSize = MaterialTheme.typography.titleMedium.fontSize, fontWeight = FontWeight.Bold)) {
                             append(card.back)
                         }
                         card.backNotes.filter { it.content.isNotBlank() }.forEach { note ->
+                            withStyle(SpanStyle(color = dimColor, fontStyle = FontStyle.Italic)) {
+                                append(" ${note.name}")
+                            }
                             withStyle(SpanStyle(color = dimColor)) {
-                                append(" ${note.name}: ${note.content}")
+                                append(": ${noteDisplayContent(note, internalFilesDir)}")
                             }
                         }
                     }

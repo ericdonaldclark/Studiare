@@ -119,7 +119,8 @@ import androidx.compose.material3.SnackbarResult
 fun DeckEditorScreen(
     navController: NavController,
     deckWithCards: DeckWithCards?,
-    viewModel: FlashcardViewModel
+    viewModel: FlashcardViewModel,
+    cameFromMerge: Boolean = false
 ) {
     val context = LocalContext.current
     val dimensions = LocalStudiareDimensions.current
@@ -206,7 +207,8 @@ fun DeckEditorScreen(
     // State for showing the settings dialog
     // New decks open straight into Deck Options so the user sets a name (and other properties)
     // before landing on the empty card list.
-    var showSettingsDialog by remember { mutableStateOf(deckWithCards == null) }
+    var showSettingsDialog by remember { mutableStateOf(deckWithCards == null || cameFromMerge) }
+    var showTagDialogForSelection by remember { mutableStateOf<Set<String>?>(null) }
     // True only for that very first auto-opened dialog — Cancel there abandons deck creation
     // entirely (navigates back) instead of just closing to reveal the empty editor. Cleared after
     // the first save so a later re-open (gear icon) cancels normally.
@@ -457,6 +459,12 @@ fun DeckEditorScreen(
         cards.filter { it.id in ids }.forEach { it.isPinned.value = pinned }
     }
 
+    fun applyTagsForSelection(ids: Set<String>, addTags: Set<String>, removeTags: Set<String>) {
+        cards.filter { it.id in ids }.forEach { card ->
+            card.tags.value = (card.tags.value.toSet() + addTags - removeTags).toList()
+        }
+    }
+
     // --- Save Action ---
     val saveAction = {
         // Sanitize field names to prevent empty or duplicate fields
@@ -600,7 +608,13 @@ fun DeckEditorScreen(
                 showSettingsDialog = false
             },
             alwaysOpenBulkEditor = alwaysOpenBulkEditor,
-            onSetAlwaysOpenBulkEditor = { viewModel.setAlwaysOpenBulkEditor(it) }
+            onSetAlwaysOpenBulkEditor = { viewModel.setAlwaysOpenBulkEditor(it) },
+            onRevertMerge = if (cameFromMerge) {
+                {
+                    viewModel.revertLastMerge()
+                    navController.popBackStack()
+                }
+            } else null
         )
     }
 
@@ -774,6 +788,22 @@ fun DeckEditorScreen(
         cards.flatMap { it.tags.value }.toSet()
     }
 
+    showTagDialogForSelection?.let { ids ->
+        net.ericclark.studiare.components.MultiCardTagSelectionDialog(
+            selectedCardsTags = cards.filter { it.id in ids }.map { it.tags.value.toSet() },
+            allTags = allTags,
+            currentDeckTags = currentDeckTags,
+            onDismiss = { showTagDialogForSelection = null },
+            onSave = { addTags, removeTags ->
+                applyTagsForSelection(ids, addTags, removeTags)
+                showTagDialogForSelection = null
+            },
+            onCreateTag = { name, color ->
+                viewModel.saveTagDefinition(TagDefinition(name = name, color = color))
+            }
+        )
+    }
+
     // Selection table's own filtered/sorted list — see selectionSortType/selectionFilterText
     // above. Hoisted here (not local to the table's own render block) since the toolbar's Select
     // All button and count tile need it too.
@@ -910,6 +940,12 @@ fun DeckEditorScreen(
                                 icon = Icons.Default.Check,
                                 label = getText(context, R.string.mark_as_known),
                                 onClick = { setKnownForSelection(selection.selected, true) }
+                            ),
+                            SelectionAction(
+                                id = "tag",
+                                icon = Icons.Default.Label,
+                                label = getText(context, R.string.tag),
+                                onClick = { showTagDialogForSelection = selection.selected }
                             ),
                             SelectionAction(
                                 id = "edit",
@@ -1073,11 +1109,12 @@ fun DeckEditorScreen(
                             // Same grabbable fast-scroll slider the normal card list uses.
                             CustomVerticalScrollbar(
                                 listState = lazyListState,
+                                bottomClearance = 120.dp,
                                 modifier = Modifier
                                     .align(Alignment.CenterEnd)
                                     .width(30.dp)
                                     .fillMaxHeight()
-                                    .padding(vertical = dimensions.paddingMedium)
+                                    .padding(top = dimensions.paddingMedium)
                             )
                         }
                     }
@@ -1156,11 +1193,12 @@ fun DeckEditorScreen(
                                     // Custom Fast Scroll Slider (Wide Mode)
                                     CustomVerticalScrollbar(
                                         listState = lazyListState,
+                                        bottomClearance = 120.dp,
                                         modifier = Modifier
                                             .align(Alignment.CenterEnd)
                                             .width(30.dp)
                                             .fillMaxHeight()
-                                            .padding(vertical = dimensions.paddingMedium)
+                                            .padding(top = dimensions.paddingMedium)
                                     )
                                 }
                             }
@@ -1229,11 +1267,12 @@ fun DeckEditorScreen(
                                 // Custom Fast Scroll Slider (Narrow Mode)
                                 CustomVerticalScrollbar(
                                     listState = lazyListState,
+                                    bottomClearance = 120.dp,
                                     modifier = Modifier
                                         .align(Alignment.CenterEnd)
                                         .width(30.dp)
                                         .fillMaxHeight()
-                                        .padding(vertical = dimensions.paddingMedium)
+                                        .padding(top = dimensions.paddingMedium)
                                 )
                             }
                         }

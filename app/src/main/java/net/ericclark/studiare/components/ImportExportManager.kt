@@ -1118,10 +1118,37 @@ class ImportExportManager(
         return finalDecks.values.toList()
     }
 
+    // File extensions Anki's own [sound:...] field syntax covers — it's used for both audio and
+    // video alike (the Anki player itself dispatches by extension), unlike Studiare's own export
+    // which always writes an explicit <audio>/<video> tag.
+    private val audioFileExtensions = setOf("mp3", "wav", "ogg", "oga", "m4a", "flac", "aac", "opus", "wma")
+    private val videoFileExtensions = setOf("mp4", "webm", "mov", "mkv", "avi", "m4v", "3gp")
+
+    private fun mediaTypeForFilename(filename: String): net.ericclark.studiare.data.MediaType {
+        val extension = filename.substringAfterLast('.', "").lowercase()
+        return when (extension) {
+            in videoFileExtensions -> net.ericclark.studiare.data.MediaType.VIDEO
+            // Anki's [sound:...] tag always means audio or video, never anything else — an
+            // unrecognized extension still defaults to audio (its more common use) rather than
+            // falling through to plain text, which would otherwise show the bracket syntax itself.
+            else -> net.ericclark.studiare.data.MediaType.AUDIO
+        }
+    }
+
     // --- REFACTORED: 4. Content Type Parser ---
     private fun parseNoteFieldContent(html: String): Pair<net.ericclark.studiare.data.MediaType, String> {
         val trimmed = html.trim()
         if (trimmed.isEmpty()) return net.ericclark.studiare.data.MediaType.PLAIN_TEXT to ""
+
+        // Anki's native field syntax for audio/video — [sound:filename.ext] — never appears as an
+        // <audio>/<video> tag until resolveAnkiMedia rewrites it, so a raw/unresolved field (e.g.
+        // during analyzeAnkiPackage's auto-detection pass, which never calls resolveAnkiMedia) was
+        // falling all the way through to PLAIN_TEXT without this check.
+        val soundMatch = Regex("^\\[sound:([^\\]]+)\\]$").matchEntire(trimmed)
+        if (soundMatch != null) {
+            val filename = soundMatch.groupValues[1]
+            return mediaTypeForFilename(filename) to filename
+        }
 
         val audioMatch = Regex("^<audio[^>]+src=[\"']([^\"']+)[\"'][^>]*></audio>$", RegexOption.IGNORE_CASE).matchEntire(trimmed)
         if (audioMatch != null) return net.ericclark.studiare.data.MediaType.AUDIO to audioMatch.groupValues[1]
@@ -1212,7 +1239,13 @@ class ImportExportManager(
         resolvedHtml = soundRegex.replace(resolvedHtml) { matchResult ->
             val filename = matchResult.groupValues[1]
             val localPath = copyMediaToLocal(filename)
-            if (localPath != null) "<audio src=\"$localPath\" controls></audio>" else matchResult.value
+            if (localPath == null) {
+                matchResult.value
+            } else if (mediaTypeForFilename(filename) == net.ericclark.studiare.data.MediaType.VIDEO) {
+                "<video src=\"$localPath\" controls></video>"
+            } else {
+                "<audio src=\"$localPath\" controls></audio>"
+            }
         }
 
         val imgRegex = Regex("<img[^>]+src=[\"'](.*?)[\"'][^>]*>")

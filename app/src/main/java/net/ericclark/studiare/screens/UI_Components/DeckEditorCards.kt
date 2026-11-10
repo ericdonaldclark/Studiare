@@ -66,6 +66,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import net.ericclark.studiare.components.*
 import net.ericclark.studiare.DifficultySlider
@@ -130,7 +131,10 @@ fun CardSelectionTable(
         state = listState,
         modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall / 2),
-        contentPadding = PaddingValues(vertical = dimensions.paddingSmall, horizontal = dimensions.paddingMedium)
+        // Extra bottom padding (matching the normal card list's own floating-toolbar clearance)
+        // so the last rows aren't hidden behind the selection action bar/Close FAB, which float
+        // over this table rather than pushing its layout up.
+        contentPadding = PaddingValues(start = dimensions.paddingMedium, end = dimensions.paddingMedium, top = dimensions.paddingSmall, bottom = 120.dp)
     ) {
         itemsIndexed(cards, key = { _, card -> card.id }) { _, card ->
             CardSelectionRow(
@@ -474,12 +478,58 @@ fun CardEditor(
 @Composable
 fun CustomVerticalScrollbar(
     listState: androidx.compose.foundation.lazy.LazyListState,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    bottomClearance: Dp = 0.dp
+) {
+    CustomVerticalScrollbarCore(
+        modifier = modifier,
+        bottomClearance = bottomClearance,
+        totalItemsCount = { listState.layoutInfo.totalItemsCount },
+        visibleItemsCount = { listState.layoutInfo.visibleItemsInfo.size },
+        position = { listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset },
+        scrollToItem = { index -> listState.scrollToItem(index) }
+    )
+}
+
+/** Same as the [androidx.compose.foundation.lazy.LazyListState] overload above, for a
+ * [androidx.compose.foundation.lazy.grid.LazyGridState] grid (e.g. Simple Editor's card grid)
+ * instead of a plain list — [LazyGridState] isn't a [androidx.compose.foundation.lazy.LazyListState]
+ * subtype, so this can't just accept either one, but exposes the identical shape/behavior. */
+@Composable
+fun CustomVerticalScrollbar(
+    gridState: androidx.compose.foundation.lazy.grid.LazyGridState,
+    modifier: Modifier = Modifier,
+    bottomClearance: Dp = 0.dp
+) {
+    CustomVerticalScrollbarCore(
+        modifier = modifier,
+        bottomClearance = bottomClearance,
+        totalItemsCount = { gridState.layoutInfo.totalItemsCount },
+        visibleItemsCount = { gridState.layoutInfo.visibleItemsInfo.size },
+        position = { gridState.firstVisibleItemIndex to gridState.firstVisibleItemScrollOffset },
+        scrollToItem = { index -> gridState.scrollToItem(index) }
+    )
+}
+
+@Composable
+private fun CustomVerticalScrollbarCore(
+    modifier: Modifier,
+    // Reserved purely for the drawn thumb — never for the draggable area itself, which always
+    // spans the full bar so a drag started near the bottom (where a floating toolbar/FAB may
+    // visually sit) still scrolls correctly. Shrinking the touch target to match previously meant
+    // the bottom strip wasn't draggable at all; a user grabbing it was being told to look 1-2
+    // toolbar-heights higher just to find where dragging "started working."
+    bottomClearance: Dp = 0.dp,
+    totalItemsCount: () -> Int,
+    visibleItemsCount: () -> Int,
+    position: () -> Pair<Int, Int>,
+    scrollToItem: suspend (Int) -> Unit
 ) {
     val coroutineScope = rememberCoroutineScope()
-    val totalItemsCount = listState.layoutInfo.totalItemsCount
+    val totalItems = totalItemsCount()
     val density = LocalDensity.current
     var barHeight by remember { mutableStateOf(0f) }
+    val clearancePx = with(density) { bottomClearance.toPx() }
 
     // Only shown for 3 seconds after the list actually moves (a fling/drag on the list itself, or
     // a drag on this scrollbar's own thumb — both change firstVisibleItemIndex/ScrollOffset),
@@ -487,8 +537,8 @@ fun CustomVerticalScrollbar(
     // every further movement instead of hiding mid-scroll; drop(1) skips the position snapshotFlow
     // emits immediately on first collection, so it doesn't show up uninvited on first composition.
     var visible by remember { mutableStateOf(false) }
-    LaunchedEffect(listState) {
-        snapshotFlow { listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset }
+    LaunchedEffect(Unit) {
+        snapshotFlow { position() }
             .drop(1)
             .collectLatest {
                 visible = true
@@ -497,35 +547,39 @@ fun CustomVerticalScrollbar(
             }
     }
 
-    if (totalItemsCount > 1) {
+    if (totalItems > 1) {
         Box(
             modifier = modifier
                 .onSizeChanged { barHeight = it.height.toFloat() }
-                .pointerInput(totalItemsCount, barHeight) {
+                .pointerInput(totalItems, barHeight) {
                     detectVerticalDragGestures(
                         onDragStart = { offset ->
                             if (barHeight > 0) {
                                 val percentage = (offset.y / barHeight).coerceIn(0f, 1f)
-                                val index = (percentage * (totalItemsCount - 1)).toInt()
-                                coroutineScope.launch { listState.scrollToItem(index) }
+                                val index = (percentage * (totalItems - 1)).toInt()
+                                coroutineScope.launch { scrollToItem(index) }
                             }
                         },
                         onVerticalDrag = { change, _ ->
                             if (barHeight > 0) {
                                 val percentage = (change.position.y / barHeight).coerceIn(0f, 1f)
-                                val index = (percentage * (totalItemsCount - 1)).toInt()
-                                coroutineScope.launch { listState.scrollToItem(index) }
+                                val index = (percentage * (totalItems - 1)).toInt()
+                                coroutineScope.launch { scrollToItem(index) }
                             }
                         }
                     )
                 }
         ) {
             AnimatedVisibility(visible = visible, enter = fadeIn(), exit = fadeOut()) {
-                if (barHeight > 0 && totalItemsCount > 0) {
-                    val visibleItems = listState.layoutInfo.visibleItemsInfo.size
-                    val thumbHeightPx = (barHeight * visibleItems / totalItemsCount).coerceAtLeast(100f)
-                    val firstVisible = listState.firstVisibleItemIndex
-                    val scrollOffsetPx = (firstVisible.toFloat() / totalItemsCount) * barHeight
+                if (barHeight > 0 && totalItems > 0) {
+                    // The thumb is drawn within this reduced height only — the drag detection
+                    // above still maps against the full, unreduced barHeight.
+                    val safeHeight = (barHeight - clearancePx).coerceAtLeast(0f)
+                    val visibleItems = visibleItemsCount()
+                    val thumbHeightPx = (safeHeight * visibleItems / totalItems).coerceIn(100f, safeHeight)
+                    val (firstVisible, _) = position()
+                    val maxOffsetPx = (safeHeight - thumbHeightPx).coerceAtLeast(0f)
+                    val scrollOffsetPx = ((firstVisible.toFloat() / totalItems) * safeHeight).coerceAtMost(maxOffsetPx)
 
                     val thumbHeightDp = with(density) { thumbHeightPx.toDp() }
                     val scrollOffsetDp = with(density) { scrollOffsetPx.toDp() }
@@ -769,7 +823,23 @@ fun DynamicNoteEditor(
             )
 
             // BOTTOM LINE: Content
-            when (note.type) {
+            // A note can hold an internal media file path while still tagged PLAIN_TEXT (e.g.
+            // imported/legacy data whose type never got corrected) — shown read-only and truncated
+            // like the real media branches below, not as a freely-editable field, since editing it
+            // as text would silently turn a file path into arbitrary content on the next save. Use
+            // the type dropdown to re-tag it if it's genuinely meant to be plain text.
+            if (note.type == MediaType.PLAIN_TEXT && note.content.startsWith(context.filesDir.absolutePath)) {
+                TextField(
+                    value = net.ericclark.studiare.components.MediaStorageUtils.truncatedDisplayPath(note.content),
+                    onValueChange = {},
+                    readOnly = true,
+                    enabled = false,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = bottomShape,
+                    colors = textFieldColors,
+                    trailingIcon = typeDropdown
+                )
+            } else when (note.type) {
                 MediaType.PLAIN_TEXT, MediaType.WEB_LINK, MediaType.HTML -> {
                     // The hint says what the box expects for the selected type, and disappears once typing starts
                     val hintRes = when (note.type) {
@@ -816,7 +886,7 @@ fun DynamicNoteEditor(
                 }
                 MediaType.IMAGE, MediaType.VIDEO -> {
                     val hasMedia = note.content.isNotBlank() && note.content.startsWith(context.filesDir.absolutePath)
-                    val displayInfo = if (!hasMedia) "Add Media..." else note.content.substringAfterLast('/')
+                    val displayInfo = if (!hasMedia) "Add Media..." else net.ericclark.studiare.components.MediaStorageUtils.truncatedDisplayPath(note.content)
                     Box(modifier = Modifier.fillMaxWidth().clickable {
                         val mimeType = if (note.type == MediaType.IMAGE) arrayOf("image/*") else arrayOf("video/*")
                         visualMediaLauncher.launch(mimeType)
@@ -836,7 +906,7 @@ fun DynamicNoteEditor(
                 }
                 MediaType.AUDIO -> {
                     val hasMedia = note.content.isNotBlank() && note.content.startsWith(context.filesDir.absolutePath)
-                    val displayInfo = if (!hasMedia) "Add Audio..." else note.content.substringAfterLast('/')
+                    val displayInfo = if (!hasMedia) "Add Audio..." else net.ericclark.studiare.components.MediaStorageUtils.truncatedDisplayPath(note.content)
                     Box(modifier = Modifier.fillMaxWidth().clickable { audioLauncher.launch("audio/*") }) {
                         TextField(
                             value = displayInfo,

@@ -439,6 +439,10 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
     var toastMessage by mutableStateOf<String?>(null)
         private set
 
+    /** Everything needed to undo the most recent [mergeDecks] call — see [revertLastMerge]. */
+    var lastMergeUndo by mutableStateOf<MergeUndoSnapshot?>(null)
+        private set
+
     val themeMode: StateFlow<Int>
 
     // null until Room has actually delivered the sessions table, so screens can tell
@@ -2105,6 +2109,141 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
+    /**
+     * A true, independent duplicate of each deck/set in [deckIds] — including every nested child
+     * set, to arbitrary depth — as new rows with new ids, landing as a sibling of whatever it was
+     * cloned from (same `parentDeckId`). Review/scheduling progress resets to fresh on every
+     * cloned card; everything else (content, tags, flags, pin/known state) carries over unchanged.
+     * Distinct from [cloneDeckAsSet] ("Clone Parent" in Set Manager's creation menu), which makes
+     * a *linked* set sharing the original's own card rows rather than a real copy.
+     */
+    fun cloneDecksForSelection(deckIds: List<String>) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val allDecks = localDecks
+            // The authoritative source for "this deck's cards" is its own cardIds list, not
+            // ownerDeckId — a linked set's cardIds point at cards actually owned by its parent
+            // (DeckLinkageResolver.resolveEffectiveDecks does the same lookup), so grouping by
+            // ownerDeckId silently cloned zero cards for any linked set and could under/over-count
+            // for a deck whose cardIds had drifted from ownerDeckId.
+            val cardsById = localCards.associateBy { it.id }
+            val newDecks = mutableListOf<Deck>()
+            val newCards = mutableListOf<Card>()
+            val now = System.currentTimeMillis()
+
+            fun cloneSubtree(originalId: String, newParentId: String?) {
+                val original = allDecks.find { it.id == originalId } ?: return
+                val newId = UUID.randomUUID().toString()
+                val originalCards = original.cardIds.mapNotNull { cardsById[it] }
+                val idMap = originalCards.associate { it.id to UUID.randomUUID().toString() }
+                newCards.addAll(originalCards.map { card ->
+                    card.copy(
+                        id = idMap.getValue(card.id), ownerDeckId = newId,
+                        createdAt = now, updatedAt = now,
+                        reviewedAt = null, reviewedCount = 0,
+                        gradedAttempts = emptyList(), incorrectAttempts = emptyList(),
+                        reviewLogs = emptyList(), absoluteDueDate = null,
+                        fsrsStability = null, fsrsDifficulty = null, fsrsElapsedDays = null,
+                        fsrsScheduledDays = null, fsrsState = FsrsState.NEW, fsrsLastReview = null,
+                        fsrsLapses = 0, lastReviewDurationMs = 0L,
+                        isPendingSync = true, isDeleted = false
+                    )
+                })
+                newDecks.add(original.copy(
+                    id = newId, parentDeckId = newParentId,
+                    name = getApplication<Application>().getString(R.string.clone_name_format, original.name),
+                    cardIds = original.cardIds.mapNotNull { idMap[it] },
+                    createdAt = now, updatedAt = now,
+                    isPendingSync = true, isDeleted = false
+                ))
+                // Children of the ORIGINAL, reparented under the NEW clone — preserves the
+                // original's own hierarchy inside the cloned subtree.
+                allDecks.filter { it.parentDeckId == originalId }.forEach { child -> cloneSubtree(child.id, newId) }
+            }
+
+            deckIds.forEach { id -> cloneSubtree(id, allDecks.find { it.id == id }?.parentDeckId) }
+
+            database.withTransaction {
+                deckDao.insertOrUpdateAll(newDecks)
+                cardDao.insertOrUpdateAll(newCards)
+            }
+        }
+    }
+
+    /**
+     * Combines [selectedIds] (2+ decks/sets sharing the same parent — same level, per
+     * [onError]'s check) into one: the first-selected item survives (keeps its own name/settings)
+     * and absorbs every other selected item's cards plus any of their own child sets (reparented
+     * onto the survivor); the other selected items are soft-deleted. [lastMergeUndo] captures
+     * everything needed to put it all back — see [revertLastMerge].
+     */
+    fun mergeDecks(selectedIds: List<String>, onMerged: (survivorId: String) -> Unit, onError: (String) -> Unit) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val allDecks = localDecks
+            val selected = selectedIds.mapNotNull { id -> allDecks.find { it.id == id } }
+            if (selected.size < 2) return@launch
+            if (selected.map { it.parentDeckId }.distinct().size > 1) {
+                withContext(Dispatchers.Main) { onError(getApplication<Application>().getString(R.string.merge_same_level_required)) }
+                return@launch
+            }
+            val survivor = selected.find { it.id == selectedIds.first() } ?: selected.first()
+            val losers = selected.filter { it.id != survivor.id }
+            if (losers.isEmpty()) return@launch
+
+            val allCards = localCards
+            val movedCardOriginalOwner = mutableMapOf<String, String>()
+            losers.forEach { loser -> loser.cardIds.forEach { cardId -> movedCardOriginalOwner[cardId] = loser.id } }
+            val childSets = allDecks.filter { it.parentDeckId in losers.map { loser -> loser.id } }
+            val reparentedChildOriginalParent = childSets.associate { it.id to it.parentDeckId }
+
+            val snapshot = MergeUndoSnapshot(
+                survivorId = survivor.id,
+                originalSurvivorCardIds = survivor.cardIds,
+                mergedDecks = losers,
+                movedCardOriginalOwner = movedCardOriginalOwner,
+                reparentedChildOriginalParent = reparentedChildOriginalParent
+            )
+
+            val now = System.currentTimeMillis()
+            database.withTransaction {
+                movedCardOriginalOwner.keys.forEach { cardId ->
+                    allCards.find { it.id == cardId }?.let { cardDao.insertOrUpdate(it.copy(ownerDeckId = survivor.id, isPendingSync = true)) }
+                }
+                childSets.forEach { child -> deckDao.insertOrUpdate(child.copy(parentDeckId = survivor.id, isPendingSync = true)) }
+                deckDao.insertOrUpdate(survivor.copy(cardIds = survivor.cardIds + movedCardOriginalOwner.keys, updatedAt = now, isPendingSync = true))
+                losers.forEach { loser -> deckDao.softDelete(loser.id, now) }
+            }
+
+            withContext(Dispatchers.Main) {
+                lastMergeUndo = snapshot
+                onMerged(survivor.id)
+            }
+        }
+    }
+
+    /** Undoes the most recent [mergeDecks] call — restores the merged-away decks/sets (undeleted,
+     * exactly as they were), moves their cards' ownership back, reparents their child sets back,
+     * and restores the survivor's original card list. Cleared after use. */
+    fun revertLastMerge() {
+        val snapshot = lastMergeUndo ?: return
+        viewModelScope.launch(Dispatchers.IO) {
+            val allCards = localCards
+            val allDecks = localDecks
+            database.withTransaction {
+                snapshot.movedCardOriginalOwner.forEach { (cardId, originalOwnerId) ->
+                    allCards.find { it.id == cardId }?.let { cardDao.insertOrUpdate(it.copy(ownerDeckId = originalOwnerId, isPendingSync = true)) }
+                }
+                snapshot.reparentedChildOriginalParent.forEach { (childId, originalParentId) ->
+                    allDecks.find { it.id == childId }?.let { deckDao.insertOrUpdate(it.copy(parentDeckId = originalParentId, isPendingSync = true)) }
+                }
+                deckDao.getDeckById(snapshot.survivorId)?.let {
+                    deckDao.insertOrUpdate(it.copy(cardIds = snapshot.originalSurvivorCardIds, isPendingSync = true))
+                }
+                snapshot.mergedDecks.forEach { loser -> deckDao.insertOrUpdate(loser.copy(isDeleted = false, isPendingSync = true)) }
+            }
+            withContext(Dispatchers.Main) { lastMergeUndo = null }
+        }
+    }
+
     fun toggleDeckPinned(deck: Deck) {
         viewModelScope.launch(Dispatchers.IO) {
             deckDao.insertOrUpdate(deck.copy(isPinned = !deck.isPinned, updatedAt = System.currentTimeMillis(), isPendingSync = true))
@@ -2476,6 +2615,16 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
     }
 
 }
+
+/** Snapshot [FlashcardViewModel.mergeDecks] captures right before merging, so
+ * [FlashcardViewModel.revertLastMerge] can put everything back exactly as it was. */
+data class MergeUndoSnapshot(
+    val survivorId: String,
+    val originalSurvivorCardIds: List<String>,
+    val mergedDecks: List<Deck>,
+    val movedCardOriginalOwner: Map<String, String>,
+    val reparentedChildOriginalParent: Map<String, String?>
+)
 
 class FlashcardViewModelFactory(private val application: Application) : androidx.lifecycle.ViewModelProvider.Factory {
     override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {

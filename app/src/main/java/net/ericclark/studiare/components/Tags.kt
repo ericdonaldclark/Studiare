@@ -28,6 +28,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -45,6 +46,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -757,6 +759,300 @@ fun TagSelectionDialog(
                             interactionSource = saveSelInteractionSource,
                             modifier = Modifier.pressSquish(saveSelInteractionSource, 0.95f),
                             enabled = isSaveEnabled || selectedTags.isNotEmpty(),
+                            shape = RoundedCornerShape(dimensions.cornerRadiusButton)
+                        ) {
+                            Text(getText(R.string.save))
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** Same chip [TagChip] uses, but for a tag shared across several cards at once: [state] is `true`
+ * when every selected card already has the tag (tap removes it from all), `false` when none do
+ * (tap adds it to all), or `null` when only some do — tapping a `null` chip resolves it to `true`
+ * (add to every card missing it), the same direction Android's own tri-state checkbox resolves an
+ * indeterminate state on the next click. */
+@Composable
+fun TriStateTagChip(
+    text: String,
+    colorHex: String,
+    state: Boolean?,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val dimensions = LocalStudiareDimensions.current
+    val tagColor = parseHexColor(colorHex)
+    val displayText = if (text.length > 16) text.take(13) + "..." else text
+    val chipInteractionSource = remember { MutableInteractionSource() }
+    // Fill communicates the state on its own (not just the icon, which is easy to miss at a
+    // glance): NONE is an outline only, matching CardTagRow's own "+" add-tag affordance; SOME is
+    // half-filled, visually between the other two; ALL is fully filled, same as every other tag
+    // chip in the app.
+    val fillColor = when (state) {
+        true -> tagColor
+        null -> tagColor.copy(alpha = 0.5f)
+        false -> Color.Transparent
+    }
+    val contentColor = when (state) {
+        false -> tagColor
+        else -> if (tagColor.luminance() > 0.5f) Color.Black else Color.White
+    }
+
+    Surface(
+        color = fillColor,
+        shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+        border = if (state == false) BorderStroke(1.dp, tagColor) else null,
+        modifier = modifier
+            .padding(end = dimensions.spacingSmall)
+            .pressSquish(chipInteractionSource, 0.9f)
+            .clickable(interactionSource = chipInteractionSource, indication = LocalIndication.current, onClick = onClick)
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(horizontal = dimensions.paddingMedium, vertical = 6.dp)
+        ) {
+            Text(
+                text = displayText,
+                color = contentColor,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1
+            )
+            if (state != false) {
+                Spacer(Modifier.width(dimensions.spacingSmall))
+                Icon(
+                    imageVector = if (state == true) Icons.Default.Clear else Icons.Default.Remove,
+                    contentDescription = if (state == true) getText(R.string.remove) else getText(R.string.tag_partially_selected),
+                    tint = contentColor,
+                    modifier = Modifier.size(16.dp)
+                )
+            }
+        }
+    }
+}
+
+/**
+ * The multi-select "Tag" action's dialog (Simple/Bulk Editor) — same shape as [TagSelectionDialog]
+ * but for several cards' tags at once via [TriStateTagChip]. [selectedCardsTags] is each selected
+ * card's own current tag set; [onSave] reports only the tags the user actually touched (as
+ * add-to-every-card / remove-from-every-card sets) — any tag never tapped is left exactly as it
+ * was per card, mixed selections included.
+ */
+@Composable
+fun MultiCardTagSelectionDialog(
+    selectedCardsTags: List<Set<String>>,
+    allTags: List<TagDefinition>,
+    currentDeckTags: Set<String>,
+    onDismiss: () -> Unit,
+    onSave: (addTags: Set<String>, removeTags: Set<String>) -> Unit,
+    onCreateTag: (String, String) -> Unit
+) {
+    val dimensions = LocalStudiareDimensions.current
+    val locallyCreatedTags = remember { mutableStateListOf<TagDefinition>() }
+    // Only ever holds a tag once the user has explicitly tapped it — its presence (not its value)
+    // is what isSaveEnabled below checks, since the initial, untouched tri-state is never itself
+    // something to save.
+    val overrides = remember { mutableStateMapOf<String, Boolean>() }
+
+    val combinedTags = remember(allTags, locallyCreatedTags.toList()) {
+        (allTags + locallyCreatedTags).distinctBy { it.name }
+    }
+    val thisDeckTags = combinedTags.filter { it.name in currentDeckTags }.sortedBy { it.name.lowercase() }
+    val otherDeckTags = combinedTags.filter { it.name !in currentDeckTags }.sortedBy { it.name.lowercase() }
+
+    fun initialState(tagName: String): Boolean? {
+        val presentCount = selectedCardsTags.count { tagName in it }
+        return when (presentCount) {
+            0 -> false
+            selectedCardsTags.size -> true
+            else -> null
+        }
+    }
+    fun displayState(tagName: String): Boolean? = if (overrides.containsKey(tagName)) overrides[tagName] else initialState(tagName)
+    fun toggle(tagName: String) {
+        overrides[tagName] = displayState(tagName) != true
+    }
+
+    var newTagName by remember { mutableStateOf("") }
+    var newTagColor by remember { mutableStateOf("#0D47A1") }
+    val isCreateEnabled = newTagName.isNotBlank()
+    val isSaveEnabled = overrides.isNotEmpty()
+
+    AnimatedDialog(onDismissRequest = onDismiss, properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)) {
+        Card(
+            shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+            modifier = Modifier
+                .widthIn(min = 280.dp, max = 560.dp)
+                .heightIn(max = 700.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
+        ) {
+            Column(modifier = Modifier.padding(dimensions.paddingLarge)) {
+                Text(
+                    text = getText(R.string.tags_manage),
+                    style = MaterialTheme.typography.headlineSmall,
+                    modifier = Modifier.padding(bottom = dimensions.spacingSmall)
+                )
+                Text(
+                    getText(R.string.tag_multi_select_hint),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(bottom = dimensions.spacingMedium)
+                )
+
+                Column(
+                    modifier = Modifier
+                        .weight(1f, fill = false)
+                        .verticalScroll(rememberScrollState())
+                ) {
+                    @Composable
+                    fun TagItem(tag: TagDefinition) {
+                        TriStateTagChip(
+                            text = tag.name,
+                            colorHex = tag.color,
+                            state = displayState(tag.name),
+                            onClick = { toggle(tag.name) },
+                            modifier = Modifier.padding(bottom = dimensions.spacingSmall)
+                        )
+                    }
+
+                    if (thisDeckTags.isNotEmpty()) {
+                        Text(
+                            getText(R.string.tags_in_this_deck),
+                            style = MaterialTheme.typography.titleSmall,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.padding(bottom = dimensions.spacingSmall)
+                        )
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .horizontalScroll(rememberScrollState())
+                                .padding(bottom = dimensions.spacingMedium)
+                        ) {
+                            thisDeckTags.forEach { TagItem(it) }
+                        }
+                    }
+
+                    if (otherDeckTags.isNotEmpty()) {
+                        Text(
+                            getText(R.string.tags_from_other_decks),
+                            style = MaterialTheme.typography.titleSmall,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.padding(bottom = dimensions.spacingSmall)
+                        )
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .horizontalScroll(rememberScrollState())
+                                .padding(bottom = dimensions.spacingMedium)
+                        ) {
+                            otherDeckTags.forEach { TagItem(it) }
+                        }
+                    }
+
+                    if (thisDeckTags.isEmpty() && otherDeckTags.isEmpty()) {
+                        Text(
+                            getText(R.string.tags_none_found),
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontStyle = FontStyle.Italic,
+                            modifier = Modifier.padding(bottom = dimensions.spacingMedium)
+                        )
+                    }
+                }
+
+                HorizontalDivider(modifier = Modifier.padding(vertical = dimensions.spacingMedium))
+
+                Text(
+                    getText(R.string.tag_create_new),
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(bottom = dimensions.spacingSmall)
+                )
+
+                OutlinedTextField(
+                    value = newTagName,
+                    onValueChange = { newTagName = it },
+                    label = { Text(getText(R.string.tag_name)) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
+                )
+
+                Spacer(Modifier.height(dimensions.spacingSmall))
+
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    OutlinedTextField(
+                        value = newTagColor,
+                        onValueChange = { newTagColor = it },
+                        label = { Text(getText(R.string.hex_color)) },
+                        modifier = Modifier.weight(1f),
+                        singleLine = true,
+                        shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+                        trailingIcon = {
+                            Box(
+                                modifier = Modifier
+                                    .size(24.dp)
+                                    .clip(CircleShape)
+                                    .background(parseHexColor(newTagColor))
+                                    .border(1.dp, MaterialTheme.colorScheme.outline, CircleShape)
+                            )
+                        }
+                    )
+                }
+
+                Spacer(Modifier.height(dimensions.spacingSmall))
+                SimpleColorPicker(
+                    selectedColor = newTagColor,
+                    onColorSelected = { newTagColor = it }
+                )
+
+                Spacer(Modifier.height(dimensions.spacingMedium))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    val createInteractionSource = remember { MutableInteractionSource() }
+                    Button(
+                        onClick = {
+                            if (isCreateEnabled) {
+                                val name = newTagName.trim()
+                                onCreateTag(name, newTagColor)
+                                locallyCreatedTags.add(TagDefinition(name = name, color = newTagColor))
+                                overrides[name] = true
+                                newTagName = ""
+                                newTagColor = "#0D47A1"
+                            }
+                        },
+                        interactionSource = createInteractionSource,
+                        modifier = Modifier.pressSquish(createInteractionSource, 0.95f),
+                        enabled = isCreateEnabled,
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary),
+                        shape = RoundedCornerShape(dimensions.cornerRadiusButton)
+                    ) {
+                        Text(getText(R.string.create))
+                    }
+
+                    Row {
+                        val cancelSelInteractionSource = remember { MutableInteractionSource() }
+                        TextButton(onClick = onDismiss, interactionSource = cancelSelInteractionSource, modifier = Modifier.pressSquish(cancelSelInteractionSource, 0.95f), shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(getText(R.string.cancel)) }
+
+                        Spacer(Modifier.width(dimensions.spacingSmall))
+
+                        val saveSelInteractionSource = remember { MutableInteractionSource() }
+                        Button(
+                            onClick = {
+                                onSave(
+                                    overrides.filterValues { it }.keys.toSet(),
+                                    overrides.filterValues { !it }.keys.toSet()
+                                )
+                            },
+                            interactionSource = saveSelInteractionSource,
+                            modifier = Modifier.pressSquish(saveSelInteractionSource, 0.95f),
+                            enabled = isSaveEnabled,
                             shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                         ) {
                             Text(getText(R.string.save))

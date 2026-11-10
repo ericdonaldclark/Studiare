@@ -56,7 +56,7 @@ fun CreateSetOptionsDialog(
                         }
                     }
                 }
-                Option(Icons.Default.ContentCopy, "Clone Entire Deck", action = SetCreationAction.CLONE)
+                Option(Icons.Default.ContentCopy, "Clone Parent", action = SetCreationAction.CLONE)
                 Option(Icons.Default.ChecklistRtl, getText(R.string.pick_and_choose), action = SetCreationAction.PICK_AND_CHOOSE)
                 Option(Icons.Default.FilterList, "Filter & Sort", action = SetCreationAction.FILTER_AND_SORT)
                 if (hasSets) Option(Icons.Default.Delete, getText(R.string.delete_all_sets), action = SetCreationAction.DELETE_ALL)
