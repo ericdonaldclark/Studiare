@@ -144,6 +144,7 @@ fun PinnedScreen(navController: NavController, viewModel: FlashcardViewModel) {
 
     var showSortDialog by remember { mutableStateOf(false) }
     var editingCard by remember { mutableStateOf<Card?>(null) }
+    var showMoveDialogForCard by remember { mutableStateOf<Card?>(null) }
     var showRestartDialog by remember { mutableStateOf<ActiveSession?>(null) }
     var showDeleteSessionDialog by remember { mutableStateOf<ActiveSession?>(null) }
     var showDeleteDeckDialog by remember { mutableStateOf<DeckSummary?>(null) }
@@ -641,10 +642,34 @@ fun PinnedScreen(navController: NavController, viewModel: FlashcardViewModel) {
                         }
                     }
                     editingCard = null
+                },
+                onClone = {
+                    deck?.let { viewModel.cloneCardsForSelection(it, setOf(card.id)) }
+                    editingCard = null
+                },
+                onMove = {
+                    showMoveDialogForCard = card
+                    editingCard = null
                 }
             ),
             onCancel = { editingCard = null },
             normalizationType = deck?.deck?.normalizationType ?: NormalizationType.NONE
+        )
+    }
+
+    showMoveDialogForCard?.let { card ->
+        val deck = remember(card.id, allDecks) { allDecks.find { it.cards.any { c -> c.id == card.id } } }
+        net.ericclark.studiare.screens.Dialogs.MoveCardsDialog(
+            decks = allDecks,
+            onDismiss = { showMoveDialogForCard = null },
+            onMoveToExisting = { toDeckId ->
+                deck?.let { viewModel.moveCardsToDeck(listOf(card.toCardDataForSave()), fromDeckId = it.deck.id, toDeckId = toDeckId) }
+                showMoveDialogForCard = null
+            },
+            onMoveToNewDeck = { name ->
+                deck?.let { viewModel.moveCardsToNewDeck(listOf(card.toCardDataForSave()), fromDeckId = it.deck.id, newDeckName = name) {} }
+                showMoveDialogForCard = null
+            }
         )
     }
 }

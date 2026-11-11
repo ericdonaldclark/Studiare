@@ -49,6 +49,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.livedata.observeAsState
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
@@ -209,6 +210,7 @@ fun DeckEditorScreen(
     // before landing on the empty card list.
     var showSettingsDialog by remember { mutableStateOf(deckWithCards == null || cameFromMerge) }
     var showTagDialogForSelection by remember { mutableStateOf<Set<String>?>(null) }
+    var showMoveDialogForSelection by remember { mutableStateOf<Set<String>?>(null) }
     // True only for that very first auto-opened dialog — Cancel there abandons deck creation
     // entirely (navigates back) instead of just closing to reveal the empty editor. Cleared after
     // the first save so a later re-open (gear icon) cancels normally.
@@ -225,6 +227,7 @@ fun DeckEditorScreen(
     val allTags by viewModel.tags.collectAsState()
     val savedTemplateSets by viewModel.templateSets.collectAsState()
     val alwaysOpenBulkEditor by viewModel.alwaysOpenBulkEditor.collectAsState()
+    val allDecksState by viewModel.allDecks.observeAsState(emptyList())
 
     // Builds a brand-new empty card. The editor always keeps exactly one of these at the end of
     // `cards` (see the trailing-blank-card effect below), so it behaves like an endless growing
@@ -449,6 +452,89 @@ fun DeckEditorScreen(
             kotlinx.coroutines.delay(5000)
             snackbarJob.cancel()
         }
+    }
+
+    // True independent duplicates, same reset-metadata semantics as the Simple Editor's/decks'
+    // own Clone (see CardDataForSave.asClone) — built as fresh CardEditorState here instead of
+    // going through the ViewModel, since this screen's `cards` is in-memory/unsaved until Save.
+    // Inserted right after each source card (reversed so earlier insertions don't shift later
+    // sources' indices) rather than appended at the end, so a clone stays next to what it came from.
+    fun cloneCardStates(ids: Set<String>) {
+        val sources = cards.withIndex().filter { (_, card) -> card.id in ids }
+        sources.reversed().forEach { (index, source) ->
+            val clone = CardEditorState(
+                id = UUID.randomUUID().toString(),
+                front = mutableStateOf(source.front.value),
+                frontRichTextInfo = mutableStateOf(source.frontRichTextInfo.value),
+                isFrontRichText = mutableStateOf(source.isFrontRichText.value),
+                back = mutableStateOf(source.back.value),
+                backRichTextInfo = mutableStateOf(source.backRichTextInfo.value),
+                isBackRichText = mutableStateOf(source.isBackRichText.value),
+                frontNotes = mutableStateOf(source.frontNotes.value),
+                backNotes = mutableStateOf(source.backNotes.value),
+                difficulty = mutableStateOf(source.difficulty.value),
+                isKnown = mutableStateOf(false),
+                reviewedCount = mutableStateOf(0),
+                gradedAttempts = mutableStateOf(emptyList()),
+                incorrectAttempts = mutableStateOf(emptyList()),
+                reviewLogs = mutableStateOf(emptyList()),
+                absoluteDueDate = mutableStateOf(null),
+                tags = mutableStateOf(source.tags.value),
+                isSuspended = mutableStateOf(false),
+                flag = mutableStateOf(CardFlag.NONE),
+                isPinned = mutableStateOf(false),
+                createdAt = mutableLongStateOf(System.currentTimeMillis()),
+                updatedAt = mutableStateOf(System.currentTimeMillis())
+            )
+            cards.add(index + 1, clone)
+        }
+    }
+
+    fun cardDataFrom(cardState: CardEditorState): CardDataForSave = CardDataForSave(
+        id = cardState.id,
+        front = cardState.front.value.trim(),
+        frontRichText = cardState.frontRichTextInfo.value?.trim(),
+        back = cardState.back.value.trim(),
+        backRichText = cardState.backRichTextInfo.value?.trim(),
+        frontNotes = cardState.frontNotes.value,
+        backNotes = cardState.backNotes.value,
+        difficulty = cardState.difficulty.value,
+        isKnown = cardState.isKnown.value,
+        reviewedCount = cardState.reviewedCount.value,
+        gradedAttempts = cardState.gradedAttempts.value,
+        incorrectAttempts = cardState.incorrectAttempts.value,
+        reviewLogs = cardState.reviewLogs.value,
+        absoluteDueDate = cardState.absoluteDueDate.value,
+        tags = cardState.tags.value,
+        isSuspended = cardState.isSuspended.value,
+        flag = cardState.flag.value,
+        isPinned = cardState.isPinned.value,
+        createdAt = cardState.createdAt.value,
+        updatedAt = cardState.updatedAt.value
+    )
+
+    // Move is an immediate cross-deck DB write (unlike every other action here, which only
+    // touches the in-memory `cards` list until the screen's own Save) — there's no destination
+    // CardEditorState list loaded in this screen to move into, so it goes straight through
+    // FlashcardViewModel.moveCardsToDeck/moveCardsToNewDeck (built from this card's *current*
+    // in-memory edits, so a move also commits any in-progress change), then the moved rows are
+    // dropped from this screen's own `cards` list so they stop appearing here immediately.
+    fun moveCardStatesToExisting(ids: Set<String>, toDeckId: String) {
+        val fromDeckId = deckWithCards?.deck?.id ?: return
+        val toMove = cards.filter { it.id in ids }
+        if (toMove.isEmpty()) return
+        viewModel.moveCardsToDeck(toMove.map { cardDataFrom(it) }, fromDeckId = fromDeckId, toDeckId = toDeckId)
+        cards.removeAll(toMove)
+        showMoveDialogForSelection = null
+    }
+
+    fun moveCardStatesToNewDeck(ids: Set<String>, newDeckName: String) {
+        val fromDeckId = deckWithCards?.deck?.id ?: return
+        val toMove = cards.filter { it.id in ids }
+        if (toMove.isEmpty()) return
+        viewModel.moveCardsToNewDeck(toMove.map { cardDataFrom(it) }, fromDeckId = fromDeckId, newDeckName = newDeckName) {}
+        cards.removeAll(toMove)
+        showMoveDialogForSelection = null
     }
 
     fun setKnownForSelection(ids: Set<String>, known: Boolean) {
@@ -804,6 +890,15 @@ fun DeckEditorScreen(
         )
     }
 
+    showMoveDialogForSelection?.let { ids ->
+        net.ericclark.studiare.screens.Dialogs.MoveCardsDialog(
+            decks = allDecksState,
+            onDismiss = { showMoveDialogForSelection = null },
+            onMoveToExisting = { toDeckId -> moveCardStatesToExisting(ids, toDeckId) },
+            onMoveToNewDeck = { name -> moveCardStatesToNewDeck(ids, name) }
+        )
+    }
+
     // Selection table's own filtered/sorted list — see selectionSortType/selectionFilterText
     // above. Hoisted here (not local to the table's own render block) since the toolbar's Select
     // All button and count tile need it too.
@@ -948,6 +1043,26 @@ fun DeckEditorScreen(
                                 onClick = { showTagDialogForSelection = selection.selected }
                             ),
                             SelectionAction(
+                                id = "clone",
+                                icon = Icons.Default.ContentCopy,
+                                label = getText(context, R.string.clone),
+                                onClick = {
+                                    val ids = selection.selected
+                                    selection.exit()
+                                    cloneCardStates(ids)
+                                }
+                            ),
+                            SelectionAction(
+                                id = "move",
+                                icon = Icons.Default.DriveFileMove,
+                                label = getText(context, R.string.move),
+                                onClick = {
+                                    val ids = selection.selected
+                                    selection.exit()
+                                    showMoveDialogForSelection = ids
+                                }
+                            ),
+                            SelectionAction(
                                 id = "edit",
                                 icon = Icons.Default.Edit,
                                 label = getText(context, R.string.edit),
@@ -970,8 +1085,11 @@ fun DeckEditorScreen(
                                 }
                             )
                         )
-                        // "Edit" only once exactly one card is selected; everything else needs ≥1.
-                        others.filter { it.id != "edit" || selection.selected.size == 1 } + selectAll
+                        // "Edit" only once exactly one card is selected; "Move" needs an existing,
+                        // already-persisted deck to move out of (see moveCardStatesToExisting/
+                        // ...ToNewDeck). Everything else needs ≥1.
+                        others.filter { it.id != "edit" || selection.selected.size == 1 }
+                            .filter { it.id != "move" || deckWithCards != null } + selectAll
                     }
                 }
                 Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)) {
@@ -1156,6 +1274,8 @@ fun DeckEditorScreen(
                                             onPinClick = {
                                                 cardState.isPinned.value = !cardState.isPinned.value
                                             },
+                                            onCloneClick = { cloneCardStates(setOf(cardState.id)) },
+                                            onMoveClick = if (deckWithCards != null) { { showMoveDialogForSelection = setOf(cardState.id) } } else null,
                                             allTags = allTags,
                                             currentDeckTags = currentDeckTags,
                                             onUpdateTags = { newTags ->
@@ -1233,6 +1353,8 @@ fun DeckEditorScreen(
                                         onDelete = { deleteCardsWithUndo(listOf(cardState)) },
                                         onKnownClick = { cardState.isKnown.value = !cardState.isKnown.value },
                                         onPinClick = { cardState.isPinned.value = !cardState.isPinned.value },
+                                        onCloneClick = { cloneCardStates(setOf(cardState.id)) },
+                                        onMoveClick = if (deckWithCards != null) { { showMoveDialogForSelection = setOf(cardState.id) } } else null,
                                         allTags = allTags,
                                         currentDeckTags = currentDeckTags,
                                         onUpdateTags = { newTags -> cardState.tags.value = newTags.toList() },

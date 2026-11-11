@@ -63,7 +63,7 @@ import net.ericclark.studiare.screens.UI_Components.DynamicNoteEditor
 
 /** The action buttons at the bottom of a [CardEditDialog] — either Cancel/Save (editing an existing card) or Cancel/Add More/Add (creating a new one). */
 sealed class CardEditDialogMode {
-    data class Edit(val onSave: () -> Unit, val onDelete: () -> Unit) : CardEditDialogMode()
+    data class Edit(val onSave: () -> Unit, val onDelete: () -> Unit, val onClone: () -> Unit, val onMove: () -> Unit) : CardEditDialogMode()
     data class Create(val onAdd: () -> Unit, val onAddMore: () -> Unit) : CardEditDialogMode()
 }
 
@@ -149,6 +149,8 @@ fun CardEditDialog(
                         cardNumber = cardNumber,
                         totalCards = totalCards,
                         onDelete = { if (mode is CardEditDialogMode.Edit) mode.onDelete() },
+                        onCloneClick = if (mode is CardEditDialogMode.Edit) mode.onClone else null,
+                        onMoveClick = if (mode is CardEditDialogMode.Edit) mode.onMove else null,
                         onKnownClick = { cardState.isKnown.value = !cardState.isKnown.value },
                         onPinClick = { cardState.isPinned.value = !cardState.isPinned.value },
                         allTags = allTags,

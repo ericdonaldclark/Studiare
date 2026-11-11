@@ -1718,6 +1718,91 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         )
     }
 
+    /**
+     * True independent duplicates — fresh ids, review/FSRS state reset to the same defaults a
+     * newly-created card gets (matching [cloneDecksForSelection]'s own "true independent
+     * duplicate" semantics for decks/sets) — not snapshots of review progress, since a clone's
+     * whole point is a fresh starting point. Builds the full cardsToSave list (originals + all
+     * clones) in one call rather than looping [saveSingleCard] per id, since that single-card
+     * path's cardsToSave is derived from this same stale `deck` snapshot each time and would
+     * silently drop earlier clones in the same batch.
+     */
+    fun cloneCardsForSelection(deck: DeckWithCards, cardIds: Set<String>) {
+        val clones = deck.cards.filter { it.id in cardIds }.map { it.toCardDataForSave().asClone() }
+        if (clones.isEmpty()) return
+        val cardsToSave = deck.cards.map { it.toCardDataForSave() } + clones
+        checkForDuplicatesInEditor(
+            deck.deck.id, deck.deck.name, cardsToSave, deck.deck.normalizationType, deck.deck.deckSortMode,
+            deck.deck.parentDeckId, deck.deck.frontLanguage, deck.deck.backLanguage, deck.deck.description,
+            deck.deck.dailyNewCardLimit, deck.deck.dailyReviewLimit, deck.deck.frontNoteTemplates, deck.deck.backNoteTemplates
+        )
+    }
+
+    fun cloneSingleCard(deck: DeckWithCards, cardId: String) = cloneCardsForSelection(deck, setOf(cardId))
+
+    /**
+     * Cross-deck move to an *existing* deck or set — reassigns each card's `ownerDeckId` and
+     * updates both decks' `cardIds`, the same direct-DAO pattern [mergeDecks] already uses for
+     * reparenting cards, rather than [saveDeckWithCards]'s single-deck whole-list-diff pipeline
+     * (not shaped for "remove from one deck, add to a different one" in one transaction). Unlike
+     * [cloneCardsForSelection], review/FSRS state moves with the card as-is — see
+     * [CardDataForSave.toMovedCard]. [cardsToMove] carries each card's latest (possibly
+     * unsaved-in-editor) content so a move also commits any in-progress edit.
+     */
+    fun moveCardsToDeck(cardsToMove: List<CardDataForSave>, fromDeckId: String, toDeckId: String) {
+        if (cardsToMove.isEmpty()) return
+        viewModelScope.launch(Dispatchers.IO) {
+            val toDeck = localDecks.find { it.id == toDeckId } ?: return@launch
+            val fromDeck = localDecks.find { it.id == fromDeckId }
+            val allCards = localCards
+            val movedIds = cardsToMove.map { it.id }
+            val now = System.currentTimeMillis()
+            database.withTransaction {
+                cardsToMove.forEach { data ->
+                    cardDao.insertOrUpdate(data.toMovedCard(ownerDeckId = toDeckId, existing = allCards.find { it.id == data.id }))
+                }
+                if (fromDeckId != toDeckId) {
+                    fromDeck?.let { deckDao.insertOrUpdate(it.copy(cardIds = it.cardIds - movedIds.toSet(), updatedAt = now, isPendingSync = true)) }
+                    deckDao.insertOrUpdate(toDeck.copy(cardIds = (toDeck.cardIds + movedIds).distinct(), updatedAt = now, isPendingSync = true))
+                }
+            }
+        }
+    }
+
+    /** Same as [moveCardsToDeck], but the destination is a brand-new top-level deck created from
+     * [newDeckName] rather than an existing one — inherits the source deck's language/
+     * normalization settings (so moved cards keep displaying/validating the same way) but nothing
+     * else (templates, limits, etc. start at their own defaults, like any other new deck). */
+    fun moveCardsToNewDeck(cardsToMove: List<CardDataForSave>, fromDeckId: String, newDeckName: String, onCreated: (newDeckId: String) -> Unit) {
+        if (cardsToMove.isEmpty() || newDeckName.isBlank()) return
+        viewModelScope.launch(Dispatchers.IO) {
+            val fromDeck = localDecks.find { it.id == fromDeckId }
+            val allCards = localCards
+            val movedIds = cardsToMove.map { it.id }
+            val now = System.currentTimeMillis()
+            val newId = UUID.randomUUID().toString()
+            val newDeck = Deck(
+                id = newId,
+                name = newDeckName,
+                createdAt = now,
+                updatedAt = now,
+                cardIds = movedIds,
+                normalizationType = fromDeck?.normalizationType ?: NormalizationType.NONE,
+                frontLanguage = fromDeck?.frontLanguage ?: java.util.Locale.getDefault().language,
+                backLanguage = fromDeck?.backLanguage ?: java.util.Locale.getDefault().language,
+                isPendingSync = true
+            )
+            database.withTransaction {
+                cardsToMove.forEach { data ->
+                    cardDao.insertOrUpdate(data.toMovedCard(ownerDeckId = newId, existing = allCards.find { it.id == data.id }))
+                }
+                deckDao.insertOrUpdate(newDeck)
+                fromDeck?.let { deckDao.insertOrUpdate(it.copy(cardIds = it.cardIds - movedIds.toSet(), updatedAt = now, isPendingSync = true)) }
+            }
+            withContext(Dispatchers.Main) { onCreated(newId) }
+        }
+    }
+
     /** See [saveSingleCard] — same pipeline, with the one card excluded instead of upserted. */
     fun deleteSingleCard(deck: DeckWithCards, cardId: String) {
         val cardsToSave = deck.cards.filter { it.id != cardId }.map { it.toCardDataForSave() }

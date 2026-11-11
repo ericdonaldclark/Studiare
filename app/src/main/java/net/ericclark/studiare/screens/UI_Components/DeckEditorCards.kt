@@ -222,6 +222,9 @@ fun CardEditor(
     onDelete: () -> Unit,
     onKnownClick: () -> Unit,
     onPinClick: () -> Unit,
+    /** Null hides the overflow menu entirely — used by [net.ericclark.studiare.screens.Dialogs.CardEditDialog]'s Create mode, where there's no saved card yet to clone or move. */
+    onCloneClick: (() -> Unit)? = null,
+    onMoveClick: (() -> Unit)? = null,
     allTags: List<TagDefinition>,
     currentDeckTags: Set<String>,
     onUpdateTags: (Set<String>) -> Unit,
@@ -260,6 +263,7 @@ fun CardEditor(
             showCardNumberChip = canDelete,
             toggleButtonModifier = Modifier,
             frontTopBarExtra = {
+                val iconSpacing = dimensions.spacingSmall / 2
                 val deleteInteractionSource = remember { MutableInteractionSource() }
                 TooltipIconButton(
                     description = getText(R.string.delete),
@@ -274,7 +278,7 @@ fun CardEditor(
                         tint = if (canDelete) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
                     )
                 }
-                Spacer(Modifier.width(dimensions.spacingSmall))
+                Spacer(Modifier.width(iconSpacing))
                 val pinInteractionSource = remember { MutableInteractionSource() }
                 val isPinned = cardState.isPinned.value
                 TooltipIconButton(
@@ -289,7 +293,32 @@ fun CardEditor(
                         tint = if (isPinned) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-                Spacer(Modifier.width(dimensions.spacingSmall))
+                if (onCloneClick != null || onMoveClick != null) {
+                    Spacer(Modifier.width(iconSpacing))
+                    var showOverflowMenu by remember { mutableStateOf(false) }
+                    Box {
+                        TooltipIconButton(description = getText(R.string.more_options), onClick = { showOverflowMenu = true }) {
+                            Icon(Icons.Default.MoreVert, contentDescription = getText(R.string.more_options))
+                        }
+                        DropdownMenu(expanded = showOverflowMenu, onDismissRequest = { showOverflowMenu = false }) {
+                            if (onCloneClick != null) {
+                                DropdownMenuItem(
+                                    text = { Text(getText(R.string.clone)) },
+                                    leadingIcon = { Icon(Icons.Default.ContentCopy, contentDescription = null) },
+                                    onClick = { showOverflowMenu = false; onCloneClick() }
+                                )
+                            }
+                            if (onMoveClick != null) {
+                                DropdownMenuItem(
+                                    text = { Text(getText(R.string.move)) },
+                                    leadingIcon = { Icon(Icons.Default.DriveFileMove, contentDescription = null) },
+                                    onClick = { showOverflowMenu = false; onMoveClick() }
+                                )
+                            }
+                        }
+                    }
+                }
+                Spacer(Modifier.width(iconSpacing))
             },
             infoContent = { CardMetadataContent(cardState) },
             frontContent = {

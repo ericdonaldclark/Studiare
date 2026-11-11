@@ -21,7 +21,9 @@ import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.DriveFileMove
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Label
@@ -57,6 +59,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.livedata.observeAsState
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -171,12 +174,14 @@ fun SimpleEditorScreen(
     val allTags by viewModel.tags.collectAsState()
     val savedTemplateSets by viewModel.templateSets.collectAsState()
     val alwaysOpenBulkEditor by viewModel.alwaysOpenBulkEditor.collectAsState()
+    val allDecksState by viewModel.allDecks.observeAsState(emptyList())
     val snackbarHostState = remember { SnackbarHostState() }
     val coroutineScope = rememberCoroutineScope()
     val context = LocalContext.current
 
     var editingCard by remember { mutableStateOf<CardEntity?>(null) }
     var showTagDialogForSelection by remember { mutableStateOf<Set<String>?>(null) }
+    var showMoveDialogForSelection by remember { mutableStateOf<Set<String>?>(null) }
     var createCardState by remember { mutableStateOf<CardEditorState?>(null) }
     var showTemplateEditor by remember { mutableStateOf(false) }
     var showFilterOverlay by remember { mutableStateOf(false) }
@@ -305,6 +310,25 @@ fun SimpleEditorScreen(
         }
     }
 
+    fun cloneCardsForSelection(ids: Set<String>) {
+        val deck = deckWithCards ?: return
+        viewModel.cloneCardsForSelection(deck, ids)
+    }
+
+    fun moveCardsForSelectionToExisting(ids: Set<String>, toDeckId: String) {
+        val deck = deckWithCards ?: return
+        val cardsToMove = deck.cards.filter { it.id in ids }.map { it.toCardDataForSave() }
+        viewModel.moveCardsToDeck(cardsToMove, fromDeckId = deck.deck.id, toDeckId = toDeckId)
+        showMoveDialogForSelection = null
+    }
+
+    fun moveCardsForSelectionToNewDeck(ids: Set<String>, newDeckName: String) {
+        val deck = deckWithCards ?: return
+        val cardsToMove = deck.cards.filter { it.id in ids }.map { it.toCardDataForSave() }
+        viewModel.moveCardsToNewDeck(cardsToMove, fromDeckId = deck.deck.id, newDeckName = newDeckName) {}
+        showMoveDialogForSelection = null
+    }
+
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         floatingActionButtonPosition = FabPosition.Center,
@@ -375,6 +399,26 @@ fun SimpleEditorScreen(
                                 icon = Icons.Default.Label,
                                 label = getText(context, R.string.tag),
                                 onClick = { showTagDialogForSelection = selection.selected }
+                            ),
+                            SelectionAction(
+                                id = "clone",
+                                icon = Icons.Default.ContentCopy,
+                                label = getText(context, R.string.clone),
+                                onClick = {
+                                    val ids = selection.selected
+                                    selection.exit()
+                                    cloneCardsForSelection(ids)
+                                }
+                            ),
+                            SelectionAction(
+                                id = "move",
+                                icon = Icons.Default.DriveFileMove,
+                                label = getText(context, R.string.move),
+                                onClick = {
+                                    val ids = selection.selected
+                                    selection.exit()
+                                    showMoveDialogForSelection = ids
+                                }
                             ),
                             SelectionAction(
                                 id = "edit",
@@ -556,6 +600,15 @@ fun SimpleEditorScreen(
         }
     }
 
+    showMoveDialogForSelection?.let { ids ->
+        net.ericclark.studiare.screens.Dialogs.MoveCardsDialog(
+            decks = allDecksState,
+            onDismiss = { showMoveDialogForSelection = null },
+            onMoveToExisting = { toDeckId -> moveCardsForSelectionToExisting(ids, toDeckId) },
+            onMoveToNewDeck = { name -> moveCardsForSelectionToNewDeck(ids, name) }
+        )
+    }
+
     editingCard?.let { card ->
         val editState = remember(card.id) { card.toEditorState() }
         val totalCards = deckWithCards?.cards?.size ?: 1
@@ -573,7 +626,15 @@ fun SimpleEditorScreen(
                     deckWithCards?.let { viewModel.saveSingleCard(it, cardDataFrom(editState)) }
                     editingCard = null
                 },
-                onDelete = { deleteCard(card) }
+                onDelete = { deleteCard(card) },
+                onClone = {
+                    cloneCardsForSelection(setOf(card.id))
+                    editingCard = null
+                },
+                onMove = {
+                    showMoveDialogForSelection = setOf(card.id)
+                    editingCard = null
+                }
             ),
             onCancel = { editingCard = null },
             normalizationType = deckWithCards?.deck?.normalizationType ?: NormalizationType.NONE
