@@ -236,8 +236,10 @@ fun AdvancedDeckEditorDialog(
     frontTemplates: List<NoteField>,
     backTemplates: List<NoteField>,
     onDismiss: () -> Unit,
-    onSave: (List<NoteField>, List<NoteField>, TemplateMode, TemplateScope, String) -> Unit,
-    initialTemplateMode: TemplateMode = TemplateMode.MANUAL,
+    /** Last param is `applyToExistingCards` — true only when "Apply to All" was pressed, false
+     * for "Apply to New" (seeding turns on either way; only "All" also sweeps existing cards). */
+    onSave: (List<NoteField>, List<NoteField>, Boolean, TemplateScope, String, Boolean) -> Unit,
+    initialEnforceTemplate: Boolean = false,
     initialTemplateScope: TemplateScope = TemplateScope.NEW_CARDS,
     /** Name of the [TemplateSet] already backing this deck's template (see
      * `Deck.activeTemplateSetId`), or blank for a deck whose template has never been named yet. */
@@ -254,7 +256,7 @@ fun AdvancedDeckEditorDialog(
     // single open session), so in-progress edits within one session are untouched.
     var localFront by remember(frontTemplates) { mutableStateOf(frontTemplates) }
     var localBack by remember(backTemplates) { mutableStateOf(backTemplates) }
-    var templateMode by remember(initialTemplateMode) { mutableStateOf(initialTemplateMode) }
+    var enforceTemplate by remember(initialEnforceTemplate) { mutableStateOf(initialEnforceTemplate) }
     var templateScope by remember(initialTemplateScope) { mutableStateOf(initialTemplateScope) }
     var templateName by remember(initialTemplateName) { mutableStateOf(initialTemplateName) }
     var showTemplatePicker by remember { mutableStateOf(false) }
@@ -267,24 +269,25 @@ fun AdvancedDeckEditorDialog(
             modifier = Modifier.widthIn(min = 280.dp, max = 560.dp).fillMaxHeight(0.9f)
         ) {
             Column(modifier = Modifier.padding(dimensions.paddingLarge)) {
-                Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(getText(R.string.advanced_editor), style = MaterialTheme.typography.headlineMedium, color = MaterialTheme.colorScheme.primary)
-                        Spacer(Modifier.height(4.dp))
-                        Text(getText(R.string.define_default_note_fields_desc), style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                    Box {
+                Text(getText(R.string.advanced_editor), style = MaterialTheme.typography.headlineMedium, color = MaterialTheme.colorScheme.primary)
+                Spacer(Modifier.height(4.dp))
+                Text(getText(R.string.define_default_note_fields_desc), style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Spacer(Modifier.height(dimensions.spacingMedium))
+
+                Row(horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall), modifier = Modifier.fillMaxWidth()) {
+                    Box(modifier = Modifier.weight(1f)) {
                         // Gated on real saved templates only — the always-present "Default" entry
                         // below doesn't count, since it's just a quick reset to the two locked
                         // fields rather than something worth enabling this button for on its own.
                         OutlinedButton(
                             onClick = { showTemplatePicker = true },
                             enabled = savedTemplateSets.isNotEmpty(),
+                            modifier = Modifier.fillMaxWidth(),
                             shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                         ) {
                             Icon(Icons.Default.FileOpen, contentDescription = null, modifier = Modifier.height(18.dp))
                             Spacer(Modifier.width(8.dp))
-                            Text(getText(R.string.start_from_template), style = MaterialTheme.typography.labelLarge)
+                            Text(getText(R.string.open), style = MaterialTheme.typography.labelLarge)
                         }
                         DropdownMenu(expanded = showTemplatePicker, onDismissRequest = { showTemplatePicker = false }) {
                             DropdownMenuItem(
@@ -316,6 +319,26 @@ fun AdvancedDeckEditorDialog(
                                 )
                             }
                         }
+                    }
+                    OutlinedButton(
+                        onClick = {
+                            localFront = emptyList()
+                            localBack = emptyList()
+                        },
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(dimensions.cornerRadiusButton)
+                    ) {
+                        Text(getText(R.string.reset), style = MaterialTheme.typography.labelLarge)
+                    }
+                    OutlinedButton(
+                        onClick = { showSaveTemplateDialog = true },
+                        enabled = localFront.isNotEmpty() || localBack.isNotEmpty(),
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(dimensions.cornerRadiusButton)
+                    ) {
+                        Icon(Icons.Default.Save, contentDescription = null, modifier = Modifier.height(18.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text(getText(R.string.save), style = MaterialTheme.typography.labelLarge)
                     }
                 }
                 Spacer(Modifier.height(dimensions.spacingMedium))
@@ -409,21 +432,18 @@ fun AdvancedDeckEditorDialog(
                     // of always staying on screen.
                     item {
                         Spacer(Modifier.height(dimensions.spacingLarge))
-                        Text(getText(R.string.template_mode_section_title), style = MaterialTheme.typography.titleMedium)
-                        Text(
-                            getText(R.string.template_mode_section_desc),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(bottom = dimensions.spacingSmall)
-                        )
-                        ConnectedButtonGroup(
-                            items = TemplateMode.entries,
-                            selected = templateMode,
-                            onSelected = { templateMode = it },
-                            labelFor = { it.asString() },
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                        androidx.compose.animation.AnimatedVisibility(visible = templateMode != TemplateMode.MANUAL) {
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(getText(R.string.template_mode_section_title), style = MaterialTheme.typography.titleMedium)
+                                Text(
+                                    getText(R.string.template_mode_section_desc),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            StudiareSwitch(checked = enforceTemplate, onCheckedChange = { enforceTemplate = it })
+                        }
+                        androidx.compose.animation.AnimatedVisibility(visible = enforceTemplate) {
                             Column {
                                 Spacer(Modifier.height(dimensions.spacingSmall))
                                 ConnectedButtonGroup(
@@ -436,36 +456,24 @@ fun AdvancedDeckEditorDialog(
                             }
                         }
                     }
-                    item {
-                        Spacer(Modifier.height(dimensions.spacingMedium))
-                        Text(
-                            getText(R.string.save_as_template_desc),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Spacer(Modifier.height(dimensions.spacingSmall))
-                        OutlinedButton(
-                            onClick = { showSaveTemplateDialog = true },
-                            enabled = localFront.isNotEmpty() || localBack.isNotEmpty(),
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(dimensions.cornerRadiusButton)
-                        ) {
-                            Icon(Icons.Default.Save, contentDescription = null, modifier = Modifier.height(18.dp))
-                            Spacer(Modifier.width(8.dp))
-                            Text(getText(R.string.save_as_template), style = MaterialTheme.typography.labelLarge)
-                        }
-                    }
                 }
 
                 Spacer(Modifier.height(dimensions.spacingMedium))
 
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     TextButton(onClick = onDismiss, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(getText(R.string.cancel), style = MaterialTheme.typography.labelLarge) }
-                    Button(
-                        onClick = { onSave(localFront, localBack, templateMode, templateScope, templateName.trim()) },
-                        enabled = templateName.isNotBlank(),
-                        shape = RoundedCornerShape(dimensions.cornerRadiusButton)
-                    ) { Text(getText(R.string.apply), style = MaterialTheme.typography.labelLarge) }
+                    Row(horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)) {
+                        OutlinedButton(
+                            onClick = { onSave(localFront, localBack, enforceTemplate, templateScope, templateName.trim(), false) },
+                            enabled = templateName.isNotBlank(),
+                            shape = RoundedCornerShape(dimensions.cornerRadiusButton)
+                        ) { Text(getText(R.string.apply_to_new), style = MaterialTheme.typography.labelLarge) }
+                        Button(
+                            onClick = { onSave(localFront, localBack, enforceTemplate, templateScope, templateName.trim(), true) },
+                            enabled = templateName.isNotBlank(),
+                            shape = RoundedCornerShape(dimensions.cornerRadiusButton)
+                        ) { Text(getText(R.string.apply_to_all), style = MaterialTheme.typography.labelLarge) }
+                    }
                 }
             }
         }

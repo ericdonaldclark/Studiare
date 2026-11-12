@@ -112,12 +112,17 @@ fun ExportDecksDialog(
     val areAllSelected = selectedDecks.size == availableItemsToSelect.size && availableItemsToSelect.isNotEmpty()
 
     val canScrollUp by remember {
-        derivedStateOf { listState.firstVisibleItemIndex > 0 }
+        derivedStateOf { listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 0 }
     }
     val canScrollDown by remember {
         derivedStateOf {
-            val lastVisibleItem = listState.layoutInfo.visibleItemsInfo.lastOrNull()
-            lastVisibleItem != null && lastVisibleItem.index < listState.layoutInfo.totalItemsCount - 1
+            val layoutInfo = listState.layoutInfo
+            val lastVisibleItem = layoutInfo.visibleItemsInfo.lastOrNull() ?: return@derivedStateOf false
+            // A merely-peeking last item still counts as "visible" to LazyListState, so an index
+            // comparison alone misses a barely-clipped final item — also require it to be fully
+            // visible (bottom not past the viewport) before saying there's nothing left to scroll to.
+            val viewportEnd = layoutInfo.viewportEndOffset - layoutInfo.afterContentPadding
+            lastVisibleItem.index < layoutInfo.totalItemsCount - 1 || lastVisibleItem.offset + lastVisibleItem.size > viewportEnd
         }
     }
 
@@ -139,9 +144,9 @@ fun ExportDecksDialog(
     }
 
     AnimatedDialog(onDismissRequest = onDismiss, properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)) {
-        val maxDialogHeight = (androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp * 0.9f).dp
+
         Card(
-            modifier = Modifier.widthIn(min = 280.dp, max = 560.dp).heightIn(max = maxDialogHeight),
+            modifier = Modifier.widthIn(min = 280.dp, max = 560.dp).fillMaxHeight(0.9f),
             shape = RoundedCornerShape(dimensions.cornerRadiusMedium), // Dynamic corner radius
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
             elevation = CardDefaults.cardElevation(defaultElevation = dimensions.cardElevation)
@@ -375,6 +380,12 @@ private fun DeckExportTreeItem(
             onCheckedChange = { onToggleSelected() }
         )
         Spacer(Modifier.width(8.dp))
+        Text(
+            deck.deck.name,
+            style = if (depth == 0) MaterialTheme.typography.titleMedium else MaterialTheme.typography.bodyLarge,
+            fontWeight = if (depth == 0) FontWeight.Bold else FontWeight.Normal,
+            modifier = Modifier.weight(1f)
+        )
         if (hasChildren) {
             val chevronInteractionSource = remember { MutableInteractionSource() }
             Icon(
@@ -390,14 +401,6 @@ private fun DeckExportTreeItem(
                     .graphicsLayer { rotationZ = chevronRotation }
                     .padding(4.dp)
             )
-        } else {
-            Spacer(Modifier.size(32.dp))
         }
-        Spacer(Modifier.width(8.dp))
-        Text(
-            deck.deck.name,
-            style = if (depth == 0) MaterialTheme.typography.titleMedium else MaterialTheme.typography.bodyLarge,
-            fontWeight = if (depth == 0) FontWeight.Bold else FontWeight.Normal
-        )
     }
 }

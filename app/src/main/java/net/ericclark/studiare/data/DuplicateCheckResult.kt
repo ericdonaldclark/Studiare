@@ -18,7 +18,8 @@ data class DuplicateCheckResult(
     val backNoteTemplates: List<NoteField> = emptyList(),
     val defaultPromptSide: CardSide? = null,
     val sortPinnedCardsFirst: Boolean? = null,
-    val templateMode: TemplateMode? = null,
+    val seedNewCardsFromTemplate: Boolean? = null,
+    val enforceTemplate: Boolean? = null,
     val templateScope: TemplateScope? = null,
     val activeTemplateSetId: String? = null
 )

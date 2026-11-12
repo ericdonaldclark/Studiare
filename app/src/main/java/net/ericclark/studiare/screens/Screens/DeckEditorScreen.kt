@@ -164,7 +164,8 @@ fun DeckEditorScreen(
     // permanently locking onto the empty-list fallback it saw on that first pass.
     var frontNoteTemplates by remember(deckWithCards?.deck?.id) { mutableStateOf(deckWithCards?.deck?.frontNoteTemplates ?: emptyList()) }
     var backNoteTemplates by remember(deckWithCards?.deck?.id) { mutableStateOf(deckWithCards?.deck?.backNoteTemplates ?: emptyList()) }
-    var templateMode by remember(deckWithCards?.deck?.id) { mutableStateOf(deckWithCards?.deck?.templateMode ?: TemplateMode.MANUAL) }
+    var seedNewCardsFromTemplate by remember(deckWithCards?.deck?.id) { mutableStateOf(deckWithCards?.deck?.seedNewCardsFromTemplate ?: false) }
+    var enforceTemplate by remember(deckWithCards?.deck?.id) { mutableStateOf(deckWithCards?.deck?.enforceTemplate ?: false) }
     var templateScope by remember(deckWithCards?.deck?.id) { mutableStateOf(deckWithCards?.deck?.templateScope ?: TemplateScope.NEW_CARDS) }
     var activeTemplateSetId by remember(deckWithCards?.deck?.id) { mutableStateOf(deckWithCards?.deck?.activeTemplateSetId) }
     var showAdvancedEditor by remember { mutableStateOf(false) }
@@ -240,8 +241,9 @@ fun DeckEditorScreen(
     // Builds a brand-new empty card. The editor always keeps exactly one of these at the end of
     // `cards` (see the trailing-blank-card effect below), so it behaves like an endless growing
     // form instead of needing an explicit "add card" action.
-    // A brand-new card is always "new" for TemplateScope's purposes, so both NEW_CARDS and
-    // ALL_CARDS scope seed it the same way here — only MANUAL mode skips the auto-seed.
+    // A brand-new card is always "new" for TemplateScope's purposes — scope only decides whether
+    // Enforce retroactively reaches existing cards, so a fresh card seeds/locks off these two
+    // deck-level flags directly, regardless of scope.
     fun blankCardState(): CardEditorState = CardEditorState(
         id = UUID.randomUUID().toString(),
         front = mutableStateOf(""),
@@ -250,8 +252,8 @@ fun DeckEditorScreen(
         back = mutableStateOf(""),
         backRichTextInfo = mutableStateOf(null),
         isBackRichText = mutableStateOf(false),
-        frontNotes = mutableStateOf(if (templateMode != TemplateMode.MANUAL) frontNoteTemplates else emptyList()),
-        backNotes = mutableStateOf(if (templateMode != TemplateMode.MANUAL) backNoteTemplates else emptyList()),
+        frontNotes = mutableStateOf(if (seedNewCardsFromTemplate || enforceTemplate) frontNoteTemplates else emptyList()),
+        backNotes = mutableStateOf(if (seedNewCardsFromTemplate || enforceTemplate) backNoteTemplates else emptyList()),
         difficulty = mutableStateOf(DifficultySetting.FIVE),
         isKnown = mutableStateOf(false),
         reviewedCount = mutableStateOf(0),
@@ -265,7 +267,7 @@ fun DeckEditorScreen(
         isPinned = mutableStateOf(false),
         createdAt = mutableLongStateOf(System.currentTimeMillis()),
         updatedAt = mutableStateOf(System.currentTimeMillis()),
-        isDeckTemplateEnforced = mutableStateOf(templateMode == TemplateMode.ENFORCE)
+        isDeckTemplateEnforced = mutableStateOf(enforceTemplate)
     )
 
     // State for the list of cards in the editor
@@ -554,6 +556,8 @@ fun DeckEditorScreen(
 
     // Unlike Move, "Use Template" never needs a persisted deck — it only mutates this screen's
     // in-memory `cards`, same as Clone/Tag/Known/Pin, deferred to this screen's own Save.
+    // Use Template's own Apply/Enforce/Remove-Enforcement actions stay on the dialog so the user
+    // can keep trying different templates — only Close/dismiss and Open Template Editor leave it.
     fun applyTemplateToCardStates(ids: Set<String>, templateSet: net.ericclark.studiare.data.TemplateSet) {
         cards.filter { it.id in ids }.forEach { card ->
             val currentFront = card.frontNotes.value.map { it.name to it.type }
@@ -563,7 +567,6 @@ fun DeckEditorScreen(
             if (missingFront.isNotEmpty()) card.frontNotes.value = card.frontNotes.value + missingFront
             if (missingBack.isNotEmpty()) card.backNotes.value = card.backNotes.value + missingBack
         }
-        showUseTemplateDialogForSelection = null
     }
 
     fun enforceTemplateToCardStates(ids: Set<String>, templateSet: net.ericclark.studiare.data.TemplateSet) {
@@ -576,7 +579,6 @@ fun DeckEditorScreen(
             card.backNotes.value = card.backNotes.value.reshapedTo(templateSet.backFields)
             card.enforcedTemplateSetId.value = templateSet.id
         }
-        showUseTemplateDialogForSelection = null
     }
 
     /** See FlashcardViewModel.clearTemplateEnforcement — same full unlock (per-card override and
@@ -586,7 +588,6 @@ fun DeckEditorScreen(
             card.enforcedTemplateSetId.value = null
             card.isDeckTemplateEnforced.value = false
         }
-        showUseTemplateDialogForSelection = null
     }
 
     // Reflects this screen's own live (possibly-unsaved) frontNoteTemplates/backNoteTemplates —
@@ -703,7 +704,8 @@ fun DeckEditorScreen(
             backNoteTemplates,  // NEW: Pass templates
             defaultPromptSide,
             sortPinnedCardsFirst,
-            templateMode,
+            seedNewCardsFromTemplate,
+            enforceTemplate,
             templateScope,
             activeTemplateSetId
         )
@@ -813,20 +815,21 @@ fun DeckEditorScreen(
                     showSettingsDialog = true
                 }
             },
-            onSave = { newFront, newBack, newTemplateMode, newTemplateScope, newTemplateName ->
+            onSave = { newFront, newBack, newEnforceTemplate, newTemplateScope, newTemplateName, applyToAll ->
                 frontNoteTemplates = newFront
                 backNoteTemplates = newBack
-                templateMode = newTemplateMode
+                seedNewCardsFromTemplate = true
+                enforceTemplate = newEnforceTemplate
                 templateScope = newTemplateScope
                 // Upserted immediately (like "Save as Template" already does), even though the
-                // deck's own templateMode/templateScope/activeTemplateSetId fields stay deferred
-                // to this screen's own main Save button below, same as frontNoteTemplates/
-                // backNoteTemplates always have been.
+                // deck's own seedNewCardsFromTemplate/enforceTemplate/templateScope/
+                // activeTemplateSetId fields stay deferred to this screen's own main Save button
+                // below, same as frontNoteTemplates/backNoteTemplates always have been.
                 val resolvedTemplateSetId = activeTemplateSetId ?: java.util.UUID.randomUUID().toString()
                 activeTemplateSetId = resolvedTemplateSetId
                 viewModel.upsertDeckTemplateSet(resolvedTemplateSetId, newTemplateName, newFront, newBack)
 
-                if (newTemplateMode != TemplateMode.MANUAL && newTemplateScope == TemplateScope.ALL_CARDS) {
+                if (applyToAll) {
                     cards.forEach { card ->
                         val currentFrontNames = card.frontNotes.value.map { it.name }
                         val currentBackNames = card.backNotes.value.map { it.name }
@@ -851,9 +854,9 @@ fun DeckEditorScreen(
                 // saveNoteTemplates' own doc comment for why this ignores the *current* scope and
                 // a per-card enforcedTemplateSetId override is left untouched either way.
                 cards.forEach { card ->
-                    if (newTemplateMode == TemplateMode.ENFORCE && newTemplateScope == TemplateScope.ALL_CARDS) {
+                    if (newEnforceTemplate && newTemplateScope == TemplateScope.ALL_CARDS) {
                         card.isDeckTemplateEnforced.value = true
-                    } else if (newTemplateMode != TemplateMode.ENFORCE && card.isDeckTemplateEnforced.value) {
+                    } else if (!newEnforceTemplate && card.isDeckTemplateEnforced.value) {
                         card.isDeckTemplateEnforced.value = false
                     }
                 }
@@ -865,9 +868,9 @@ fun DeckEditorScreen(
                 // policy) and came back to this one.
                 cards.lastOrNull()?.let { trailing ->
                     if (trailing.front.value.isBlank() && trailing.back.value.isBlank()) {
-                        trailing.frontNotes.value = if (newTemplateMode != TemplateMode.MANUAL) newFront else emptyList()
-                        trailing.backNotes.value = if (newTemplateMode != TemplateMode.MANUAL) newBack else emptyList()
-                        trailing.isDeckTemplateEnforced.value = newTemplateMode == TemplateMode.ENFORCE
+                        trailing.frontNotes.value = newFront
+                        trailing.backNotes.value = newBack
+                        trailing.isDeckTemplateEnforced.value = newEnforceTemplate
                     }
                 }
 
@@ -880,7 +883,7 @@ fun DeckEditorScreen(
                     showSettingsDialog = true
                 }
             },
-            initialTemplateMode = templateMode,
+            initialEnforceTemplate = enforceTemplate,
             initialTemplateScope = templateScope,
             initialTemplateName = savedTemplateSets.find { it.id == activeTemplateSetId }?.name ?: "",
             savedTemplateSets = savedTemplateSets,
@@ -1040,7 +1043,8 @@ fun DeckEditorScreen(
                 showUseTemplateDialogForSelection = null
                 showAdvancedEditor = true
             },
-            onRemoveEnforcement = { clearTemplateEnforcementForCardStates(ids) }
+            onRemoveEnforcement = { clearTemplateEnforcementForCardStates(ids) },
+            activeTemplateSetId = ids.singleOrNull()?.let { singleId -> cards.find { it.id == singleId }?.enforcedTemplateSetId?.value }
         )
     }
 

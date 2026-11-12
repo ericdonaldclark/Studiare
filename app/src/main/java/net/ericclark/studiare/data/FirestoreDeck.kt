@@ -50,9 +50,13 @@ data class FirestoreDeck(
     val lastExportedAt: Long? = null,
 
     // --- TEMPLATE LOCKING ---
+    // templateMode is superseded by seedNewCardsFromTemplate/enforceTemplate but kept (unread) so
+    // old synced docs round-trip cleanly.
     val templateMode: Int = 0,
     val templateScope: Int = 0,
-    val activeTemplateSetId: String? = null
+    val activeTemplateSetId: String? = null,
+    val seedNewCardsFromTemplate: Boolean = false,
+    val enforceTemplate: Boolean = false
 ) {
     // No-argument constructor needed for Firestore deserialization
     constructor() : this(UUID.randomUUID().toString())
@@ -94,7 +98,9 @@ data class FirestoreDeck(
             lastExportedAt = this.lastExportedAt,
             templateMode = TemplateMode.fromInt(this.templateMode),
             templateScope = TemplateScope.fromInt(this.templateScope),
-            activeTemplateSetId = this.activeTemplateSetId
+            activeTemplateSetId = this.activeTemplateSetId,
+            seedNewCardsFromTemplate = this.seedNewCardsFromTemplate,
+            enforceTemplate = this.enforceTemplate
         )
     }
 }
@@ -133,6 +139,8 @@ fun Deck.toFirestoreDeck(): FirestoreDeck {
         lastExportedAt = this.lastExportedAt,
         templateMode = this.templateMode.value,
         templateScope = this.templateScope.value,
-        activeTemplateSetId = this.activeTemplateSetId
+        activeTemplateSetId = this.activeTemplateSetId,
+        seedNewCardsFromTemplate = this.seedNewCardsFromTemplate,
+        enforceTemplate = this.enforceTemplate
     )
 }

@@ -108,7 +108,6 @@ import net.ericclark.studiare.data.DifficultySetting
 import net.ericclark.studiare.data.NoteField
 import net.ericclark.studiare.data.NormalizationType
 import net.ericclark.studiare.data.TagDefinition
-import net.ericclark.studiare.data.TemplateMode
 import net.ericclark.studiare.data.TemplateScope
 import net.ericclark.studiare.data.asString
 import net.ericclark.studiare.data.toCardDataForSave
@@ -241,13 +240,14 @@ fun SimpleEditorScreen(
     // A brand-new card is always "new" for TemplateScope's purposes, so both NEW_CARDS and
     // ALL_CARDS scope seed it the same way here — only MANUAL mode skips the auto-seed.
     fun blankEditorState(): CardEditorState {
-        val deckTemplateMode = deckWithCards?.deck?.templateMode ?: TemplateMode.MANUAL
+        val deck = deckWithCards?.deck
+        val shouldSeed = deck?.seedNewCardsFromTemplate == true || deck?.enforceTemplate == true
         return CardEditorState(
             id = UUID.randomUUID().toString(),
             front = mutableStateOf(""), frontRichTextInfo = mutableStateOf(null), isFrontRichText = mutableStateOf(false),
             back = mutableStateOf(""), backRichTextInfo = mutableStateOf(null), isBackRichText = mutableStateOf(false),
-            frontNotes = mutableStateOf(if (deckTemplateMode != TemplateMode.MANUAL) deckWithCards?.deck?.frontNoteTemplates ?: emptyList() else emptyList()),
-            backNotes = mutableStateOf(if (deckTemplateMode != TemplateMode.MANUAL) deckWithCards?.deck?.backNoteTemplates ?: emptyList() else emptyList()),
+            frontNotes = mutableStateOf(if (shouldSeed) deck?.frontNoteTemplates ?: emptyList() else emptyList()),
+            backNotes = mutableStateOf(if (shouldSeed) deck?.backNoteTemplates ?: emptyList() else emptyList()),
             difficulty = mutableStateOf(DifficultySetting.FIVE), isKnown = mutableStateOf(false),
             reviewedCount = mutableStateOf(0), gradedAttempts = mutableStateOf(emptyList()),
             incorrectAttempts = mutableStateOf(emptyList()), reviewLogs = mutableStateOf(emptyList()),
@@ -255,7 +255,7 @@ fun SimpleEditorScreen(
             isSuspended = mutableStateOf(false), flag = mutableStateOf(CardFlag.NONE),
             isPinned = mutableStateOf(false),
             createdAt = mutableLongStateOf(System.currentTimeMillis()), updatedAt = mutableStateOf(System.currentTimeMillis()),
-            isDeckTemplateEnforced = mutableStateOf(deckTemplateMode == TemplateMode.ENFORCE)
+            isDeckTemplateEnforced = mutableStateOf(deck?.enforceTemplate == true)
         )
     }
 
@@ -355,22 +355,21 @@ fun SimpleEditorScreen(
         showMoveDialogForSelection = null
     }
 
+    // Use Template's own Apply/Enforce/Remove-Enforcement actions stay on the dialog so the user
+    // can keep trying different templates — only Close/dismiss and Open Template Editor leave it.
     fun applyTemplateForSelection(ids: Set<String>, templateSet: net.ericclark.studiare.data.TemplateSet) {
         val deck = deckWithCards ?: return
         viewModel.applyTemplateToCards(deck, ids, templateSet)
-        showUseTemplateDialogForSelection = null
     }
 
     fun enforceTemplateForSelection(ids: Set<String>, templateSet: net.ericclark.studiare.data.TemplateSet) {
         val deck = deckWithCards ?: return
         viewModel.enforceTemplateOnCards(deck, ids, templateSet)
-        showUseTemplateDialogForSelection = null
     }
 
     fun clearTemplateEnforcementForSelection(ids: Set<String>) {
         val deck = deckWithCards ?: return
         viewModel.clearTemplateEnforcement(deck, ids)
-        showUseTemplateDialogForSelection = null
     }
 
     Scaffold(
@@ -674,7 +673,8 @@ fun SimpleEditorScreen(
                 showUseTemplateDialogForSelection = null
                 showTemplateEditor = true
             },
-            onRemoveEnforcement = { clearTemplateEnforcementForSelection(ids) }
+            onRemoveEnforcement = { clearTemplateEnforcementForSelection(ids) },
+            activeTemplateSetId = ids.singleOrNull()?.let { singleId -> deckWithCards?.cards?.find { it.id == singleId }?.enforcedTemplateSetId }
         )
     }
 
@@ -765,8 +765,8 @@ fun SimpleEditorScreen(
                     showDeckOptions = true
                 }
             },
-            onSave = { newFront, newBack, templateMode, templateScope, templateName ->
-                viewModel.saveNoteTemplates(deckWithCards, templateName, newFront, newBack, templateMode, templateScope)
+            onSave = { newFront, newBack, enforceTemplate, templateScope, templateName, applyToAll ->
+                viewModel.saveNoteTemplates(deckWithCards, templateName, newFront, newBack, enforceTemplate, templateScope, applyToAll)
                 showTemplateEditor = false
                 val returnIds = pendingUseTemplateIds
                 if (returnIds != null) {
@@ -776,7 +776,7 @@ fun SimpleEditorScreen(
                     showDeckOptions = true
                 }
             },
-            initialTemplateMode = deckWithCards.deck.templateMode,
+            initialEnforceTemplate = deckWithCards.deck.enforceTemplate,
             initialTemplateScope = deckWithCards.deck.templateScope,
             initialTemplateName = savedTemplateSets.find { it.id == deckWithCards.deck.activeTemplateSetId }?.name ?: "",
             savedTemplateSets = savedTemplateSets,

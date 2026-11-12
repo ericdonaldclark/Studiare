@@ -80,7 +80,7 @@ import net.ericclark.studiare.screens.Dialogs.AnkiMappingConfig
 import net.ericclark.studiare.screens.Dialogs.DeckSortDialog
 import net.ericclark.studiare.screens.Dialogs.DuplicateWarningDialog
 import net.ericclark.studiare.screens.Dialogs.ExportDecksDialog
-import net.ericclark.studiare.screens.Dialogs.ImportOverwriteDialog
+import net.ericclark.studiare.screens.Dialogs.ImportSelectionDialog
 import net.ericclark.studiare.screens.Dialogs.MapperDestination
 import net.ericclark.studiare.screens.Dialogs.MapperItem
 import net.ericclark.studiare.screens.UI_Components.ConnectedButtonGroup
@@ -211,10 +211,10 @@ fun DeckListScreen(
     }
 
     overwriteConfirmation?.let { data ->
-        ImportOverwriteDialog(
-            decksToOverwrite = data.decksToOverwrite,
+        ImportSelectionDialog(
+            data = data,
             onDismiss = { viewModel.cancelImport() },
-            onConfirm = { selectedIds -> viewModel.proceedWithImport(selectedIds) }
+            onConfirm = { toImport, toOverwrite -> viewModel.proceedWithImport(toImport, toOverwrite) }
         )
     }
 

@@ -14,7 +14,7 @@
     <string name="reset">Reset</string>
     <string name="remove">Remove</string>
     <string name="create">Create</string>
-    <string name="close">close</string>
+    <string name="close">Close</string>
     <string name="front">Front</string>
     <string name="back">Back</string>
     <string name="difficulty">Difficulty</string>
@@ -77,7 +77,7 @@
     <string name="add_more">Add More</string>
     <string name="decks_mapped_count_format">%1$d of %2$d Decks</string>
     <string name="sets_detected_count_format">%1$d Sets Detected</string>
-    <string name="create_separated_deck">Create Separated Deck</string>
+    <string name="create_separated_deck">Create Separate Deck</string>
     <string name="unmapped_fields">Unmapped Fields</string>
     <string name="custom_text">Custom Text</string>
     <string name="drag_handle">Drag Handle</string>
@@ -563,13 +563,16 @@
     <string name="template_mode_enforce">Enforce</string>
     <string name="template_scope_new_cards">New cards only</string>
     <string name="template_scope_all_cards">All cards</string>
-    <string name="template_mode_section_title">Template Policy</string>
-    <string name="template_mode_section_desc">Control whether new or existing cards pick up these fields automatically</string>
+    <string name="template_mode_section_title">Enforce Template</string>
+    <string name="template_mode_section_desc">Lock cards to this field shape (name/order/type) — content stays editable</string>
+    <string name="apply_to_new">Apply to New</string>
+    <string name="apply_to_all">Apply to All</string>
     <string name="use_template">Use Template</string>
     <string name="use_template_dialog_title">Use Template</string>
-    <string name="use_template_dialog_subtitle">Apply or enforce a saved template on the selected card(s)</string>
+    <string name="use_template_dialog_subtitle">Apply or enforce a saved template</string>
     <string name="enforce">Enforce</string>
-    <string name="remove_enforcement">Remove Enforcement</string>
+    <string name="applied">Applied</string>
+    <string name="enforced">Enforced</string>
     <string name="open_template_editor">Open Template Editor</string>
     <string name="export_decks">All Decks</string>
     <string name="no_decks_yet">No decks yet.</string>
@@ -587,9 +590,13 @@
     <string name="unpin_deck">Unpin Deck</string>
     <string name="show_pinned_first">Show pinned first</string>
     <string name="processing">Processing…</string>
-    <string name="overwrite_existing">Overwrite Existing?</string>
-    <string name="select_decks_to_overwrite">Select decks to overwrite:</string>
-    <string name="overwrite_selected">Overwrite Selected</string>
+    <string name="select_decks_to_import">Select Decks to Import</string>
+    <string name="import_selected">Import Selected</string>
+    <string name="overwrite">Overwrite</string>
+    <string name="new_copy">New Copy</string>
+    <string name="import_overwrite_warning">This will overwrite an existing deck.</string>
+    <string name="import_overwrite_warning_set">This will overwrite an existing set.</string>
+    <string name="import_no_conflict">(no conflict)</string>
     <string name="duplicates_found">Duplicates Found</string>
     <string name="duplicates_found_message">Duplicates were found in \'%1$s\'. Remove them before saving?</string>
     <string name="duplicate_item_format">• \"%1$s\" (%2$d)</string>
@@ -1200,6 +1207,14 @@
     <plurals name="cards_count">
         <item quantity="one">%1$d Card</item>
         <item quantity="other">%1$d Cards</item>
+    </plurals>
+    <plurals name="import_sets_summary">
+        <item quantity="one">Includes %1$d set</item>
+        <item quantity="other">Includes %1$d sets</item>
+    </plurals>
+    <plurals name="import_sets_overwrite_summary">
+        <item quantity="one">This will also overwrite %1$d of %2$d set</item>
+        <item quantity="other">This will also overwrite %1$d of %2$d sets</item>
     </plurals>
     <plurals name="cards_count_lowercase">
         <item quantity="one">%1$d card</item>

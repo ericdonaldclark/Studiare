@@ -444,8 +444,8 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
     private val _importDuplicateQueue = MutableStateFlow<List<DuplicateCheckResult>>(emptyList())
     val importDuplicateQueue: StateFlow<List<DuplicateCheckResult>> = _importDuplicateQueue
 
-    private val _overwriteConfirmation = MutableStateFlow<OverwriteConfirmationData?>(null)
-    val overwriteConfirmation: StateFlow<OverwriteConfirmationData?> = _overwriteConfirmation
+    private val _overwriteConfirmation = MutableStateFlow<ImportSelectionData?>(null)
+    val overwriteConfirmation: StateFlow<ImportSelectionData?> = _overwriteConfirmation
 
     val hasPromptedHdLanguages: StateFlow<Boolean> = preferenceManager.hasPromptedHdLanguagesFlow
         .stateIn(viewModelScope, SharingStarted.Eagerly, false)
@@ -1263,8 +1263,8 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         importExportManager.cancelImport()
     }
 
-    fun proceedWithImport(selectedIdsToOverwrite: List<String>) {
-        importExportManager.proceedWithImport(selectedIdsToOverwrite)
+    fun proceedWithImport(selectedIdsToImport: Set<String>, selectedIdsToOverwrite: Set<String>) {
+        importExportManager.proceedWithImport(selectedIdsToImport, selectedIdsToOverwrite)
     }
 
     private fun processNextInImportQueue() { _importDuplicateQueue.value = _importDuplicateQueue.value.drop(1) }
@@ -1927,30 +1927,32 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
     }
 
     /**
-     * Saves the deck's own default template fields plus its [TemplateMode]/[TemplateScope]
-     * policy. The `templateScope == ALL_CARDS` retroactive sweep reuses the merge this already
-     * did (add any of the new template's fields a card doesn't already have, by name, leaving
-     * content alone) — under Enforce it additionally stamps `isDeckTemplateEnforced = true` on
-     * every card in the deck (not just ones with missing fields, since the flag needs setting
-     * regardless of whether a merge happened). `NEW_CARDS` scope touches no existing card at all;
-     * future new cards are handled separately, at creation time (see blankCardState()/
-     * blankEditorState() in the Bulk/Simple Editor screens).
+     * Saves the deck's own default template fields plus its enforce/scope policy. `applyToAll`
+     * (true only for the Template Editor's "Apply to All" button, false for "Apply to New")
+     * reuses the existing merge (add any of the new template's fields a card doesn't already
+     * have, by name, leaving content alone) against every card in the deck right now — "Apply to
+     * New" touches no existing card at all, only `seedNewCardsFromTemplate` going forward (see
+     * blankCardState()/blankEditorState() in the Bulk/Simple Editor screens). Enforce additionally
+     * stamps `isDeckTemplateEnforced = true` on every card when scope is All Cards (not just ones
+     * with missing fields, since the flag needs setting regardless of whether a merge happened).
      *
-     * Symmetric with the lock-on side: whenever the saved mode is no longer Enforce, every card
-     * the deck's own policy had previously locked (`isDeckTemplateEnforced`) is unlocked here too,
-     * regardless of the *current* scope setting — otherwise there was no way to undo a deck-level
-     * Enforce pass once cards had already been stamped, short of unlocking them one at a time via
-     * the per-card "Use Template" action. A card's own separate per-card override
-     * (`enforcedTemplateSetId`) is untouched either way — that's a deliberate choice made
-     * elsewhere (Use Template's own "Remove Enforcement"), not something switching the *deck's*
-     * mode should reach into.
+     * Symmetric with the lock-on side: whenever Enforce is off, every card the deck's own policy
+     * had previously locked (`isDeckTemplateEnforced`) is unlocked here too, regardless of the
+     * *current* scope setting — otherwise there was no way to undo a deck-level Enforce pass once
+     * cards had already been stamped, short of unlocking them one at a time via the per-card "Use
+     * Template" action. A card's own separate per-card override (`enforcedTemplateSetId`) is
+     * untouched either way — that's a deliberate choice made elsewhere (Use Template's own
+     * "Remove Enforcement"), not something switching the *deck's* policy should reach into.
      */
-    fun saveNoteTemplates(deck: DeckWithCards, templateName: String, newFront: List<NoteField>, newBack: List<NoteField>, templateMode: TemplateMode, templateScope: TemplateScope) {
+    fun saveNoteTemplates(
+        deck: DeckWithCards, templateName: String, newFront: List<NoteField>, newBack: List<NoteField>,
+        enforceTemplate: Boolean, templateScope: TemplateScope, applyToAll: Boolean
+    ) {
         val templateSetId = deck.deck.activeTemplateSetId ?: UUID.randomUUID().toString()
         upsertDeckTemplateSet(templateSetId, templateName, newFront, newBack)
         val cardsToSave = deck.cards.map { card ->
             var data = card.toCardDataForSave()
-            if (templateMode != TemplateMode.MANUAL && templateScope == TemplateScope.ALL_CARDS) {
+            if (applyToAll) {
                 val currentFrontNames = data.frontNotes.map { it.name }
                 val currentBackNames = data.backNotes.map { it.name }
                 val missingFront = newFront.filter { it.name !in currentFrontNames }.map { it.copy(content = "") }
@@ -1959,9 +1961,9 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
                     data = data.copy(frontNotes = data.frontNotes + missingFront, backNotes = data.backNotes + missingBack)
                 }
             }
-            data = if (templateMode == TemplateMode.ENFORCE && templateScope == TemplateScope.ALL_CARDS) {
+            data = if (enforceTemplate && templateScope == TemplateScope.ALL_CARDS) {
                 data.copy(isDeckTemplateEnforced = true)
-            } else if (templateMode != TemplateMode.ENFORCE && data.isDeckTemplateEnforced) {
+            } else if (!enforceTemplate && data.isDeckTemplateEnforced) {
                 data.copy(isDeckTemplateEnforced = false)
             } else data
             data
@@ -1970,7 +1972,8 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
             deck.deck.id, deck.deck.name, cardsToSave, deck.deck.normalizationType, deck.deck.deckSortMode,
             deck.deck.parentDeckId, deck.deck.frontLanguage, deck.deck.backLanguage, deck.deck.description,
             deck.deck.dailyNewCardLimit, deck.deck.dailyReviewLimit, newFront, newBack,
-            templateMode = templateMode, templateScope = templateScope, activeTemplateSetId = templateSetId
+            seedNewCardsFromTemplate = true, enforceTemplate = enforceTemplate, templateScope = templateScope,
+            activeTemplateSetId = templateSetId
         )
     }
 
@@ -1990,7 +1993,8 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         backNoteTemplates: List<NoteField>,
         defaultPromptSide: CardSide? = null,
         sortPinnedCardsFirst: Boolean? = null,
-        templateMode: TemplateMode? = null,
+        seedNewCardsFromTemplate: Boolean? = null,
+        enforceTemplate: Boolean? = null,
         templateScope: TemplateScope? = null,
         activeTemplateSetId: String? = null
     ) {
@@ -2005,14 +2009,14 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
                 duplicates, deckId, deckName, cards, normalizationType, sortType, parentDeckId,
                 frontLanguage, backLanguage, description, dailyNewCardLimit, dailyReviewLimit,
                 frontNoteTemplates, backNoteTemplates, defaultPromptSide, sortPinnedCardsFirst,
-                templateMode, templateScope, activeTemplateSetId
+                seedNewCardsFromTemplate, enforceTemplate, templateScope, activeTemplateSetId
             )
         } else {
             saveDeckWithCards(
                 deckId, deckName, cards, normalizationType, sortType, parentDeckId, null,
                 frontLanguage, backLanguage, description, dailyNewCardLimit, dailyReviewLimit,
                 frontNoteTemplates, backNoteTemplates, defaultPromptSide, sortPinnedCardsFirst,
-                templateMode, templateScope, activeTemplateSetId
+                seedNewCardsFromTemplate, enforceTemplate, templateScope, activeTemplateSetId
             )
         }
     }
@@ -2069,13 +2073,13 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         { it.front.normalizeForDuplicateCheck() to it.back.normalizeForDuplicateCheck() },
             result.normalizationType, result.sortType, result.parentDeckId, null, result.frontLanguage, result.backLanguage,
             result.description, result.dailyNewCardLimit, result.dailyReviewLimit, result.frontNoteTemplates, result.backNoteTemplates,
-            result.defaultPromptSide, result.sortPinnedCardsFirst, result.templateMode, result.templateScope, result.activeTemplateSetId) }; dismissEditorDuplicateWarning() }
+            result.defaultPromptSide, result.sortPinnedCardsFirst, result.seedNewCardsFromTemplate, result.enforceTemplate, result.templateScope, result.activeTemplateSetId) }; dismissEditorDuplicateWarning() }
     fun saveEditorIgnoringDuplicates() { _editorDuplicateResult.value?.let { result ->
         saveDeckWithCards(result.deckId, result.deckName, result.cardsToSave,
             result.normalizationType, result.sortType, result.parentDeckId,
             null, result.frontLanguage, result.backLanguage,
             result.description, result.dailyNewCardLimit, result.dailyReviewLimit, result.frontNoteTemplates, result.backNoteTemplates,
-            result.defaultPromptSide, result.sortPinnedCardsFirst, result.templateMode, result.templateScope, result.activeTemplateSetId) }; dismissEditorDuplicateWarning() }
+            result.defaultPromptSide, result.sortPinnedCardsFirst, result.seedNewCardsFromTemplate, result.enforceTemplate, result.templateScope, result.activeTemplateSetId) }; dismissEditorDuplicateWarning() }
 
     private fun saveDeckWithCards(
         deckId: String?,
@@ -2094,7 +2098,8 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         backNoteTemplates: List<NoteField> = emptyList(),
         defaultPromptSide: CardSide? = null,
         sortPinnedCardsFirst: Boolean? = null,
-        templateMode: TemplateMode? = null,
+        seedNewCardsFromTemplate: Boolean? = null,
+        enforceTemplate: Boolean? = null,
         templateScope: TemplateScope? = null,
         activeTemplateSetId: String? = null
     ) {
@@ -2142,7 +2147,8 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
                 description = description,
                 dailyNewCardLimit = dailyNewCardLimit,
                 dailyReviewLimit = dailyReviewLimit,
-                templateMode = templateMode ?: existingDeck?.templateMode ?: TemplateMode.MANUAL,
+                seedNewCardsFromTemplate = seedNewCardsFromTemplate ?: existingDeck?.seedNewCardsFromTemplate ?: false,
+                enforceTemplate = enforceTemplate ?: existingDeck?.enforceTemplate ?: false,
                 templateScope = templateScope ?: existingDeck?.templateScope ?: TemplateScope.NEW_CARDS,
                 activeTemplateSetId = activeTemplateSetId ?: existingDeck?.activeTemplateSetId,
                 isPendingSync = true

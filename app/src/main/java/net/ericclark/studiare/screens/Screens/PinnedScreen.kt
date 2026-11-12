@@ -691,13 +691,14 @@ fun PinnedScreen(navController: NavController, viewModel: FlashcardViewModel) {
         net.ericclark.studiare.screens.Dialogs.UseTemplateDialog(
             templateSets = savedTemplateSets,
             onDismiss = { showUseTemplateDialogForCard = null },
+            // Use Template's own Apply/Enforce/Remove-Enforcement actions stay on the dialog so
+            // the user can keep trying different templates — only Close/dismiss and Open
+            // Template Editor leave it.
             onApply = { templateSet ->
                 deck?.let { viewModel.applyTemplateToCards(it, setOf(card.id), templateSet) }
-                showUseTemplateDialogForCard = null
             },
             onEnforce = { templateSet ->
                 deck?.let { viewModel.enforceTemplateOnCards(it, setOf(card.id), templateSet) }
-                showUseTemplateDialogForCard = null
             },
             onOpenTemplateEditor = {
                 showUseTemplateDialogForCard = null
@@ -705,8 +706,8 @@ fun PinnedScreen(navController: NavController, viewModel: FlashcardViewModel) {
             },
             onRemoveEnforcement = {
                 deck?.let { viewModel.clearTemplateEnforcement(it, setOf(card.id)) }
-                showUseTemplateDialogForCard = null
-            }
+            },
+            activeTemplateSetId = card.enforcedTemplateSetId
         )
     }
 }
