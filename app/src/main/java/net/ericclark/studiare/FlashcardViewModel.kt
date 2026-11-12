@@ -79,6 +79,22 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
     private val preferenceManager = PreferenceManager(application)
     private val cardUtils = CardUtils()
 
+    // --- Bulk/Simple Editor scroll position hand-off ---
+    // Deliberately a one-shot hand-off, not a general "remember where I left off" cache: a
+    // position is only ever written right before the Bulk/Simple Editor toggle button navigates
+    // to the other editor, and reading it immediately clears it. So it only ever restores a
+    // position when the *other* editor is the very next screen visited for this deck — leaving
+    // the editor some other way (back, Decks list, etc.) and returning later always falls back to
+    // that screen's normal default scroll position, never a stale one from last time.
+    private val bulkEditorScrollHandoff = mutableMapOf<String, Pair<Int, Int>>()
+    private val simpleEditorScrollHandoff = mutableMapOf<String, Pair<Int, Int>>()
+
+    fun consumeBulkEditorScrollHandoff(deckId: String): Pair<Int, Int>? = bulkEditorScrollHandoff.remove(deckId)
+    fun setBulkEditorScrollHandoff(deckId: String, index: Int, offset: Int) { bulkEditorScrollHandoff[deckId] = index to offset }
+
+    fun consumeSimpleEditorScrollHandoff(deckId: String): Pair<Int, Int>? = simpleEditorScrollHandoff.remove(deckId)
+    fun setSimpleEditorScrollHandoff(deckId: String, index: Int, offset: Int) { simpleEditorScrollHandoff[deckId] = index to offset }
+
     // --- BYOB Credentials & State ---
     private val credentialManager = FirebaseCredentialManager(application)
 
@@ -1740,6 +1756,72 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
 
     fun cloneSingleCard(deck: DeckWithCards, cardId: String) = cloneCardsForSelection(deck, setOf(cardId))
 
+    /** Per-card "Use Template → Apply": adds any of [templateSet]'s fields a card doesn't already
+     * have (matched by name+type) onto its existing frontNotes/backNotes — never removes or
+     * reorders what's already there, and never touches `enforcedTemplateSetId` (a one-time seed,
+     * not an ongoing lock, same semantics as the deck-level Apply mode). */
+    fun applyTemplateToCards(deck: DeckWithCards, cardIds: Set<String>, templateSet: TemplateSet) {
+        if (cardIds.isEmpty()) return
+        val cardsToSave = deck.cards.map { card ->
+            val data = card.toCardDataForSave()
+            if (card.id !in cardIds) return@map data
+            val currentFront = data.frontNotes.map { it.name to it.type }
+            val currentBack = data.backNotes.map { it.name to it.type }
+            val missingFront = templateSet.frontFields.filter { (it.name to it.type) !in currentFront }.map { it.copy(content = "") }
+            val missingBack = templateSet.backFields.filter { (it.name to it.type) !in currentBack }.map { it.copy(content = "") }
+            data.copy(frontNotes = data.frontNotes + missingFront, backNotes = data.backNotes + missingBack)
+        }
+        checkForDuplicatesInEditor(
+            deck.deck.id, deck.deck.name, cardsToSave, deck.deck.normalizationType, deck.deck.deckSortMode,
+            deck.deck.parentDeckId, deck.deck.frontLanguage, deck.deck.backLanguage, deck.deck.description,
+            deck.deck.dailyNewCardLimit, deck.deck.dailyReviewLimit, deck.deck.frontNoteTemplates, deck.deck.backNoteTemplates
+        )
+    }
+
+    /** Per-card "Use Template → Enforce": replaces a card's frontNotes/backNotes wholesale with
+     * [templateSet]'s exact field list (no extra fields beyond the template's own), preserving
+     * content for any field whose name+type already matches one the card has, and sets
+     * `enforcedTemplateSetId` so the editor locks that card's shape to this template going
+     * forward (looked up live — see [CardDataForSave.enforcedTemplateSetId]). */
+    fun enforceTemplateOnCards(deck: DeckWithCards, cardIds: Set<String>, templateSet: TemplateSet) {
+        if (cardIds.isEmpty()) return
+        fun List<NoteField>.reshapedTo(templateFields: List<NoteField>): List<NoteField> {
+            val byKey = associateBy { it.name to it.type }
+            return templateFields.map { tf -> byKey[tf.name to tf.type]?.copy(name = tf.name, type = tf.type) ?: tf.copy(content = "") }
+        }
+        val cardsToSave = deck.cards.map { card ->
+            val data = card.toCardDataForSave()
+            if (card.id !in cardIds) return@map data
+            data.copy(
+                frontNotes = data.frontNotes.reshapedTo(templateSet.frontFields),
+                backNotes = data.backNotes.reshapedTo(templateSet.backFields),
+                enforcedTemplateSetId = templateSet.id
+            )
+        }
+        checkForDuplicatesInEditor(
+            deck.deck.id, deck.deck.name, cardsToSave, deck.deck.normalizationType, deck.deck.deckSortMode,
+            deck.deck.parentDeckId, deck.deck.frontLanguage, deck.deck.backLanguage, deck.deck.description,
+            deck.deck.dailyNewCardLimit, deck.deck.dailyReviewLimit, deck.deck.frontNoteTemplates, deck.deck.backNoteTemplates
+        )
+    }
+
+    /** Per-card "Use Template → Remove Enforcement" — clears whatever is currently locking a
+     * card's field shape, regardless of source: a per-card override (`enforcedTemplateSetId`) and
+     * the deck's own policy stamp (`isDeckTemplateEnforced`) alike. Content/fields are left
+     * exactly as they are; only the lock itself is lifted. */
+    fun clearTemplateEnforcement(deck: DeckWithCards, cardIds: Set<String>) {
+        if (cardIds.isEmpty()) return
+        val cardsToSave = deck.cards.map { card ->
+            val data = card.toCardDataForSave()
+            if (card.id !in cardIds) data else data.copy(enforcedTemplateSetId = null, isDeckTemplateEnforced = false)
+        }
+        checkForDuplicatesInEditor(
+            deck.deck.id, deck.deck.name, cardsToSave, deck.deck.normalizationType, deck.deck.deckSortMode,
+            deck.deck.parentDeckId, deck.deck.frontLanguage, deck.deck.backLanguage, deck.deck.description,
+            deck.deck.dailyNewCardLimit, deck.deck.dailyReviewLimit, deck.deck.frontNoteTemplates, deck.deck.backNoteTemplates
+        )
+    }
+
     /**
      * Cross-deck move to an *existing* deck or set — reassigns each card's `ownerDeckId` and
      * updates both decks' `cardIds`, the same direct-DAO pattern [mergeDecks] already uses for
@@ -1844,10 +1926,31 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         )
     }
 
-    fun saveNoteTemplates(deck: DeckWithCards, newFront: List<NoteField>, newBack: List<NoteField>, addToExistingCards: Boolean) {
+    /**
+     * Saves the deck's own default template fields plus its [TemplateMode]/[TemplateScope]
+     * policy. The `templateScope == ALL_CARDS` retroactive sweep reuses the merge this already
+     * did (add any of the new template's fields a card doesn't already have, by name, leaving
+     * content alone) — under Enforce it additionally stamps `isDeckTemplateEnforced = true` on
+     * every card in the deck (not just ones with missing fields, since the flag needs setting
+     * regardless of whether a merge happened). `NEW_CARDS` scope touches no existing card at all;
+     * future new cards are handled separately, at creation time (see blankCardState()/
+     * blankEditorState() in the Bulk/Simple Editor screens).
+     *
+     * Symmetric with the lock-on side: whenever the saved mode is no longer Enforce, every card
+     * the deck's own policy had previously locked (`isDeckTemplateEnforced`) is unlocked here too,
+     * regardless of the *current* scope setting — otherwise there was no way to undo a deck-level
+     * Enforce pass once cards had already been stamped, short of unlocking them one at a time via
+     * the per-card "Use Template" action. A card's own separate per-card override
+     * (`enforcedTemplateSetId`) is untouched either way — that's a deliberate choice made
+     * elsewhere (Use Template's own "Remove Enforcement"), not something switching the *deck's*
+     * mode should reach into.
+     */
+    fun saveNoteTemplates(deck: DeckWithCards, templateName: String, newFront: List<NoteField>, newBack: List<NoteField>, templateMode: TemplateMode, templateScope: TemplateScope) {
+        val templateSetId = deck.deck.activeTemplateSetId ?: UUID.randomUUID().toString()
+        upsertDeckTemplateSet(templateSetId, templateName, newFront, newBack)
         val cardsToSave = deck.cards.map { card ->
             var data = card.toCardDataForSave()
-            if (addToExistingCards) {
+            if (templateMode != TemplateMode.MANUAL && templateScope == TemplateScope.ALL_CARDS) {
                 val currentFrontNames = data.frontNotes.map { it.name }
                 val currentBackNames = data.backNotes.map { it.name }
                 val missingFront = newFront.filter { it.name !in currentFrontNames }.map { it.copy(content = "") }
@@ -1856,12 +1959,18 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
                     data = data.copy(frontNotes = data.frontNotes + missingFront, backNotes = data.backNotes + missingBack)
                 }
             }
+            data = if (templateMode == TemplateMode.ENFORCE && templateScope == TemplateScope.ALL_CARDS) {
+                data.copy(isDeckTemplateEnforced = true)
+            } else if (templateMode != TemplateMode.ENFORCE && data.isDeckTemplateEnforced) {
+                data.copy(isDeckTemplateEnforced = false)
+            } else data
             data
         }
         checkForDuplicatesInEditor(
             deck.deck.id, deck.deck.name, cardsToSave, deck.deck.normalizationType, deck.deck.deckSortMode,
             deck.deck.parentDeckId, deck.deck.frontLanguage, deck.deck.backLanguage, deck.deck.description,
-            deck.deck.dailyNewCardLimit, deck.deck.dailyReviewLimit, newFront, newBack
+            deck.deck.dailyNewCardLimit, deck.deck.dailyReviewLimit, newFront, newBack,
+            templateMode = templateMode, templateScope = templateScope, activeTemplateSetId = templateSetId
         )
     }
 
@@ -1880,7 +1989,10 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         frontNoteTemplates: List<NoteField>,
         backNoteTemplates: List<NoteField>,
         defaultPromptSide: CardSide? = null,
-        sortPinnedCardsFirst: Boolean? = null
+        sortPinnedCardsFirst: Boolean? = null,
+        templateMode: TemplateMode? = null,
+        templateScope: TemplateScope? = null,
+        activeTemplateSetId: String? = null
     ) {
         val duplicates = cards.groupBy { it.front.normalizeForDuplicateCheck() to it.back.normalizeForDuplicateCheck() }
             .filter { it.value.size > 1 }
@@ -1892,13 +2004,15 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
             _editorDuplicateResult.value = DuplicateCheckResult(
                 duplicates, deckId, deckName, cards, normalizationType, sortType, parentDeckId,
                 frontLanguage, backLanguage, description, dailyNewCardLimit, dailyReviewLimit,
-                frontNoteTemplates, backNoteTemplates, defaultPromptSide, sortPinnedCardsFirst
+                frontNoteTemplates, backNoteTemplates, defaultPromptSide, sortPinnedCardsFirst,
+                templateMode, templateScope, activeTemplateSetId
             )
         } else {
             saveDeckWithCards(
                 deckId, deckName, cards, normalizationType, sortType, parentDeckId, null,
                 frontLanguage, backLanguage, description, dailyNewCardLimit, dailyReviewLimit,
-                frontNoteTemplates, backNoteTemplates, defaultPromptSide, sortPinnedCardsFirst
+                frontNoteTemplates, backNoteTemplates, defaultPromptSide, sortPinnedCardsFirst,
+                templateMode, templateScope, activeTemplateSetId
             )
         }
     }
@@ -1955,13 +2069,13 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         { it.front.normalizeForDuplicateCheck() to it.back.normalizeForDuplicateCheck() },
             result.normalizationType, result.sortType, result.parentDeckId, null, result.frontLanguage, result.backLanguage,
             result.description, result.dailyNewCardLimit, result.dailyReviewLimit, result.frontNoteTemplates, result.backNoteTemplates,
-            result.defaultPromptSide, result.sortPinnedCardsFirst) }; dismissEditorDuplicateWarning() }
+            result.defaultPromptSide, result.sortPinnedCardsFirst, result.templateMode, result.templateScope, result.activeTemplateSetId) }; dismissEditorDuplicateWarning() }
     fun saveEditorIgnoringDuplicates() { _editorDuplicateResult.value?.let { result ->
         saveDeckWithCards(result.deckId, result.deckName, result.cardsToSave,
             result.normalizationType, result.sortType, result.parentDeckId,
             null, result.frontLanguage, result.backLanguage,
             result.description, result.dailyNewCardLimit, result.dailyReviewLimit, result.frontNoteTemplates, result.backNoteTemplates,
-            result.defaultPromptSide, result.sortPinnedCardsFirst) }; dismissEditorDuplicateWarning() }
+            result.defaultPromptSide, result.sortPinnedCardsFirst, result.templateMode, result.templateScope, result.activeTemplateSetId) }; dismissEditorDuplicateWarning() }
 
     private fun saveDeckWithCards(
         deckId: String?,
@@ -1979,7 +2093,10 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         frontNoteTemplates: List<NoteField> = emptyList(),
         backNoteTemplates: List<NoteField> = emptyList(),
         defaultPromptSide: CardSide? = null,
-        sortPinnedCardsFirst: Boolean? = null
+        sortPinnedCardsFirst: Boolean? = null,
+        templateMode: TemplateMode? = null,
+        templateScope: TemplateScope? = null,
+        activeTemplateSetId: String? = null
     ) {
         viewModelScope.launch(Dispatchers.IO) {
             val id = deckId ?: UUID.randomUUID().toString()
@@ -2025,6 +2142,9 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
                 description = description,
                 dailyNewCardLimit = dailyNewCardLimit,
                 dailyReviewLimit = dailyReviewLimit,
+                templateMode = templateMode ?: existingDeck?.templateMode ?: TemplateMode.MANUAL,
+                templateScope = templateScope ?: existingDeck?.templateScope ?: TemplateScope.NEW_CARDS,
+                activeTemplateSetId = activeTemplateSetId ?: existingDeck?.activeTemplateSetId,
                 isPendingSync = true
             )
 
@@ -2061,6 +2181,8 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
                     fsrsState = ex?.fsrsState ?: cd.fsrsState,
                     fsrsLastReview = ex?.fsrsLastReview ?: cd.fsrsLastReview,
                     fsrsLapses = ex?.fsrsLapses ?: cd.fsrsLapses,
+                    enforcedTemplateSetId = ex?.enforcedTemplateSetId ?: cd.enforcedTemplateSetId,
+                    isDeckTemplateEnforced = ex?.isDeckTemplateEnforced ?: cd.isDeckTemplateEnforced,
                     isPendingSync = true
                 )
             }
@@ -2560,6 +2682,17 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
     fun saveAsTemplateSet(name: String, frontFields: List<NoteField>, backFields: List<NoteField>) {
         viewModelScope.launch(Dispatchers.IO) {
             templateSetDao.insertOrUpdate(TemplateSet(name = name.trim(), frontFields = frontFields, backFields = backFields))
+        }
+    }
+
+    /** Upserts (by [id]) the named [TemplateSet] backing a deck's own Template Editor fields —
+     * every Apply in that dialog requires a name and goes through this, instead of leaving the
+     * deck's template as an anonymous, un-shareable field list. The caller supplies [id] (either
+     * the deck's existing `activeTemplateSetId`, or a freshly generated one) so it already knows
+     * the id to persist onto the deck itself in the same action. */
+    fun upsertDeckTemplateSet(id: String, name: String, frontFields: List<NoteField>, backFields: List<NoteField>) {
+        viewModelScope.launch(Dispatchers.IO) {
+            templateSetDao.insertOrUpdate(TemplateSet(id = id, name = name.trim(), frontFields = frontFields, backFields = backFields))
         }
     }
 

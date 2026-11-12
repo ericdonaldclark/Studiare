@@ -58,5 +58,16 @@ data class Card(
 
     // --- NEW: SYNC METADATA ---
     val isPendingSync: Boolean = true, // True by default for newly created items
-    val isDeleted: Boolean = false     // True when a user deletes it (Soft Delete)
+    val isDeleted: Boolean = false,    // True when a user deletes it (Soft Delete)
+
+    // --- TEMPLATE LOCKING ---
+    // Set only by the per-card "Use Template" → Enforce action. Looked up against TemplateSetDao
+    // live wherever it's read (never snapshotted), so later edits to that saved template
+    // propagate to every card enforcing it automatically. Takes precedence over
+    // isDeckTemplateEnforced when both are present.
+    val enforcedTemplateSetId: String? = null,
+    // Stamped at card-creation time from the owning deck's Deck.templateMode/templateScope at
+    // that moment — deliberately not reactive to later deck-level mode changes, since "new cards
+    // only" vs "all cards" is a point-in-time decision, not a standing rule to keep re-evaluating.
+    val isDeckTemplateEnforced: Boolean = false
 )

@@ -44,6 +44,12 @@ class Converters {
     @TypeConverter fun fromDeckSortMode(value: DeckSortMode?): Int = value?.value ?: 0
     @TypeConverter fun toDeckSortMode(value: Int?): DeckSortMode = DeckSortMode.fromInt(value)
 
+    @TypeConverter fun fromTemplateMode(value: TemplateMode?): Int = value?.value ?: 0
+    @TypeConverter fun toTemplateMode(value: Int?): TemplateMode = TemplateMode.fromInt(value)
+
+    @TypeConverter fun fromTemplateScope(value: TemplateScope?): Int = value?.value ?: 0
+    @TypeConverter fun toTemplateScope(value: Int?): TemplateScope = TemplateScope.fromInt(value)
+
     // --- NEW: SESSION & TAG CONVERTERS ---
     @TypeConverter fun fromSessionMode(value: SessionMode?): String = value?.name ?: SessionMode.FLASHCARD.name
     @TypeConverter fun toSessionMode(value: String?): SessionMode = runCatching { SessionMode.valueOf(value ?: "") }.getOrDefault(SessionMode.FLASHCARD)

@@ -46,5 +46,17 @@ data class Deck(
 
     // --- NEW: SYNC METADATA ---
     val isPendingSync: Boolean = true,
-    val isDeleted: Boolean = false
+    val isDeleted: Boolean = false,
+
+    // --- TEMPLATE LOCKING ---
+    // Strictness for this deck's own frontNoteTemplates/backNoteTemplates: Manual (pickable via
+    // per-card "Use Template" only), Apply (seed new cards, one-time), Enforce (seed + lock
+    // shape). Scope only matters when mode != MANUAL.
+    val templateMode: TemplateMode = TemplateMode.MANUAL,
+    val templateScope: TemplateScope = TemplateScope.NEW_CARDS,
+    // The named TemplateSet backing this deck's own template fields — every save of the Template
+    // Editor requires a name, which upserts this same TemplateSet (by id) rather than leaving the
+    // deck's template as an anonymous, un-shareable field list. Null only for a deck whose
+    // template has never been saved since this requirement was added.
+    val activeTemplateSetId: String? = null
 )

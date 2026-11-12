@@ -30,7 +30,6 @@ object SampleDeckProvider {
             cardIds = rootCards.map { it.id },
             frontLanguage = "en",
             backLanguage = "en",
-            frontNoteTemplates = listOf(NoteField(name = "Example Sentence", content = "", type = MediaType.HTML)),
             description = "A tutorial deck — each card explains one of Studiare's features and " +
                 "demonstrates it directly. Study it like any other deck, or open individual cards " +
                 "in the editor to see how each feature is configured. Delete it whenever you're ready.",

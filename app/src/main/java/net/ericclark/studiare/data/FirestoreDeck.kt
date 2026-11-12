@@ -47,7 +47,12 @@ data class FirestoreDeck(
     val fsrsMaximumInterval: Int = 36500,
     // --- NEW: Hierarchy & Linkage ---
     val linkageSettings: Map<String, Boolean>? = null,
-    val lastExportedAt: Long? = null
+    val lastExportedAt: Long? = null,
+
+    // --- TEMPLATE LOCKING ---
+    val templateMode: Int = 0,
+    val templateScope: Int = 0,
+    val activeTemplateSetId: String? = null
 ) {
     // No-argument constructor needed for Firestore deserialization
     constructor() : this(UUID.randomUUID().toString())
@@ -86,7 +91,10 @@ data class FirestoreDeck(
                     linkScoring = settings["linkScoring"] ?: true
                 )
             } ?: LinkageSettings(),
-            lastExportedAt = this.lastExportedAt
+            lastExportedAt = this.lastExportedAt,
+            templateMode = TemplateMode.fromInt(this.templateMode),
+            templateScope = TemplateScope.fromInt(this.templateScope),
+            activeTemplateSetId = this.activeTemplateSetId
         )
     }
 }
@@ -122,6 +130,9 @@ fun Deck.toFirestoreDeck(): FirestoreDeck {
             "linkMetadata" to this.linkageSettings.linkMetadata,
             "linkScoring" to this.linkageSettings.linkScoring
         ),
-        lastExportedAt = this.lastExportedAt
+        lastExportedAt = this.lastExportedAt,
+        templateMode = this.templateMode.value,
+        templateScope = this.templateScope.value,
+        activeTemplateSetId = this.activeTemplateSetId
     )
 }

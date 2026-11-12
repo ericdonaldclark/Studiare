@@ -48,6 +48,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import net.ericclark.studiare.components.*
@@ -59,11 +60,12 @@ import net.ericclark.studiare.R
 import androidx.compose.ui.window.DialogProperties
 import net.ericclark.studiare.screens.Screens.DeckEditorScreen
 import net.ericclark.studiare.screens.UI_Components.CardEditor
+import net.ericclark.studiare.screens.UI_Components.ConnectedButtonGroup
 import net.ericclark.studiare.screens.UI_Components.DynamicNoteEditor
 
 /** The action buttons at the bottom of a [CardEditDialog] — either Cancel/Save (editing an existing card) or Cancel/Add More/Add (creating a new one). */
 sealed class CardEditDialogMode {
-    data class Edit(val onSave: () -> Unit, val onDelete: () -> Unit, val onClone: () -> Unit, val onMove: () -> Unit) : CardEditDialogMode()
+    data class Edit(val onSave: () -> Unit, val onDelete: () -> Unit, val onClone: () -> Unit, val onMove: () -> Unit, val onUseTemplate: () -> Unit) : CardEditDialogMode()
     data class Create(val onAdd: () -> Unit, val onAddMore: () -> Unit) : CardEditDialogMode()
 }
 
@@ -85,7 +87,8 @@ fun CardEditDialog(
     onCreateTag: (String, String) -> Unit,
     mode: CardEditDialogMode,
     onCancel: () -> Unit,
-    normalizationType: NormalizationType = NormalizationType.NONE
+    normalizationType: NormalizationType = NormalizationType.NONE,
+    lockedFields: net.ericclark.studiare.data.LockedTemplateFields? = null
 ) {
     val dimensions = LocalStudiareDimensions.current
     val dialogSnackbarHostState = remember { androidx.compose.material3.SnackbarHostState() }
@@ -151,6 +154,8 @@ fun CardEditDialog(
                         onDelete = { if (mode is CardEditDialogMode.Edit) mode.onDelete() },
                         onCloneClick = if (mode is CardEditDialogMode.Edit) mode.onClone else null,
                         onMoveClick = if (mode is CardEditDialogMode.Edit) mode.onMove else null,
+                        onUseTemplateClick = if (mode is CardEditDialogMode.Edit) mode.onUseTemplate else null,
+                        lockedFields = lockedFields,
                         onKnownClick = { cardState.isKnown.value = !cardState.isKnown.value },
                         onPinClick = { cardState.isPinned.value = !cardState.isPinned.value },
                         allTags = allTags,
@@ -231,7 +236,12 @@ fun AdvancedDeckEditorDialog(
     frontTemplates: List<NoteField>,
     backTemplates: List<NoteField>,
     onDismiss: () -> Unit,
-    onSave: (List<NoteField>, List<NoteField>, Boolean) -> Unit, // CHANGED: Added Boolean
+    onSave: (List<NoteField>, List<NoteField>, TemplateMode, TemplateScope, String) -> Unit,
+    initialTemplateMode: TemplateMode = TemplateMode.MANUAL,
+    initialTemplateScope: TemplateScope = TemplateScope.NEW_CARDS,
+    /** Name of the [TemplateSet] already backing this deck's template (see
+     * `Deck.activeTemplateSetId`), or blank for a deck whose template has never been named yet. */
+    initialTemplateName: String = "",
     savedTemplateSets: List<TemplateSet> = emptyList(),
     onSaveAsTemplate: (String, List<NoteField>, List<NoteField>) -> Unit = { _, _, _ -> },
     onDeleteTemplateSet: (TemplateSet) -> Unit = {}
@@ -244,7 +254,9 @@ fun AdvancedDeckEditorDialog(
     // single open session), so in-progress edits within one session are untouched.
     var localFront by remember(frontTemplates) { mutableStateOf(frontTemplates) }
     var localBack by remember(backTemplates) { mutableStateOf(backTemplates) }
-    var addToExistingCards by remember { mutableStateOf(false) } // NEW: Switch state
+    var templateMode by remember(initialTemplateMode) { mutableStateOf(initialTemplateMode) }
+    var templateScope by remember(initialTemplateScope) { mutableStateOf(initialTemplateScope) }
+    var templateName by remember(initialTemplateName) { mutableStateOf(initialTemplateName) }
     var showTemplatePicker by remember { mutableStateOf(false) }
     var showSaveTemplateDialog by remember { mutableStateOf(false) }
 
@@ -289,6 +301,11 @@ fun AdvancedDeckEditorDialog(
                                     onClick = {
                                         localFront = templateSet.frontFields
                                         localBack = templateSet.backFields
+                                        // Just a starting suggestion — Apply always upserts this
+                                        // deck's own TemplateSet (by its own activeTemplateSetId),
+                                        // never the one just copied from, so renaming here (or
+                                        // leaving it) can't overwrite the source template.
+                                        templateName = templateSet.name
                                         showTemplatePicker = false
                                     },
                                     trailingIcon = {
@@ -303,22 +320,46 @@ fun AdvancedDeckEditorDialog(
                 }
                 Spacer(Modifier.height(dimensions.spacingMedium))
 
+                // Required for every Apply (any mode, including Manual) — this is what backs the
+                // deck's own template with a real, named TemplateSet instead of an anonymous
+                // field list (upserted by Deck.activeTemplateSetId on Apply; see
+                // FlashcardViewModel.upsertDeckTemplateSet).
+                TextField(
+                    value = templateName,
+                    onValueChange = { templateName = it },
+                    singleLine = true,
+                    label = { Text(getText(R.string.template_name)) },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
+                )
+                Spacer(Modifier.height(dimensions.spacingMedium))
+
                 LazyColumn(modifier = Modifier.weight(1f)) {
                     item { Text(getText(R.string.front_note_templates), style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(bottom = 8.dp)) }
                     item { LockedFieldRow(getText(R.string.front)) }
                     itemsIndexed(localFront) { index, template ->
                         TemplateRow(
                             template = template,
+                            index = index,
                             onUpdate = { updated -> localFront = localFront.toMutableList().apply { this[index] = updated } },
                             onRemove = { localFront = localFront.toMutableList().apply { removeAt(index) } },
                             onMoveUp = if (index > 0) { { localFront = localFront.toMutableList().apply { add(index - 1, removeAt(index)) } } } else null,
-                            onMoveDown = if (index < localFront.lastIndex) { { localFront = localFront.toMutableList().apply { add(index + 1, removeAt(index)) } } } else null
+                            onMoveDown = if (index < localFront.lastIndex) {
+                                { localFront = localFront.toMutableList().apply { add(index + 1, removeAt(index)) } }
+                            } else {
+                                // Last front field's "down" carries it across to the back side,
+                                // same convention as a card's own note fields.
+                                {
+                                    localFront = localFront.toMutableList().apply { removeAt(index) }
+                                    localBack = listOf(template) + localBack
+                                }
+                            }
                         )
                     }
                     item {
                         Spacer(Modifier.height(8.dp))
                         FilledTonalButton(
-                            onClick = { localFront = localFront + NoteField(name = "New Field", content = "", type = MediaType.PLAIN_TEXT) },
+                            onClick = { localFront = localFront + NoteField(name = "", content = "", type = MediaType.PLAIN_TEXT) },
                             modifier = Modifier.fillMaxWidth(),
                             shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                         ) {
@@ -334,16 +375,26 @@ fun AdvancedDeckEditorDialog(
                     itemsIndexed(localBack) { index, template ->
                         TemplateRow(
                             template = template,
+                            index = index,
                             onUpdate = { updated -> localBack = localBack.toMutableList().apply { this[index] = updated } },
                             onRemove = { localBack = localBack.toMutableList().apply { removeAt(index) } },
-                            onMoveUp = if (index > 0) { { localBack = localBack.toMutableList().apply { add(index - 1, removeAt(index)) } } } else null,
+                            onMoveUp = if (index > 0) {
+                                { localBack = localBack.toMutableList().apply { add(index - 1, removeAt(index)) } }
+                            } else {
+                                // First back field's "up" carries it across to the front side,
+                                // same convention as a card's own note fields.
+                                {
+                                    localBack = localBack.toMutableList().apply { removeAt(index) }
+                                    localFront = localFront + template
+                                }
+                            },
                             onMoveDown = if (index < localBack.lastIndex) { { localBack = localBack.toMutableList().apply { add(index + 1, removeAt(index)) } } } else null
                         )
                     }
                     item {
                         Spacer(Modifier.height(8.dp))
                         FilledTonalButton(
-                            onClick = { localBack = localBack + NoteField(name = "New Field", content = "", type = MediaType.PLAIN_TEXT) },
+                            onClick = { localBack = localBack + NoteField(name = "", content = "", type = MediaType.PLAIN_TEXT) },
                             modifier = Modifier.fillMaxWidth(),
                             shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                         ) {
@@ -358,15 +409,31 @@ fun AdvancedDeckEditorDialog(
                     // of always staying on screen.
                     item {
                         Spacer(Modifier.height(dimensions.spacingLarge))
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(getText(R.string.add_missing_fields_desc), style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
-                            StudiareSwitch(
-                                checked = addToExistingCards,
-                                onCheckedChange = { addToExistingCards = it }
-                            )
+                        Text(getText(R.string.template_mode_section_title), style = MaterialTheme.typography.titleMedium)
+                        Text(
+                            getText(R.string.template_mode_section_desc),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(bottom = dimensions.spacingSmall)
+                        )
+                        ConnectedButtonGroup(
+                            items = TemplateMode.entries,
+                            selected = templateMode,
+                            onSelected = { templateMode = it },
+                            labelFor = { it.asString() },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        androidx.compose.animation.AnimatedVisibility(visible = templateMode != TemplateMode.MANUAL) {
+                            Column {
+                                Spacer(Modifier.height(dimensions.spacingSmall))
+                                ConnectedButtonGroup(
+                                    items = TemplateScope.entries,
+                                    selected = templateScope,
+                                    onSelected = { templateScope = it },
+                                    labelFor = { it.asString() },
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                            }
                         }
                     }
                     item {
@@ -394,7 +461,11 @@ fun AdvancedDeckEditorDialog(
 
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     TextButton(onClick = onDismiss, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(getText(R.string.cancel), style = MaterialTheme.typography.labelLarge) }
-                    Button(onClick = { onSave(localFront, localBack, addToExistingCards) }, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(getText(R.string.apply), style = MaterialTheme.typography.labelLarge) }
+                    Button(
+                        onClick = { onSave(localFront, localBack, templateMode, templateScope, templateName.trim()) },
+                        enabled = templateName.isNotBlank(),
+                        shape = RoundedCornerShape(dimensions.cornerRadiusButton)
+                    ) { Text(getText(R.string.apply), style = MaterialTheme.typography.labelLarge) }
                 }
             }
         }
@@ -471,6 +542,7 @@ fun LockedFieldRow(label: String) {
 @Composable
 fun TemplateRow(
     template: NoteField,
+    index: Int,
     onUpdate: (NoteField) -> Unit,
     onRemove: () -> Unit,
     onMoveUp: (() -> Unit)? = null,
@@ -511,6 +583,7 @@ fun TemplateRow(
             onValueChange = { onUpdate(template.copy(name = it)) },
             modifier = Modifier.weight(1f),
             label = { Text(getText(R.string.field_name)) },
+            placeholder = { Text(stringResource(R.string.field_number_placeholder_format, index + 1)) },
             textStyle = MaterialTheme.typography.bodyLarge,
             singleLine = true,
             shape = RoundedCornerShape(dimensions.cornerRadiusMedium),

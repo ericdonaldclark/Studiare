@@ -1076,6 +1076,30 @@ enum class NormalizationType(val value: Int, override val labelResId: Int) : Str
     }
 }
 
+/** A deck's default-template strictness: Manual (template exists, pickable via per-card "Use
+ * Template" only), Apply (seed new cards' fields, one-time, user free to change after), Enforce
+ * (seed new cards' fields and lock their shape — see [TemplateScope]/Card.isDeckTemplateEnforced). */
+enum class TemplateMode(val value: Int, override val labelResId: Int) : StringResourceEnum {
+    MANUAL(0, R.string.template_mode_manual),
+    APPLY(1, R.string.template_mode_apply),
+    ENFORCE(2, R.string.template_mode_enforce);
+
+    companion object {
+        fun fromInt(value: Int?): TemplateMode = entries.find { it.value == value } ?: MANUAL
+    }
+}
+
+/** Only meaningful when [TemplateMode] != MANUAL — whether the policy reaches only cards created
+ * from now on, or is retroactively applied to every card already in the deck too. */
+enum class TemplateScope(val value: Int, override val labelResId: Int) : StringResourceEnum {
+    NEW_CARDS(0, R.string.template_scope_new_cards),
+    ALL_CARDS(1, R.string.template_scope_all_cards);
+
+    companion object {
+        fun fromInt(value: Int?): TemplateScope = entries.find { it.value == value } ?: NEW_CARDS
+    }
+}
+
 fun normalizeText(type: NormalizationType, text: String): String = when (type) {
     NormalizationType.UPPERCASE_FIRST_LETTER -> text.replaceFirstChar { it.uppercase() }
     NormalizationType.UPPERCASE_ALL_LETTERS -> text.uppercase()

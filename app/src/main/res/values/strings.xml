@@ -558,6 +558,19 @@
     <string name="move_cards_subtitle">Choose a destination deck or set, or create a new deck</string>
     <string name="create_new_deck">Create New Deck</string>
     <string name="new_deck_name_hint">New deck name</string>
+    <string name="template_mode_manual">Manual</string>
+    <string name="template_mode_apply">Apply</string>
+    <string name="template_mode_enforce">Enforce</string>
+    <string name="template_scope_new_cards">New cards only</string>
+    <string name="template_scope_all_cards">All cards</string>
+    <string name="template_mode_section_title">Template Policy</string>
+    <string name="template_mode_section_desc">Control whether new or existing cards pick up these fields automatically</string>
+    <string name="use_template">Use Template</string>
+    <string name="use_template_dialog_title">Use Template</string>
+    <string name="use_template_dialog_subtitle">Apply or enforce a saved template on the selected card(s)</string>
+    <string name="enforce">Enforce</string>
+    <string name="remove_enforcement">Remove Enforcement</string>
+    <string name="open_template_editor">Open Template Editor</string>
     <string name="export_decks">All Decks</string>
     <string name="no_decks_yet">No decks yet.</string>
     <string name="create_or_import_to_start">Create one or import to start.</string>
@@ -999,6 +1012,7 @@
     <string name="expand">Expand</string>
     <string name="add_note">Add Note</string>
     <string name="remove_note">Remove Note</string>
+    <string name="field_removed_format">%1$s field removed</string>
     <string name="add_front_note">Add Front Note</string>
     <string name="note_hint_plain_text">Type the text for this field</string>
     <string name="note_hint_web_link">Paste a web link</string>

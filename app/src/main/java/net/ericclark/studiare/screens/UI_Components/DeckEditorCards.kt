@@ -20,6 +20,8 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
@@ -225,6 +227,11 @@ fun CardEditor(
     /** Null hides the overflow menu entirely — used by [net.ericclark.studiare.screens.Dialogs.CardEditDialog]'s Create mode, where there's no saved card yet to clone or move. */
     onCloneClick: (() -> Unit)? = null,
     onMoveClick: (() -> Unit)? = null,
+    onUseTemplateClick: (() -> Unit)? = null,
+    /** Non-null when this card's field shape is locked (per-card enforce, or the deck's own
+     * Enforce policy) — see [net.ericclark.studiare.data.effectiveLockedFields]. Hides the "+ add
+     * field" action and locks each templated [DynamicNoteEditor]'s name/type/remove. */
+    lockedFields: LockedTemplateFields? = null,
     allTags: List<TagDefinition>,
     currentDeckTags: Set<String>,
     onUpdateTags: (Set<String>) -> Unit,
@@ -242,9 +249,17 @@ fun CardEditor(
      * Editor's single-card dialog, where there is no next card to jump to. */
     nextCardFocusRequester: FocusRequester? = null,
     /** Where Shift+Tab moves focus from this card's first field (Front); see [nextCardFocusRequester]. */
-    previousCardFocusRequester: FocusRequester? = null
+    previousCardFocusRequester: FocusRequester? = null,
+    /** False while the Bulk Editor's own initial jump-to-bottom is still settling (see
+     * `cardAnimationsEnabled` in DeckEditorScreen.kt) — note fields that already existed when
+     * this card was first composed then render fully visible instead of playing their "note
+     * added" entrance animation, which was otherwise growing the scroll-pinned last card's height
+     * mid-animation and reading as that card visibly jumping right after opening the screen.
+     * Fields added afterward (via the "+" button, once this is already true) still animate in. */
+    playNoteEntranceAnimations: Boolean = true
 ) {
     val dimensions = LocalStudiareDimensions.current
+    val context = LocalContext.current
     var showInfo by remember { mutableStateOf(false) }
 
     ElevatedCard(
@@ -293,7 +308,7 @@ fun CardEditor(
                         tint = if (isPinned) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-                if (onCloneClick != null || onMoveClick != null) {
+                if (onCloneClick != null || onMoveClick != null || onUseTemplateClick != null) {
                     Spacer(Modifier.width(iconSpacing))
                     var showOverflowMenu by remember { mutableStateOf(false) }
                     Box {
@@ -313,6 +328,13 @@ fun CardEditor(
                                     text = { Text(getText(R.string.move)) },
                                     leadingIcon = { Icon(Icons.Default.DriveFileMove, contentDescription = null) },
                                     onClick = { showOverflowMenu = false; onMoveClick() }
+                                )
+                            }
+                            if (onUseTemplateClick != null) {
+                                DropdownMenuItem(
+                                    text = { Text(getText(R.string.use_template)) },
+                                    leadingIcon = { Icon(Icons.Default.Description, contentDescription = null) },
+                                    onClick = { showOverflowMenu = false; onUseTemplateClick() }
                                 )
                             }
                         }
@@ -341,13 +363,15 @@ fun CardEditor(
                         onEditRichTextClick = {
                             onOpenRichTextEditor("front", cardState.frontRichTextInfo.value ?: cardState.front.value, "Edit Front (Rich Text)")
                         },
-                        actionIcon = {
-                            TooltipIconButton(description = getText(R.string.add_front_note), onClick = {
-                                cardState.frontNotes.value = cardState.frontNotes.value + NoteField(name = "", content = "", type = MediaType.PLAIN_TEXT)
-                            }) {
-                                Icon(Icons.Default.Add, contentDescription = getText(R.string.add_front_note), tint = MaterialTheme.colorScheme.primary)
+                        actionIcon = if (lockedFields == null) {
+                            {
+                                TooltipIconButton(description = getText(R.string.add_front_note), onClick = {
+                                    cardState.frontNotes.value = cardState.frontNotes.value + NoteField(name = "", content = "", type = MediaType.PLAIN_TEXT)
+                                }) {
+                                    Icon(Icons.Default.Add, contentDescription = getText(R.string.add_front_note), tint = MaterialTheme.colorScheme.primary)
+                                }
                             }
-                        },
+                        } else null,
                         normalizationType = normalizationType,
                         focusRequester = cardState.frontFocusRequester,
                         nextFocusRequester = cardState.backFocusRequester,
@@ -355,7 +379,7 @@ fun CardEditor(
                     )
 
                     cardState.frontNotes.value.forEachIndexed { index, note ->
-                        val enterTransition = remember { androidx.compose.animation.core.MutableTransitionState(false) }.apply { targetState = true }
+                        val enterTransition = remember { androidx.compose.animation.core.MutableTransitionState(!playNoteEntranceAnimations) }.apply { targetState = true }
                         AnimatedVisibility(
                             visibleState = enterTransition,
                             enter = fadeIn() + expandVertically(animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium))
@@ -380,8 +404,8 @@ fun CardEditor(
                                     coroutineScope.launch {
                                         snackbarHostState.currentSnackbarData?.dismiss()
                                         val result = snackbarHostState.showSnackbar(
-                                            message = "Note removed",
-                                            actionLabel = "Undo",
+                                            message = context.getString(R.string.field_removed_format, removedNote.type.toString()),
+                                            actionLabel = context.getString(R.string.undo),
                                             duration = androidx.compose.material3.SnackbarDuration.Short
                                         )
                                         if (result == androidx.compose.material3.SnackbarResult.ActionPerformed) {
@@ -391,13 +415,26 @@ fun CardEditor(
                                         }
                                     }
                                 },
-                                normalizationType = normalizationType
+                                normalizationType = normalizationType,
+                                locked = lockedFields?.front?.containsShapeOf(note) == true,
+                                onMoveUp = if (index > 0) {
+                                    { cardState.frontNotes.value = cardState.frontNotes.value.toMutableList().apply { add(index - 1, removeAt(index)) } }
+                                } else null,
+                                onMoveDown = if (index < cardState.frontNotes.value.lastIndex) {
+                                    { cardState.frontNotes.value = cardState.frontNotes.value.toMutableList().apply { add(index + 1, removeAt(index)) } }
+                                } else {
+                                    // Last front field's "down" carries it across to the back side instead of disabling.
+                                    {
+                                        cardState.frontNotes.value = cardState.frontNotes.value.toMutableList().apply { removeAt(index) }
+                                        cardState.backNotes.value = listOf(note) + cardState.backNotes.value
+                                    }
+                                }
                             )
                         }
                     }
-        
+
                     Spacer(Modifier.height(dimensions.spacingMedium))
-        
+
                     // --- BACK ---
                     CardSideEditor(
                         sideLabel = CardSide.BACK.asString(),
@@ -414,13 +451,15 @@ fun CardEditor(
                         onEditRichTextClick = {
                             onOpenRichTextEditor("back", cardState.backRichTextInfo.value ?: cardState.back.value, "Edit Back (Rich Text)")
                         },
-                        actionIcon = {
-                            TooltipIconButton(description = getText(R.string.add_back_note), onClick = {
-                                cardState.backNotes.value = cardState.backNotes.value + NoteField(name = "", content = "", type = MediaType.PLAIN_TEXT)
-                            }) {
-                                Icon(Icons.Default.Add, contentDescription = getText(R.string.add_back_note), tint = MaterialTheme.colorScheme.primary)
+                        actionIcon = if (lockedFields == null) {
+                            {
+                                TooltipIconButton(description = getText(R.string.add_back_note), onClick = {
+                                    cardState.backNotes.value = cardState.backNotes.value + NoteField(name = "", content = "", type = MediaType.PLAIN_TEXT)
+                                }) {
+                                    Icon(Icons.Default.Add, contentDescription = getText(R.string.add_back_note), tint = MaterialTheme.colorScheme.primary)
+                                }
                             }
-                        },
+                        } else null,
                         normalizationType = normalizationType,
                         focusRequester = cardState.backFocusRequester,
                         nextFocusRequester = nextCardFocusRequester,
@@ -428,7 +467,7 @@ fun CardEditor(
                     )
 
                     cardState.backNotes.value.forEachIndexed { index, note ->
-                        val enterTransition = remember { androidx.compose.animation.core.MutableTransitionState(false) }.apply { targetState = true }
+                        val enterTransition = remember { androidx.compose.animation.core.MutableTransitionState(!playNoteEntranceAnimations) }.apply { targetState = true }
                         AnimatedVisibility(
                             visibleState = enterTransition,
                             enter = fadeIn() + expandVertically(animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium))
@@ -453,18 +492,33 @@ fun CardEditor(
                                     coroutineScope.launch {
                                         snackbarHostState.currentSnackbarData?.dismiss()
                                         val result = snackbarHostState.showSnackbar(
-                                            message = "Note removed",
-                                            actionLabel = "Undo",
-                                            duration = androidx.compose.material3.SnackbarDuration.Short // FIXED: Prevent permanent snackbar
+                                            message = context.getString(R.string.field_removed_format, removedNote.type.toString()),
+                                            actionLabel = context.getString(R.string.undo),
+                                            duration = androidx.compose.material3.SnackbarDuration.Short
                                         )
                                         if (result == androidx.compose.material3.SnackbarResult.ActionPerformed) {
-                                            val restoreList = cardState.frontNotes.value.toMutableList()
+                                            // Was restoring into frontNotes — a removed BACK note's
+                                            // Undo silently resurrected it on the wrong side.
+                                            val restoreList = cardState.backNotes.value.toMutableList()
                                             restoreList.add(index.coerceIn(0, restoreList.size), removedNote)
-                                            cardState.frontNotes.value = restoreList
+                                            cardState.backNotes.value = restoreList
                                         }
                                     }
                                 },
-                                normalizationType = normalizationType
+                                normalizationType = normalizationType,
+                                locked = lockedFields?.back?.containsShapeOf(note) == true,
+                                onMoveUp = if (index > 0) {
+                                    { cardState.backNotes.value = cardState.backNotes.value.toMutableList().apply { add(index - 1, removeAt(index)) } }
+                                } else {
+                                    // First back field's "up" carries it across to the front side instead of disabling.
+                                    {
+                                        cardState.backNotes.value = cardState.backNotes.value.toMutableList().apply { removeAt(index) }
+                                        cardState.frontNotes.value = cardState.frontNotes.value + note
+                                    }
+                                },
+                                onMoveDown = if (index < cardState.backNotes.value.lastIndex) {
+                                    { cardState.backNotes.value = cardState.backNotes.value.toMutableList().apply { add(index + 1, removeAt(index)) } }
+                                } else null
                             )
                         }
                     }
@@ -716,7 +770,14 @@ fun DynamicNoteEditor(
     onNoteChange: (NoteField) -> Unit,
     onEditRichTextClick: () -> Unit,
     onRemove: () -> Unit,
-    normalizationType: NormalizationType = NormalizationType.NONE
+    normalizationType: NormalizationType = NormalizationType.NONE,
+    /** True when this field belongs to a template the card is enforcing — shape (name/order/
+     * type) is locked, but content stays freely editable. See effectiveLockedFields(). */
+    locked: Boolean = false,
+    /** Null (and hidden, like [onRemove]) at the first/last position, or whenever [locked] —
+     * mirrors [net.ericclark.studiare.screens.Dialogs.TemplateRow]'s own up/down buttons. */
+    onMoveUp: (() -> Unit)? = null,
+    onMoveDown: (() -> Unit)? = null
 ) {
     val dimensions = LocalStudiareDimensions.current
     var showTypeDropdown by remember { mutableStateOf(false) }
@@ -744,6 +805,9 @@ fun DynamicNoteEditor(
     )
 
     val typeDropdown = @Composable {
+        if (locked) {
+            Text(note.type.toString(), modifier = Modifier.padding(horizontal = dimensions.paddingSmall), color = MaterialTheme.colorScheme.onSurfaceVariant)
+        } else {
         Box {
             TextButton(onClick = { showTypeDropdown = true }, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
                 Text(note.type.toString())
@@ -774,6 +838,7 @@ fun DynamicNoteEditor(
                 }
             }
         }
+        }
     }
 
     // Standardized M3 Expressive Field Colors
@@ -801,26 +866,61 @@ fun DynamicNoteEditor(
         bottomEnd = dimensions.cornerRadiusMedium
     )
 
+    // Reorderable whenever this field isn't template-locked and has a neighbor to swap with in
+    // at least one direction — occupies the same left-edge gutter the plain grouping dot used to
+    // sit in, instead of adding new buttons elsewhere on the card.
+    val reorderable = !locked && (onMoveUp != null || onMoveDown != null)
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(top = dimensions.spacingMedium),
+            .padding(top = dimensions.spacingMedium)
+            .height(IntrinsicSize.Max),
         verticalAlignment = Alignment.Top
     ) {
+        if (reorderable) {
+            // Stacked with no gap and centered down this field's full height, so the shared
+            // boundary between the two buttons lands on the divider between the name field
+            // (above) and the content field (below) — not just two buttons floating at the top.
+            Column(
+                modifier = Modifier.width(48.dp).fillMaxHeight(),
+                verticalArrangement = Arrangement.Center,
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                TooltipIconButton(
+                    description = getText(R.string.move_field_up),
+                    onClick = { onMoveUp?.invoke() },
+                    enabled = onMoveUp != null,
+                    modifier = Modifier.size(48.dp)
+                ) {
+                    Icon(Icons.Default.KeyboardArrowUp, contentDescription = getText(R.string.move_field_up))
+                }
+                TooltipIconButton(
+                    description = getText(R.string.move_field_down),
+                    onClick = { onMoveDown?.invoke() },
+                    enabled = onMoveDown != null,
+                    modifier = Modifier.size(48.dp)
+                ) {
+                    Icon(Icons.Default.KeyboardArrowDown, contentDescription = getText(R.string.move_field_down))
+                }
+            }
+        }
         Column(
             modifier = Modifier
                 .weight(1f)
-                // The visual grouping line
-                .drawBehind {
-                    val dotRadius = 4.dp.toPx() // Adjust this value to make the dot larger or smaller
-                    drawCircle(
-                        color = primaryColor.copy(alpha = 0.4f), // Remove the .copy() if you want a solid color
-                        radius = dotRadius,
-                        center = androidx.compose.ui.geometry.Offset(
-                            x = dotRadius,     // Places the dot right on the left edge
-                            y = size.height / 2f    // Centers the dot vertically
+                // The visual grouping line — only drawn when this field isn't reorderable (the
+                // up/down buttons above take its place in that gutter otherwise).
+                .let { base ->
+                    if (reorderable) base else base.drawBehind {
+                        val dotRadius = 4.dp.toPx() // Adjust this value to make the dot larger or smaller
+                        drawCircle(
+                            color = primaryColor.copy(alpha = 0.4f), // Remove the .copy() if you want a solid color
+                            radius = dotRadius,
+                            center = androidx.compose.ui.geometry.Offset(
+                                x = dotRadius,     // Places the dot right on the left edge
+                                y = size.height / 2f    // Centers the dot vertically
+                            )
                         )
-                    )
+                    }
                 }
                 .padding(start = dimensions.paddingMedium) // Indent away from the line
         ) {
@@ -828,6 +928,7 @@ fun DynamicNoteEditor(
             TextField(
                 value = note.name,
                 onValueChange = { onNoteChange(note.copy(name = it)) },
+                readOnly = locked,
                 placeholder = { Text(stringResource(R.string.field_number_placeholder_format, noteIndex + 1)) },
                 modifier = Modifier.fillMaxWidth(),
                 shape = topShape,
@@ -953,11 +1054,18 @@ fun DynamicNoteEditor(
             }
         }
 
-        TooltipIconButton(description = getText(R.string.remove_note), 
-            onClick = onRemove,
-            modifier = Modifier.padding(start = dimensions.spacingSmall, top = 8.dp)
-        ) {
-            Icon(Icons.Default.Close, contentDescription = getText(R.string.remove_note), tint = MaterialTheme.colorScheme.error)
+        if (!locked) {
+            TooltipIconButton(description = getText(R.string.remove_note),
+                onClick = onRemove,
+                modifier = Modifier.padding(start = dimensions.spacingSmall, top = 8.dp)
+            ) {
+                Icon(Icons.Default.Close, contentDescription = getText(R.string.remove_note), tint = MaterialTheme.colorScheme.error)
+            }
+        } else {
+            // Reserves the same footprint the Remove button occupies on an unlocked field, so a
+            // locked field's content doesn't visibly shift/widen relative to its siblings just
+            // because there's nothing clickable on the right anymore.
+            Spacer(modifier = Modifier.padding(start = dimensions.spacingSmall, top = 8.dp).size(48.dp))
         }
     }
 }

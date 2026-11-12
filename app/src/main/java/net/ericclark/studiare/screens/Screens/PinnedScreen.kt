@@ -106,6 +106,7 @@ fun PinnedScreen(navController: NavController, viewModel: FlashcardViewModel) {
     val pinnedCards by viewModel.pinnedCards.collectAsState()
     val activeSessions by viewModel.allActiveSessions.collectAsState()
     val allTagDefinitions by viewModel.tags.collectAsState()
+    val savedTemplateSets by viewModel.templateSets.collectAsState()
 
     val deckSortMode by viewModel.pinnedScreenDeckSortMode.collectAsState()
     val cardSortMode by viewModel.pinnedScreenCardSortMode.collectAsState()
@@ -145,6 +146,7 @@ fun PinnedScreen(navController: NavController, viewModel: FlashcardViewModel) {
     var showSortDialog by remember { mutableStateOf(false) }
     var editingCard by remember { mutableStateOf<Card?>(null) }
     var showMoveDialogForCard by remember { mutableStateOf<Card?>(null) }
+    var showUseTemplateDialogForCard by remember { mutableStateOf<Card?>(null) }
     var showRestartDialog by remember { mutableStateOf<ActiveSession?>(null) }
     var showDeleteSessionDialog by remember { mutableStateOf<ActiveSession?>(null) }
     var showDeleteDeckDialog by remember { mutableStateOf<DeckSummary?>(null) }
@@ -613,6 +615,12 @@ fun PinnedScreen(navController: NavController, viewModel: FlashcardViewModel) {
         val deck = remember(card.id, allDecks) { allDecks.find { it.cards.any { c -> c.id == card.id } } }
         val editState = remember(card.id) { card.toEditorState() }
         val currentDeckTags = remember(deck?.cards) { deck?.cards?.flatMap { it.tags }?.toSet() ?: emptySet() }
+        val lockedFields = net.ericclark.studiare.data.effectiveLockedFields(
+            enforcedTemplateSetId = card.enforcedTemplateSetId,
+            isDeckTemplateEnforced = card.isDeckTemplateEnforced,
+            templateSets = savedTemplateSets,
+            deck = deck?.deck
+        )
         CardEditDialog(
             cardState = editState,
             cardNumber = 1,
@@ -650,10 +658,15 @@ fun PinnedScreen(navController: NavController, viewModel: FlashcardViewModel) {
                 onMove = {
                     showMoveDialogForCard = card
                     editingCard = null
+                },
+                onUseTemplate = {
+                    showUseTemplateDialogForCard = card
+                    editingCard = null
                 }
             ),
             onCancel = { editingCard = null },
-            normalizationType = deck?.deck?.normalizationType ?: NormalizationType.NONE
+            normalizationType = deck?.deck?.normalizationType ?: NormalizationType.NONE,
+            lockedFields = lockedFields
         )
     }
 
@@ -669,6 +682,30 @@ fun PinnedScreen(navController: NavController, viewModel: FlashcardViewModel) {
             onMoveToNewDeck = { name ->
                 deck?.let { viewModel.moveCardsToNewDeck(listOf(card.toCardDataForSave()), fromDeckId = it.deck.id, newDeckName = name) {} }
                 showMoveDialogForCard = null
+            }
+        )
+    }
+
+    showUseTemplateDialogForCard?.let { card ->
+        val deck = remember(card.id, allDecks) { allDecks.find { it.cards.any { c -> c.id == card.id } } }
+        net.ericclark.studiare.screens.Dialogs.UseTemplateDialog(
+            templateSets = savedTemplateSets,
+            onDismiss = { showUseTemplateDialogForCard = null },
+            onApply = { templateSet ->
+                deck?.let { viewModel.applyTemplateToCards(it, setOf(card.id), templateSet) }
+                showUseTemplateDialogForCard = null
+            },
+            onEnforce = { templateSet ->
+                deck?.let { viewModel.enforceTemplateOnCards(it, setOf(card.id), templateSet) }
+                showUseTemplateDialogForCard = null
+            },
+            onOpenTemplateEditor = {
+                showUseTemplateDialogForCard = null
+                deck?.let { navController.navigate(viewModel.deckEditRoute(it.deck.id)) }
+            },
+            onRemoveEnforcement = {
+                deck?.let { viewModel.clearTemplateEnforcement(it, setOf(card.id)) }
+                showUseTemplateDialogForCard = null
             }
         )
     }
@@ -696,7 +733,9 @@ private fun cardDataFromState(state: CardEditorState): CardDataForSave = CardDat
     flag = state.flag.value,
     isPinned = state.isPinned.value,
     createdAt = state.createdAt.value,
-    updatedAt = System.currentTimeMillis()
+    updatedAt = System.currentTimeMillis(),
+    enforcedTemplateSetId = state.enforcedTemplateSetId.value,
+    isDeckTemplateEnforced = state.isDeckTemplateEnforced.value
 )
 
 /**
