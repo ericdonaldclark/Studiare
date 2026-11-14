@@ -522,7 +522,7 @@ private fun CompletionTopContent(
                         Text(getText(R.string.keep_this_session), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
                         Text(
                             if (keep) getText(R.string.keep_this_session_caption_on) else getText(R.string.keep_this_session_caption_off),
-                            style = MaterialTheme.typography.bodySmall,
+                            style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
@@ -548,7 +548,7 @@ private fun CompletionTopContent(
                         )
                         Text(
                             if (pin) getText(R.string.pin_this_session_caption_on) else getText(R.string.pin_this_session_caption_off),
-                            style = MaterialTheme.typography.bodySmall,
+                            style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
@@ -577,7 +577,7 @@ private fun CompletionTopContent(
                                     Text(
                                         if (missedOnly) stringResource(R.string.save_only_missed_cards_caption_on_format, missedCardsCount)
                                         else getText(R.string.save_only_missed_cards_caption_off),
-                                        style = MaterialTheme.typography.bodySmall,
+                                        style = MaterialTheme.typography.bodyMedium,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                 }
@@ -690,7 +690,7 @@ private fun CompletionHeaderContent(headerStyle: CompletionHeaderStyle, showAccu
                 Icon(imageVector = Icons.Default.EmojiEvents, contentDescription = null, modifier = Modifier.size(32.dp), tint = MaterialTheme.colorScheme.primary)
                 Column(modifier = Modifier.weight(1f)) {
                     Text(getText(R.string.congratulations), style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
-                    Text(getText(R.string.completed_session_msg), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(getText(R.string.completed_session_msg), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 if (showAccuracy) {
                     // A fixed square size, not wrap-content padding, so the cookie's points stay

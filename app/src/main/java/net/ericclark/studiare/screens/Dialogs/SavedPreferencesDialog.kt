@@ -105,7 +105,7 @@ fun SavedPreferencesDialog(viewModel: FlashcardViewModel, onDismiss: () -> Unit)
                     }
                     Text(
                         getText(R.string.saved_preferences_desc),
-                        style = MaterialTheme.typography.bodySmall,
+                        style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
                     )

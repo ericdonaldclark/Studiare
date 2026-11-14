@@ -714,13 +714,13 @@ fun SelectionModeDialogSection(
                     }
                     Spacer(Modifier.height(dimensions.spacingSmall))
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(getText(R.string.front_side), style = MaterialTheme.typography.bodySmall)
+                        Text(getText(R.string.front_side), style = MaterialTheme.typography.bodyMedium)
                         StudiareSwitch(
                             checked = state.filterSide == CardSide.BACK,
                             onCheckedChange = { actions.onFilterSideChange(if (it) CardSide.BACK else CardSide.FRONT) },
                             modifier = Modifier.padding(horizontal = dimensions.paddingSmall)
                         )
-                        Text(getText(R.string.back_side), style = MaterialTheme.typography.bodySmall)
+                        Text(getText(R.string.back_side), style = MaterialTheme.typography.bodyMedium)
                     }
                     ConnectedButtonGroup(
                         items = listOf(CardSide.FRONT, CardSide.BACK),
@@ -856,7 +856,7 @@ fun SelectionModeDialogSection(
                                 if (state.filterType == FilterType.EXCLUDE) stringResource(R.string.selects_not_incorrect_format, state.timeValue, state.timeUnit.asString())
                                 else stringResource(R.string.selects_incorrect_format, state.timeValue, state.timeUnit.asString())
                             },
-                            style = MaterialTheme.typography.bodySmall,
+                            style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }

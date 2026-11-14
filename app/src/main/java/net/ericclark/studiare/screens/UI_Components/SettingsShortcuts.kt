@@ -90,7 +90,7 @@ internal fun KeyboardShortcutSettingsContent(viewModel: FlashcardViewModel, init
         )
         Text(
             "Tap a shortcut's key to rebind it.",
-            style = MaterialTheme.typography.bodySmall,
+            style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(bottom = dimensions.spacingMedium)
         )
@@ -191,7 +191,7 @@ internal fun ShortcutRemapRow(
     if (conflicts.isNotEmpty()) {
         Text(
             "Also used by " + conflicts.joinToString(", ") { it.action },
-            style = MaterialTheme.typography.bodySmall,
+            style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.error,
             modifier = Modifier.padding(top = 2.dp)
         )

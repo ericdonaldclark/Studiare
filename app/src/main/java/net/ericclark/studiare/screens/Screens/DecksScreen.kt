@@ -2,6 +2,7 @@ package net.ericclark.studiare.screens.Screens
 
 import android.annotation.SuppressLint
 import android.net.Uri
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -79,7 +80,7 @@ import net.ericclark.studiare.screens.Dialogs.AnkiMappingConfig
 import net.ericclark.studiare.screens.Dialogs.DeckSortDialog
 import net.ericclark.studiare.screens.Dialogs.DuplicateWarningDialog
 import net.ericclark.studiare.screens.Dialogs.ExportDecksDialog
-import net.ericclark.studiare.screens.Dialogs.ImportOverwriteDialog
+import net.ericclark.studiare.screens.Dialogs.ImportSelectionDialog
 import net.ericclark.studiare.screens.Dialogs.MapperDestination
 import net.ericclark.studiare.screens.Dialogs.MapperItem
 import net.ericclark.studiare.screens.UI_Components.ConnectedButtonGroup
@@ -185,9 +186,6 @@ fun DeckListScreen(
     // Map spacing mode to Dimensions
     val dimensions = LocalStudiareDimensions.current
 
-    var decksToExport by remember { mutableStateOf<List<DeckWithCards>?>(null) }
-    var exportIncludeMetadata by remember { mutableStateOf(true) }
-
     // --- Dialogs ---
     if (showSortDialog) {
         val showPinnedFirst by viewModel.showPinnedDecksFirst.collectAsState()
@@ -210,10 +208,10 @@ fun DeckListScreen(
     }
 
     overwriteConfirmation?.let { data ->
-        ImportOverwriteDialog(
-            decksToOverwrite = data.decksToOverwrite,
+        ImportSelectionDialog(
+            data = data,
             onDismiss = { viewModel.cancelImport() },
-            onConfirm = { selectedIds -> viewModel.proceedWithImport(selectedIds) }
+            onConfirm = { toImport, toOverwrite -> viewModel.proceedWithImport(toImport, toOverwrite) }
         )
     }
 
@@ -259,90 +257,12 @@ fun DeckListScreen(
         LoadingOverlay()
     }
 
-    // --- Export Logic ---
-    val jsonExportLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.CreateDocument("application/json"),
-        onResult = { uri: Uri? ->
-            uri?.let {
-                decksToExport?.let { decks ->
-                    val content = viewModel.getDecksAsString(
-                        decks,
-                        "JSON",
-                        exportIncludeMetadata
-                    ) // ADDED PARAM
-                    context.contentResolver.openOutputStream(it)
-                        ?.use { stream -> stream.write(content.toByteArray()) }
-                    viewModel.markDecksExported(decks)
-                }
-            }
-            decksToExport = null
-        }
-    )
-
-    val csvExportLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.CreateDocument("text/csv"),
-        onResult = { uri: Uri? ->
-            uri?.let {
-                decksToExport?.let { decks ->
-                    val content = viewModel.getDecksAsString(
-                        decks,
-                        "CSV",
-                        exportIncludeMetadata
-                    ) // ADDED PARAM
-                    context.contentResolver.openOutputStream(it)
-                        ?.use { stream -> stream.write(content.toByteArray()) }
-                    viewModel.markDecksExported(decks)
-                }
-            }
-            decksToExport = null
-        }
-    )
-
-    // Anki Export Launcher
-    val ankiExportLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.CreateDocument("application/octet-stream"),
-        onResult = { uri: Uri? ->
-            uri?.let {
-                decksToExport?.let { decks ->
-                    viewModel.exportToAnkiPackage(
-                        context,
-                        decks,
-                        it,
-                        exportIncludeMetadata
-                    ) // ADDED PARAM
-                    viewModel.markDecksExported(decks)
-                }
-            }
-            decksToExport = null
-        }
-    )
-
     val allDecksWithCards by viewModel.allDecks.observeAsState(emptyList())
-    if (showExportDialog) {
-        ExportDecksDialog(
-            decks = allDecksWithCards,
-            onDismiss = { showExportDialog = false },
-            onExport = { selectedDecks, format, includeMetadata -> // NEW PARAM
-                showExportDialog = false
-                decksToExport = selectedDecks
-                exportIncludeMetadata = includeMetadata // SAVE STATE
-                val dateFormat = SimpleDateFormat("yyMMddHHmmss", Locale.getDefault())
-                val dtFormat = dateFormat.format(Date())
-
-                // Route to the correct launcher based on selection
-                when (format) {
-                    "CSV" -> {
-                        val fileName = context.getString(R.string.output_file_name, dtFormat, "csv")
-                        csvExportLauncher.launch(fileName)
-                    }
-
-                    "ANKI_APKG" -> ankiExportLauncher.launch("Studiare_Export_${dtFormat}.apkg")
-                    "ANKI_COLPKG" -> ankiExportLauncher.launch("Studiare_Export_${dtFormat}.colpkg")
-                    else -> jsonExportLauncher.launch("flashcard_decks_${dtFormat}.json")
-                }
-            }
-        )
-    }
+    net.ericclark.studiare.screens.Dialogs.ExportDecksLauncher(
+        show = showExportDialog,
+        onDismiss = { showExportDialog = false },
+        viewModel = viewModel
+    )
 
     if (showCollectionDialog) {
         CollectionPickerDialog(
@@ -987,9 +907,37 @@ fun DeckListScreen(
                                                     label = getText(context, R.string.advanced_selection),
                                                     onClick = { showAdvancedSelectionDialog = true }
                                                 )
+                                                val clone = net.ericclark.studiare.screens.UI_Components.SelectionAction(
+                                                    id = "clone",
+                                                    icon = Icons.Default.ContentCopy,
+                                                    label = getText(context, R.string.clone),
+                                                    onClick = {
+                                                        viewModel.cloneDecksForSelection(selection.selected.toList())
+                                                        selection.exit()
+                                                    }
+                                                )
+                                                val merge = net.ericclark.studiare.screens.UI_Components.SelectionAction(
+                                                    id = "merge",
+                                                    icon = Icons.Default.CallMerge,
+                                                    label = getText(context, R.string.merge),
+                                                    onClick = {
+                                                        val ids = selection.selected.toList()
+                                                        viewModel.mergeDecks(
+                                                            selectedIds = ids,
+                                                            onMerged = { survivorId ->
+                                                                selection.exit()
+                                                                navController.navigate("deckEditor?deckId=$survivorId&cameFromMerge=true")
+                                                            },
+                                                            onError = { message -> Toast.makeText(context, message, Toast.LENGTH_SHORT).show() }
+                                                        )
+                                                    }
+                                                )
                                                 if (selection.selected.isEmpty()) {
                                                     listOf(advancedSelection, selectAll)
                                                 } else {
+                                                    val canMerge = selection.selected.size >= 2 &&
+                                                        resolvedSelectedDecks.map { it.deck.parentDeckId }.distinct().size == 1
+                                                    val cloneMerge = listOfNotNull(clone, merge.takeIf { canMerge })
                                                     val others = listOf(
                                                         net.ericclark.studiare.screens.UI_Components.SelectionAction(
                                                             id = "unpin",
@@ -1027,7 +975,7 @@ fun DeckListScreen(
                                                             }
                                                         )
                                                     )
-                                                    listOf(advancedSelection) + others.filter { it.id != "edit" || selection.selected.size == 1 } + selectAll
+                                                    listOf(advancedSelection) + cloneMerge + others.filter { it.id != "edit" || selection.selected.size == 1 } + selectAll
                                                 }
                                             }
                                             Row(

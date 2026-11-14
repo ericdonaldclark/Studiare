@@ -106,6 +106,7 @@ fun PinnedScreen(navController: NavController, viewModel: FlashcardViewModel) {
     val pinnedCards by viewModel.pinnedCards.collectAsState()
     val activeSessions by viewModel.allActiveSessions.collectAsState()
     val allTagDefinitions by viewModel.tags.collectAsState()
+    val savedTemplateSets by viewModel.templateSets.collectAsState()
 
     val deckSortMode by viewModel.pinnedScreenDeckSortMode.collectAsState()
     val cardSortMode by viewModel.pinnedScreenCardSortMode.collectAsState()
@@ -144,6 +145,8 @@ fun PinnedScreen(navController: NavController, viewModel: FlashcardViewModel) {
 
     var showSortDialog by remember { mutableStateOf(false) }
     var editingCard by remember { mutableStateOf<Card?>(null) }
+    var showMoveDialogForCard by remember { mutableStateOf<Card?>(null) }
+    var showUseTemplateDialogForCard by remember { mutableStateOf<Card?>(null) }
     var showRestartDialog by remember { mutableStateOf<ActiveSession?>(null) }
     var showDeleteSessionDialog by remember { mutableStateOf<ActiveSession?>(null) }
     var showDeleteDeckDialog by remember { mutableStateOf<DeckSummary?>(null) }
@@ -641,10 +644,56 @@ fun PinnedScreen(navController: NavController, viewModel: FlashcardViewModel) {
                         }
                     }
                     editingCard = null
+                },
+                onClone = {
+                    deck?.let { viewModel.cloneCardsForSelection(it, setOf(card.id)) }
+                    editingCard = null
+                },
+                onMove = {
+                    showMoveDialogForCard = card
+                    editingCard = null
+                },
+                onUseTemplate = {
+                    showUseTemplateDialogForCard = card
+                    editingCard = null
                 }
             ),
             onCancel = { editingCard = null },
             normalizationType = deck?.deck?.normalizationType ?: NormalizationType.NONE
+        )
+    }
+
+    showMoveDialogForCard?.let { card ->
+        val deck = remember(card.id, allDecks) { allDecks.find { it.cards.any { c -> c.id == card.id } } }
+        net.ericclark.studiare.screens.Dialogs.MoveCardsDialog(
+            decks = allDecks,
+            onDismiss = { showMoveDialogForCard = null },
+            onMoveToExisting = { toDeckId ->
+                deck?.let { viewModel.moveCardsToDeck(listOf(card.toCardDataForSave()), fromDeckId = it.deck.id, toDeckId = toDeckId) }
+                showMoveDialogForCard = null
+            },
+            onMoveToNewDeck = { name ->
+                deck?.let { viewModel.moveCardsToNewDeck(listOf(card.toCardDataForSave()), fromDeckId = it.deck.id, newDeckName = name) {} }
+                showMoveDialogForCard = null
+            }
+        )
+    }
+
+    showUseTemplateDialogForCard?.let { card ->
+        val deck = remember(card.id, allDecks) { allDecks.find { it.cards.any { c -> c.id == card.id } } }
+        net.ericclark.studiare.screens.Dialogs.UseTemplateDialog(
+            templateSets = savedTemplateSets,
+            onDismiss = { showUseTemplateDialogForCard = null },
+            // Use Template's own Apply action stays on the dialog so the user can keep trying
+            // different templates — only Close/dismiss and Open Template Editor leave it.
+            onApply = { templateSet ->
+                deck?.let { viewModel.applyTemplateToCards(it, setOf(card.id), templateSet) }
+            },
+            onOpenTemplateEditor = {
+                showUseTemplateDialogForCard = null
+                deck?.let { navController.navigate(viewModel.deckEditRoute(it.deck.id)) }
+            },
+            matchStatusFor = { templateSet -> templateSet.matchStatus(card.frontNotes, card.backNotes) }
         )
     }
 }

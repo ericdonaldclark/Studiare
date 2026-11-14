@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -20,9 +21,13 @@ import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.DriveFileMove
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Label
 import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SelectAll
@@ -55,6 +60,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.livedata.observeAsState
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -63,6 +69,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
@@ -99,6 +106,7 @@ import net.ericclark.studiare.data.DeckSortMode
 import net.ericclark.studiare.data.DeckWithCards
 import net.ericclark.studiare.data.DifficultySetting
 import net.ericclark.studiare.data.NoteField
+import net.ericclark.studiare.data.matchStatus
 import net.ericclark.studiare.data.NormalizationType
 import net.ericclark.studiare.data.TagDefinition
 import net.ericclark.studiare.data.asString
@@ -168,18 +176,34 @@ fun SimpleEditorScreen(
     val allTags by viewModel.tags.collectAsState()
     val savedTemplateSets by viewModel.templateSets.collectAsState()
     val alwaysOpenBulkEditor by viewModel.alwaysOpenBulkEditor.collectAsState()
+    val allDecksState by viewModel.allDecks.observeAsState(emptyList())
     val snackbarHostState = remember { SnackbarHostState() }
     val coroutineScope = rememberCoroutineScope()
     val context = LocalContext.current
 
     var editingCard by remember { mutableStateOf<CardEntity?>(null) }
+    var showTagDialogForSelection by remember { mutableStateOf<Set<String>?>(null) }
+    var showMoveDialogForSelection by remember { mutableStateOf<Set<String>?>(null) }
+    var showUseTemplateDialogForSelection by remember { mutableStateOf<Set<String>?>(null) }
+    // Set only when the Template Editor was opened via the Use Template dialog's own "Open
+    // Template Editor" button — Cancel/Save there should return to that dialog, not Deck Options.
+    var pendingUseTemplateIds by remember { mutableStateOf<Set<String>?>(null) }
     var createCardState by remember { mutableStateOf<CardEditorState?>(null) }
     var showTemplateEditor by remember { mutableStateOf(false) }
+    var showExportDialog by remember { mutableStateOf(false) }
     var showFilterOverlay by remember { mutableStateOf(false) }
     var showDeckInfo by remember { mutableStateOf(false) }
     var showDeckOptions by remember { mutableStateOf(false) }
     var filterQuery by remember { mutableStateOf("") }
     val lazyGridState = rememberLazyGridState()
+    // Restores position only if Bulk Editor's toggle button just handed one off for this deck
+    // (see goToBulkEditor's capture above) — any other way of arriving here (Decks list, back
+    // navigation, etc.) finds nothing to consume and keeps the grid's normal default position.
+    LaunchedEffect(deckWithCards?.deck?.id) {
+        val deckId = deckWithCards?.deck?.id ?: return@LaunchedEffect
+        val handoffPosition = viewModel.consumeSimpleEditorScrollHandoff(deckId) ?: return@LaunchedEffect
+        lazyGridState.scrollToItem(handoffPosition.first, handoffPosition.second)
+    }
     val selection = rememberSelectionController()
     BackHandler(enabled = selection.inSelectionMode) { selection.exit() }
 
@@ -214,20 +238,24 @@ fun SimpleEditorScreen(
         }
     }
 
-    fun blankEditorState(): CardEditorState = CardEditorState(
-        id = UUID.randomUUID().toString(),
-        front = mutableStateOf(""), frontRichTextInfo = mutableStateOf(null), isFrontRichText = mutableStateOf(false),
-        back = mutableStateOf(""), backRichTextInfo = mutableStateOf(null), isBackRichText = mutableStateOf(false),
-        frontNotes = mutableStateOf(deckWithCards?.deck?.frontNoteTemplates ?: emptyList()),
-        backNotes = mutableStateOf(deckWithCards?.deck?.backNoteTemplates ?: emptyList()),
-        difficulty = mutableStateOf(DifficultySetting.FIVE), isKnown = mutableStateOf(false),
-        reviewedCount = mutableStateOf(0), gradedAttempts = mutableStateOf(emptyList()),
-        incorrectAttempts = mutableStateOf(emptyList()), reviewLogs = mutableStateOf(emptyList()),
-        absoluteDueDate = mutableStateOf(null), tags = mutableStateOf(emptyList()),
-        isSuspended = mutableStateOf(false), flag = mutableStateOf(CardFlag.NONE),
-        isPinned = mutableStateOf(false),
-        createdAt = mutableLongStateOf(System.currentTimeMillis()), updatedAt = mutableStateOf(System.currentTimeMillis())
-    )
+    fun blankEditorState(): CardEditorState {
+        val deck = deckWithCards?.deck
+        val shouldSeed = deck?.seedNewCardsFromTemplate == true
+        return CardEditorState(
+            id = UUID.randomUUID().toString(),
+            front = mutableStateOf(""), frontRichTextInfo = mutableStateOf(null), isFrontRichText = mutableStateOf(false),
+            back = mutableStateOf(""), backRichTextInfo = mutableStateOf(null), isBackRichText = mutableStateOf(false),
+            frontNotes = mutableStateOf(if (shouldSeed) deck?.frontNoteTemplates ?: emptyList() else emptyList()),
+            backNotes = mutableStateOf(if (shouldSeed) deck?.backNoteTemplates ?: emptyList() else emptyList()),
+            difficulty = mutableStateOf(DifficultySetting.FIVE), isKnown = mutableStateOf(false),
+            reviewedCount = mutableStateOf(0), gradedAttempts = mutableStateOf(emptyList()),
+            incorrectAttempts = mutableStateOf(emptyList()), reviewLogs = mutableStateOf(emptyList()),
+            absoluteDueDate = mutableStateOf(null), tags = mutableStateOf(emptyList()),
+            isSuspended = mutableStateOf(false), flag = mutableStateOf(CardFlag.NONE),
+            isPinned = mutableStateOf(false),
+            createdAt = mutableLongStateOf(System.currentTimeMillis()), updatedAt = mutableStateOf(System.currentTimeMillis())
+        )
+    }
 
     fun cardDataFrom(state: CardEditorState): CardDataForSave = CardDataForSave(
         id = state.id,
@@ -254,6 +282,9 @@ fun SimpleEditorScreen(
 
     fun goToBulkEditor() {
         val id = deckWithCards?.deck?.id ?: return
+        // Saved under Simple Editor's own key, not Bulk's — lets *returning* to Simple Editor
+        // (via its own toggle button) restore where Simple Editor itself was left.
+        viewModel.setSimpleEditorScrollHandoff(id, lazyGridState.firstVisibleItemIndex, lazyGridState.firstVisibleItemScrollOffset)
         // Replace this screen in the back stack instead of pushing on top of it, so Bulk
         // Editor's back button (and save/discard) exits straight past Simple Editor.
         val simpleEditorRoute = navController.currentBackStackEntry?.destination?.route ?: "simpleEditor?deckId={deckId}"
@@ -291,6 +322,40 @@ fun SimpleEditorScreen(
     fun setKnownForSelection(ids: Set<String>, known: Boolean) {
         val deck = deckWithCards ?: return
         deck.cards.filter { it.id in ids }.forEach { viewModel.saveSingleCard(deck, it.toCardDataForSave().copy(isKnown = known)) }
+    }
+
+    fun applyTagsForSelection(ids: Set<String>, addTags: Set<String>, removeTags: Set<String>) {
+        val deck = deckWithCards ?: return
+        deck.cards.filter { it.id in ids }.forEach { card ->
+            val newTags = (card.tags.toSet() + addTags - removeTags).toList()
+            viewModel.saveSingleCard(deck, card.toCardDataForSave().copy(tags = newTags))
+        }
+    }
+
+    fun cloneCardsForSelection(ids: Set<String>) {
+        val deck = deckWithCards ?: return
+        viewModel.cloneCardsForSelection(deck, ids)
+    }
+
+    fun moveCardsForSelectionToExisting(ids: Set<String>, toDeckId: String) {
+        val deck = deckWithCards ?: return
+        val cardsToMove = deck.cards.filter { it.id in ids }.map { it.toCardDataForSave() }
+        viewModel.moveCardsToDeck(cardsToMove, fromDeckId = deck.deck.id, toDeckId = toDeckId)
+        showMoveDialogForSelection = null
+    }
+
+    fun moveCardsForSelectionToNewDeck(ids: Set<String>, newDeckName: String) {
+        val deck = deckWithCards ?: return
+        val cardsToMove = deck.cards.filter { it.id in ids }.map { it.toCardDataForSave() }
+        viewModel.moveCardsToNewDeck(cardsToMove, fromDeckId = deck.deck.id, newDeckName = newDeckName) {}
+        showMoveDialogForSelection = null
+    }
+
+    // Use Template's own Apply/Enforce/Remove-Enforcement actions stay on the dialog so the user
+    // can keep trying different templates — only Close/dismiss and Open Template Editor leave it.
+    fun applyTemplateForSelection(ids: Set<String>, templateSet: net.ericclark.studiare.data.TemplateSet) {
+        val deck = deckWithCards ?: return
+        viewModel.applyTemplateToCards(deck, ids, templateSet)
     }
 
     Scaffold(
@@ -357,6 +422,42 @@ fun SimpleEditorScreen(
                                 icon = Icons.Default.Check,
                                 label = getText(context, R.string.mark_as_known),
                                 onClick = { setKnownForSelection(selection.selected, true) }
+                            ),
+                            SelectionAction(
+                                id = "tag",
+                                icon = Icons.Default.Label,
+                                label = getText(context, R.string.tag),
+                                onClick = { showTagDialogForSelection = selection.selected }
+                            ),
+                            SelectionAction(
+                                id = "clone",
+                                icon = Icons.Default.ContentCopy,
+                                label = getText(context, R.string.clone),
+                                onClick = {
+                                    val ids = selection.selected
+                                    selection.exit()
+                                    cloneCardsForSelection(ids)
+                                }
+                            ),
+                            SelectionAction(
+                                id = "move",
+                                icon = Icons.Default.DriveFileMove,
+                                label = getText(context, R.string.move),
+                                onClick = {
+                                    val ids = selection.selected
+                                    selection.exit()
+                                    showMoveDialogForSelection = ids
+                                }
+                            ),
+                            SelectionAction(
+                                id = "useTemplate",
+                                icon = Icons.Default.Description,
+                                label = getText(context, R.string.use_template),
+                                onClick = {
+                                    val ids = selection.selected
+                                    selection.exit()
+                                    showUseTemplateDialogForSelection = ids
+                                }
                             ),
                             SelectionAction(
                                 id = "edit",
@@ -474,6 +575,7 @@ fun SimpleEditorScreen(
                 exit = ExitTransition.None,
                 modifier = Modifier.fillMaxSize()
             ) {
+                Box(modifier = Modifier.fillMaxSize()) {
                 LazyVerticalGrid(
                     state = lazyGridState,
                     columns = GridCells.Adaptive(minSize = 260.dp),
@@ -500,8 +602,67 @@ fun SimpleEditorScreen(
                         )
                     }
                 }
+                // Same grabbable fast-scroll slider the Bulk Editor's card list uses — stops
+                // short of the bottom (matching the grid's own 120dp bottom content padding) so
+                // it doesn't sit behind the selection action bar/Close FAB that floats over this
+                // screen while selecting.
+                if (displayedCards.size > 3) {
+                    net.ericclark.studiare.screens.UI_Components.CustomVerticalScrollbar(
+                        gridState = lazyGridState,
+                        bottomClearance = 120.dp,
+                        modifier = Modifier
+                            .align(Alignment.CenterEnd)
+                            .width(30.dp)
+                            .fillMaxHeight()
+                            .padding(top = dimensions.paddingMedium)
+                    )
+                }
+                }
             }
         }
+    }
+
+    showTagDialogForSelection?.let { ids ->
+        val deck = deckWithCards
+        if (deck != null) {
+            net.ericclark.studiare.components.MultiCardTagSelectionDialog(
+                selectedCardsTags = deck.cards.filter { it.id in ids }.map { it.tags.toSet() },
+                allTags = allTags,
+                currentDeckTags = currentDeckTags,
+                onDismiss = { showTagDialogForSelection = null },
+                onSave = { addTags, removeTags ->
+                    applyTagsForSelection(ids, addTags, removeTags)
+                    showTagDialogForSelection = null
+                },
+                onCreateTag = { name, color -> viewModel.saveTagDefinition(TagDefinition(name = name, color = color)) }
+            )
+        }
+    }
+
+    showMoveDialogForSelection?.let { ids ->
+        net.ericclark.studiare.screens.Dialogs.MoveCardsDialog(
+            decks = allDecksState,
+            onDismiss = { showMoveDialogForSelection = null },
+            onMoveToExisting = { toDeckId -> moveCardsForSelectionToExisting(ids, toDeckId) },
+            onMoveToNewDeck = { name -> moveCardsForSelectionToNewDeck(ids, name) }
+        )
+    }
+
+    showUseTemplateDialogForSelection?.let { ids ->
+        net.ericclark.studiare.screens.Dialogs.UseTemplateDialog(
+            templateSets = savedTemplateSets,
+            onDismiss = { showUseTemplateDialogForSelection = null },
+            onApply = { templateSet -> applyTemplateForSelection(ids, templateSet) },
+            onOpenTemplateEditor = {
+                pendingUseTemplateIds = ids
+                showUseTemplateDialogForSelection = null
+                showTemplateEditor = true
+            },
+            matchStatusFor = { templateSet ->
+                val single = ids.singleOrNull()?.let { singleId -> deckWithCards?.cards?.find { it.id == singleId } }
+                if (single != null) templateSet.matchStatus(single.frontNotes, single.backNotes) else net.ericclark.studiare.data.TemplateMatchStatus.NOT_MATCHING
+            }
+        )
     }
 
     editingCard?.let { card ->
@@ -521,7 +682,19 @@ fun SimpleEditorScreen(
                     deckWithCards?.let { viewModel.saveSingleCard(it, cardDataFrom(editState)) }
                     editingCard = null
                 },
-                onDelete = { deleteCard(card) }
+                onDelete = { deleteCard(card) },
+                onClone = {
+                    cloneCardsForSelection(setOf(card.id))
+                    editingCard = null
+                },
+                onMove = {
+                    showMoveDialogForSelection = setOf(card.id)
+                    editingCard = null
+                },
+                onUseTemplate = {
+                    showUseTemplateDialogForSelection = setOf(card.id)
+                    editingCard = null
+                }
             ),
             onCancel = { editingCard = null },
             normalizationType = deckWithCards?.deck?.normalizationType ?: NormalizationType.NONE
@@ -558,23 +731,48 @@ fun SimpleEditorScreen(
             frontTemplates = deckWithCards.deck.frontNoteTemplates,
             backTemplates = deckWithCards.deck.backNoteTemplates,
             onDismiss = {
-                // Template Editor is only ever reached from Deck Options' "Open Template Editor"
-                // button, which closes Deck Options before opening this — so cancelling here (via
-                // the Cancel button, back, or tap-outside) needs to explicitly reopen it, or the
-                // user lands back on the editor screen with both dialogs gone.
+                // Template Editor is reached either from Deck Options' "Open Template Editor"
+                // button, or from the Use Template dialog's own button of the same name — so
+                // cancelling here (via the Cancel button, back, or tap-outside) needs to reopen
+                // whichever of those it came from, or the user lands back on the editor screen
+                // with both dialogs gone.
                 showTemplateEditor = false
-                showDeckOptions = true
+                val returnIds = pendingUseTemplateIds
+                if (returnIds != null) {
+                    pendingUseTemplateIds = null
+                    showUseTemplateDialogForSelection = returnIds
+                } else {
+                    showDeckOptions = true
+                }
             },
-            onSave = { newFront, newBack, addToExistingCards ->
-                viewModel.saveNoteTemplates(deckWithCards, newFront, newBack, addToExistingCards)
+            onSave = { newFront, newBack, templateId, _, applyToAll ->
+                viewModel.saveNoteTemplates(deckWithCards, templateId, newFront, newBack, applyToAll)
                 showTemplateEditor = false
-                showDeckOptions = true
+                val returnIds = pendingUseTemplateIds
+                if (returnIds != null) {
+                    pendingUseTemplateIds = null
+                    showUseTemplateDialogForSelection = returnIds
+                } else {
+                    showDeckOptions = true
+                }
             },
+            initialTemplateName = savedTemplateSets.find { it.id == deckWithCards.deck.activeTemplateSetId }?.name ?: "",
+            initialEditingTemplateId = deckWithCards.deck.activeTemplateSetId,
             savedTemplateSets = savedTemplateSets,
-            onSaveAsTemplate = { name, front, back -> viewModel.saveAsTemplateSet(name, front, back) },
-            onDeleteTemplateSet = { templateSet -> viewModel.deleteTemplateSet(templateSet) }
+            onPersistTemplate = { id, name, front, back -> viewModel.upsertDeckTemplateSet(id, name, front, back) },
+            onDeleteTemplateSet = { templateSet -> viewModel.deleteTemplateSet(templateSet) },
+            decksUsingTemplate = { templateId -> allDecksState.filter { it.deck.activeTemplateSetId == templateId }.map { it.deck.name } },
+            onOpenExportDialog = { showExportDialog = true },
+            onRemoveTemplate = { viewModel.removeDeckTemplate(deckWithCards) },
+            hasExistingCards = deckWithCards.cards.isNotEmpty()
         )
     }
+
+    net.ericclark.studiare.screens.Dialogs.ExportDecksLauncher(
+        show = showExportDialog,
+        onDismiss = { showExportDialog = false },
+        viewModel = viewModel
+    )
 
     FloatingFilterOverlay(
         visible = showFilterOverlay,
@@ -601,7 +799,13 @@ fun SimpleEditorScreen(
                 viewModel.updateDeckOptions(deckWithCards, newName, newNorm, newSort, newPinnedFirst, newPromptSide, newFrontLang, newBackLang)
                 showDeckOptions = false
             },
-            onOpenTemplateEditor = { showTemplateEditor = true },
+            onOpenTemplateEditor = { _, _, _, _, _, _, _ ->
+                // Nothing to carry over here — this dialog always reflects the deck's actually
+                // persisted name/options (it has no separate in-progress "creating a new deck"
+                // draft of its own), so reopening it already shows the right values either way.
+                showDeckOptions = false
+                showTemplateEditor = true
+            },
             onClearReviewData = {
                 viewModel.clearDeckReviewData(deckWithCards.deck.id)
                 showDeckOptions = false
@@ -611,6 +815,19 @@ fun SimpleEditorScreen(
         )
     }
 }
+
+/** A note's content as shown in [CardTile]'s preview text. Media notes (image/video/audio) hold a
+ * full internal-storage file path there — truncated to the last 3 segments via
+ * [MediaStorageUtils.truncatedDisplayPath]. Checked by content, not just [NoteField.type]: a note
+ * can end up holding an internal media path while still tagged [MediaType.PLAIN_TEXT] (e.g.
+ * imported/legacy data whose type never got corrected), and that path is just as unreadable
+ * untruncated regardless of what the field is nominally tagged. */
+private fun noteDisplayContent(note: NoteField, internalFilesDir: String): String =
+    // Just the filename here, not DeckEditorCards.kt's 3-segment truncatedDisplayPath — this tile
+    // preview has far less room than the note-field editor (Bulk Editor, and the dialog this
+    // screen opens when a tile is tapped, both still show the fuller 3-segment path).
+    if (note.content.startsWith(internalFilesDir)) note.content.substringAfterLast('/')
+    else note.content
 
 @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 /**
@@ -686,22 +903,31 @@ internal fun CardTile(
 
                 Column(modifier = Modifier.fillMaxWidth()) {
                     val dimColor = MaterialTheme.colorScheme.onSurfaceVariant
+                    val internalFilesDir = LocalContext.current.filesDir.absolutePath
                     val paragraph = buildAnnotatedString {
                         withStyle(SpanStyle(fontSize = MaterialTheme.typography.titleMedium.fontSize, fontWeight = FontWeight.Bold)) {
                             append(card.front)
                         }
                         card.frontNotes.filter { it.content.isNotBlank() }.forEach { note ->
+                            withStyle(SpanStyle(color = dimColor, fontStyle = FontStyle.Italic)) {
+                                append(" ${note.name}")
+                            }
                             withStyle(SpanStyle(color = dimColor)) {
-                                append(" ${note.name}: ${note.content}")
+                                append(": ${noteDisplayContent(note, internalFilesDir)}")
                             }
                         }
                         withStyle(SpanStyle(color = dimColor)) {
                             append(" → ")
+                        }
+                        withStyle(SpanStyle(fontSize = MaterialTheme.typography.titleMedium.fontSize, fontWeight = FontWeight.Bold)) {
                             append(card.back)
                         }
                         card.backNotes.filter { it.content.isNotBlank() }.forEach { note ->
+                            withStyle(SpanStyle(color = dimColor, fontStyle = FontStyle.Italic)) {
+                                append(" ${note.name}")
+                            }
                             withStyle(SpanStyle(color = dimColor)) {
-                                append(" ${note.name}: ${note.content}")
+                                append(": ${noteDisplayContent(note, internalFilesDir)}")
                             }
                         }
                     }

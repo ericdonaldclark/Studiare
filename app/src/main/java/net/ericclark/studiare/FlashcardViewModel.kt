@@ -12,6 +12,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.viewModelScope
+import androidx.room.withTransaction
 import net.ericclark.studiare.screens.Dialogs.pendingVoiceLanguagesFor
 import net.ericclark.studiare.data.*
 import net.ericclark.studiare.screens.UI_Components.ModeOption
@@ -77,6 +78,22 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
     // Initialize these FIRST so they are available for the Managers below
     private val preferenceManager = PreferenceManager(application)
     private val cardUtils = CardUtils()
+
+    // --- Bulk/Simple Editor scroll position hand-off ---
+    // Deliberately a one-shot hand-off, not a general "remember where I left off" cache: a
+    // position is only ever written right before the Bulk/Simple Editor toggle button navigates
+    // to the other editor, and reading it immediately clears it. So it only ever restores a
+    // position when the *other* editor is the very next screen visited for this deck — leaving
+    // the editor some other way (back, Decks list, etc.) and returning later always falls back to
+    // that screen's normal default scroll position, never a stale one from last time.
+    private val bulkEditorScrollHandoff = mutableMapOf<String, Pair<Int, Int>>()
+    private val simpleEditorScrollHandoff = mutableMapOf<String, Pair<Int, Int>>()
+
+    fun consumeBulkEditorScrollHandoff(deckId: String): Pair<Int, Int>? = bulkEditorScrollHandoff.remove(deckId)
+    fun setBulkEditorScrollHandoff(deckId: String, index: Int, offset: Int) { bulkEditorScrollHandoff[deckId] = index to offset }
+
+    fun consumeSimpleEditorScrollHandoff(deckId: String): Pair<Int, Int>? = simpleEditorScrollHandoff.remove(deckId)
+    fun setSimpleEditorScrollHandoff(deckId: String, index: Int, offset: Int) { simpleEditorScrollHandoff[deckId] = index to offset }
 
     // --- BYOB Credentials & State ---
     private val credentialManager = FirebaseCredentialManager(application)
@@ -427,8 +444,8 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
     private val _importDuplicateQueue = MutableStateFlow<List<DuplicateCheckResult>>(emptyList())
     val importDuplicateQueue: StateFlow<List<DuplicateCheckResult>> = _importDuplicateQueue
 
-    private val _overwriteConfirmation = MutableStateFlow<OverwriteConfirmationData?>(null)
-    val overwriteConfirmation: StateFlow<OverwriteConfirmationData?> = _overwriteConfirmation
+    private val _overwriteConfirmation = MutableStateFlow<ImportSelectionData?>(null)
+    val overwriteConfirmation: StateFlow<ImportSelectionData?> = _overwriteConfirmation
 
     val hasPromptedHdLanguages: StateFlow<Boolean> = preferenceManager.hasPromptedHdLanguagesFlow
         .stateIn(viewModelScope, SharingStarted.Eagerly, false)
@@ -436,6 +453,10 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptySet())
 
     var toastMessage by mutableStateOf<String?>(null)
+        private set
+
+    /** Everything needed to undo the most recent [mergeDecks] call — see [revertLastMerge]. */
+    var lastMergeUndo by mutableStateOf<MergeUndoSnapshot?>(null)
         private set
 
     val themeMode: StateFlow<Int>
@@ -1197,6 +1218,26 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         importExportManager.importDecksFromString(content, mimeType)
     }
 
+    /** Settings → About → Help's "Import Sample Deck" action — inserts (or re-inserts, in place,
+     * since it uses fixed ids) the hand-authored showcase deck + its session presets. */
+    fun importSampleDeck() {
+        viewModelScope.launch(Dispatchers.IO) {
+            // Single transaction: writing each deck's row and then its cards as separate DAO
+            // calls let Room's invalidation tracker fire in between them, so the decks/cards
+            // Flow combine (combineDecksAndCards) could briefly observe the deck with zero cards
+            // — and a session created from that exact snapshot would persist with a stale/empty
+            // card list forever after. Wrapping the whole import in one transaction means Room
+            // only notifies observers once, after every row above is already committed.
+            database.withTransaction {
+                SampleDeckProvider.buildDecksWithCards().forEach { deckWithCards ->
+                    deckDao.insertOrUpdate(deckWithCards.deck)
+                    cardDao.insertOrUpdateAll(deckWithCards.cards)
+                }
+                SampleDeckProvider.buildSessionPresets().forEach { sessionPresetDao.insertOrUpdate(it) }
+            }
+        }
+    }
+
     suspend fun analyzeAnkiPackage(context: Context, sourceUri: android.net.Uri): List<Pair<String, List<Pair<String, net.ericclark.studiare.data.MediaType>>>> {
         return importExportManager.analyzeAnkiPackage(context, sourceUri)
     }
@@ -1222,8 +1263,8 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         importExportManager.cancelImport()
     }
 
-    fun proceedWithImport(selectedIdsToOverwrite: List<String>) {
-        importExportManager.proceedWithImport(selectedIdsToOverwrite)
+    fun proceedWithImport(selectedIdsToImport: Set<String>, selectedIdsToOverwrite: Set<String>) {
+        importExportManager.proceedWithImport(selectedIdsToImport, selectedIdsToOverwrite)
     }
 
     private fun processNextInImportQueue() { _importDuplicateQueue.value = _importDuplicateQueue.value.drop(1) }
@@ -1693,6 +1734,112 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         )
     }
 
+    /**
+     * True independent duplicates — fresh ids, review/FSRS state reset to the same defaults a
+     * newly-created card gets (matching [cloneDecksForSelection]'s own "true independent
+     * duplicate" semantics for decks/sets) — not snapshots of review progress, since a clone's
+     * whole point is a fresh starting point. Builds the full cardsToSave list (originals + all
+     * clones) in one call rather than looping [saveSingleCard] per id, since that single-card
+     * path's cardsToSave is derived from this same stale `deck` snapshot each time and would
+     * silently drop earlier clones in the same batch.
+     */
+    fun cloneCardsForSelection(deck: DeckWithCards, cardIds: Set<String>) {
+        val clones = deck.cards.filter { it.id in cardIds }.map { it.toCardDataForSave().asClone() }
+        if (clones.isEmpty()) return
+        val cardsToSave = deck.cards.map { it.toCardDataForSave() } + clones
+        checkForDuplicatesInEditor(
+            deck.deck.id, deck.deck.name, cardsToSave, deck.deck.normalizationType, deck.deck.deckSortMode,
+            deck.deck.parentDeckId, deck.deck.frontLanguage, deck.deck.backLanguage, deck.deck.description,
+            deck.deck.dailyNewCardLimit, deck.deck.dailyReviewLimit, deck.deck.frontNoteTemplates, deck.deck.backNoteTemplates
+        )
+    }
+
+    fun cloneSingleCard(deck: DeckWithCards, cardId: String) = cloneCardsForSelection(deck, setOf(cardId))
+
+    /** Per-card "Use Template": adds any of [templateSet]'s fields a card doesn't already have
+     * (matched by name+type) onto its existing frontNotes/backNotes — never removes or reorders
+     * what's already there. */
+    fun applyTemplateToCards(deck: DeckWithCards, cardIds: Set<String>, templateSet: TemplateSet) {
+        if (cardIds.isEmpty()) return
+        val cardsToSave = deck.cards.map { card ->
+            val data = card.toCardDataForSave()
+            if (card.id !in cardIds) return@map data
+            val currentFront = data.frontNotes.map { it.name to it.type }
+            val currentBack = data.backNotes.map { it.name to it.type }
+            val missingFront = templateSet.frontFields.filter { (it.name to it.type) !in currentFront }.map { it.copy(content = "") }
+            val missingBack = templateSet.backFields.filter { (it.name to it.type) !in currentBack }.map { it.copy(content = "") }
+            data.copy(frontNotes = data.frontNotes + missingFront, backNotes = data.backNotes + missingBack)
+        }
+        checkForDuplicatesInEditor(
+            deck.deck.id, deck.deck.name, cardsToSave, deck.deck.normalizationType, deck.deck.deckSortMode,
+            deck.deck.parentDeckId, deck.deck.frontLanguage, deck.deck.backLanguage, deck.deck.description,
+            deck.deck.dailyNewCardLimit, deck.deck.dailyReviewLimit, deck.deck.frontNoteTemplates, deck.deck.backNoteTemplates
+        )
+    }
+
+    /**
+     * Cross-deck move to an *existing* deck or set — reassigns each card's `ownerDeckId` and
+     * updates both decks' `cardIds`, the same direct-DAO pattern [mergeDecks] already uses for
+     * reparenting cards, rather than [saveDeckWithCards]'s single-deck whole-list-diff pipeline
+     * (not shaped for "remove from one deck, add to a different one" in one transaction). Unlike
+     * [cloneCardsForSelection], review/FSRS state moves with the card as-is — see
+     * [CardDataForSave.toMovedCard]. [cardsToMove] carries each card's latest (possibly
+     * unsaved-in-editor) content so a move also commits any in-progress edit.
+     */
+    fun moveCardsToDeck(cardsToMove: List<CardDataForSave>, fromDeckId: String, toDeckId: String) {
+        if (cardsToMove.isEmpty()) return
+        viewModelScope.launch(Dispatchers.IO) {
+            val toDeck = localDecks.find { it.id == toDeckId } ?: return@launch
+            val fromDeck = localDecks.find { it.id == fromDeckId }
+            val allCards = localCards
+            val movedIds = cardsToMove.map { it.id }
+            val now = System.currentTimeMillis()
+            database.withTransaction {
+                cardsToMove.forEach { data ->
+                    cardDao.insertOrUpdate(data.toMovedCard(ownerDeckId = toDeckId, existing = allCards.find { it.id == data.id }))
+                }
+                if (fromDeckId != toDeckId) {
+                    fromDeck?.let { deckDao.insertOrUpdate(it.copy(cardIds = it.cardIds - movedIds.toSet(), updatedAt = now, isPendingSync = true)) }
+                    deckDao.insertOrUpdate(toDeck.copy(cardIds = (toDeck.cardIds + movedIds).distinct(), updatedAt = now, isPendingSync = true))
+                }
+            }
+        }
+    }
+
+    /** Same as [moveCardsToDeck], but the destination is a brand-new top-level deck created from
+     * [newDeckName] rather than an existing one — inherits the source deck's language/
+     * normalization settings (so moved cards keep displaying/validating the same way) but nothing
+     * else (templates, limits, etc. start at their own defaults, like any other new deck). */
+    fun moveCardsToNewDeck(cardsToMove: List<CardDataForSave>, fromDeckId: String, newDeckName: String, onCreated: (newDeckId: String) -> Unit) {
+        if (cardsToMove.isEmpty() || newDeckName.isBlank()) return
+        viewModelScope.launch(Dispatchers.IO) {
+            val fromDeck = localDecks.find { it.id == fromDeckId }
+            val allCards = localCards
+            val movedIds = cardsToMove.map { it.id }
+            val now = System.currentTimeMillis()
+            val newId = UUID.randomUUID().toString()
+            val newDeck = Deck(
+                id = newId,
+                name = newDeckName,
+                createdAt = now,
+                updatedAt = now,
+                cardIds = movedIds,
+                normalizationType = fromDeck?.normalizationType ?: NormalizationType.NONE,
+                frontLanguage = fromDeck?.frontLanguage ?: java.util.Locale.getDefault().language,
+                backLanguage = fromDeck?.backLanguage ?: java.util.Locale.getDefault().language,
+                isPendingSync = true
+            )
+            database.withTransaction {
+                cardsToMove.forEach { data ->
+                    cardDao.insertOrUpdate(data.toMovedCard(ownerDeckId = newId, existing = allCards.find { it.id == data.id }))
+                }
+                deckDao.insertOrUpdate(newDeck)
+                fromDeck?.let { deckDao.insertOrUpdate(it.copy(cardIds = it.cardIds - movedIds.toSet(), updatedAt = now, isPendingSync = true)) }
+            }
+            withContext(Dispatchers.Main) { onCreated(newId) }
+        }
+    }
+
     /** See [saveSingleCard] — same pipeline, with the one card excluded instead of upserted. */
     fun deleteSingleCard(deck: DeckWithCards, cardId: String) {
         val cardsToSave = deck.cards.filter { it.id != cardId }.map { it.toCardDataForSave() }
@@ -1734,10 +1881,23 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         )
     }
 
-    fun saveNoteTemplates(deck: DeckWithCards, newFront: List<NoteField>, newBack: List<NoteField>, addToExistingCards: Boolean) {
+    /**
+     * Saves the deck's own default template fields, linking the deck to the already-persisted
+     * shared [TemplateSet] named by [templateSetId] (resolved and saved by
+     * `AdvancedDeckEditorDialog` itself before calling this — see its `commitTemplateEdit`).
+     * [applyToAll] (true only for the Template Editor's "Apply to All" button, false for "Apply
+     * to New") reuses the existing merge (add any of the new template's fields a card doesn't
+     * already have, by name, leaving content alone) against every card in the deck right now —
+     * "Apply to New" touches no existing card at all, only `seedNewCardsFromTemplate` going
+     * forward (see blankCardState()/blankEditorState() in the Bulk/Simple Editor screens).
+     */
+    fun saveNoteTemplates(
+        deck: DeckWithCards, templateSetId: String, newFront: List<NoteField>, newBack: List<NoteField>,
+        applyToAll: Boolean
+    ) {
         val cardsToSave = deck.cards.map { card ->
             var data = card.toCardDataForSave()
-            if (addToExistingCards) {
+            if (applyToAll) {
                 val currentFrontNames = data.frontNotes.map { it.name }
                 val currentBackNames = data.backNotes.map { it.name }
                 val missingFront = newFront.filter { it.name !in currentFrontNames }.map { it.copy(content = "") }
@@ -1751,7 +1911,8 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         checkForDuplicatesInEditor(
             deck.deck.id, deck.deck.name, cardsToSave, deck.deck.normalizationType, deck.deck.deckSortMode,
             deck.deck.parentDeckId, deck.deck.frontLanguage, deck.deck.backLanguage, deck.deck.description,
-            deck.deck.dailyNewCardLimit, deck.deck.dailyReviewLimit, newFront, newBack
+            deck.deck.dailyNewCardLimit, deck.deck.dailyReviewLimit, newFront, newBack,
+            seedNewCardsFromTemplate = true, activeTemplateSetId = templateSetId
         )
     }
 
@@ -1770,7 +1931,12 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         frontNoteTemplates: List<NoteField>,
         backNoteTemplates: List<NoteField>,
         defaultPromptSide: CardSide? = null,
-        sortPinnedCardsFirst: Boolean? = null
+        sortPinnedCardsFirst: Boolean? = null,
+        seedNewCardsFromTemplate: Boolean? = null,
+        activeTemplateSetId: String? = null,
+        // See DuplicateCheckResult.clearActiveTemplateSetId — pass true when `activeTemplateSetId`
+        // above is this save's definitive value (even null), not "unspecified, keep existing."
+        clearActiveTemplateSetId: Boolean = false
     ) {
         val duplicates = cards.groupBy { it.front.normalizeForDuplicateCheck() to it.back.normalizeForDuplicateCheck() }
             .filter { it.value.size > 1 }
@@ -1782,13 +1948,15 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
             _editorDuplicateResult.value = DuplicateCheckResult(
                 duplicates, deckId, deckName, cards, normalizationType, sortType, parentDeckId,
                 frontLanguage, backLanguage, description, dailyNewCardLimit, dailyReviewLimit,
-                frontNoteTemplates, backNoteTemplates, defaultPromptSide, sortPinnedCardsFirst
+                frontNoteTemplates, backNoteTemplates, defaultPromptSide, sortPinnedCardsFirst,
+                seedNewCardsFromTemplate, activeTemplateSetId, clearActiveTemplateSetId
             )
         } else {
             saveDeckWithCards(
                 deckId, deckName, cards, normalizationType, sortType, parentDeckId, null,
                 frontLanguage, backLanguage, description, dailyNewCardLimit, dailyReviewLimit,
-                frontNoteTemplates, backNoteTemplates, defaultPromptSide, sortPinnedCardsFirst
+                frontNoteTemplates, backNoteTemplates, defaultPromptSide, sortPinnedCardsFirst,
+                seedNewCardsFromTemplate, activeTemplateSetId, clearActiveTemplateSetId
             )
         }
     }
@@ -1845,13 +2013,15 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         { it.front.normalizeForDuplicateCheck() to it.back.normalizeForDuplicateCheck() },
             result.normalizationType, result.sortType, result.parentDeckId, null, result.frontLanguage, result.backLanguage,
             result.description, result.dailyNewCardLimit, result.dailyReviewLimit, result.frontNoteTemplates, result.backNoteTemplates,
-            result.defaultPromptSide, result.sortPinnedCardsFirst) }; dismissEditorDuplicateWarning() }
+            result.defaultPromptSide, result.sortPinnedCardsFirst, result.seedNewCardsFromTemplate, result.activeTemplateSetId,
+            result.clearActiveTemplateSetId) }; dismissEditorDuplicateWarning() }
     fun saveEditorIgnoringDuplicates() { _editorDuplicateResult.value?.let { result ->
         saveDeckWithCards(result.deckId, result.deckName, result.cardsToSave,
             result.normalizationType, result.sortType, result.parentDeckId,
             null, result.frontLanguage, result.backLanguage,
             result.description, result.dailyNewCardLimit, result.dailyReviewLimit, result.frontNoteTemplates, result.backNoteTemplates,
-            result.defaultPromptSide, result.sortPinnedCardsFirst) }; dismissEditorDuplicateWarning() }
+            result.defaultPromptSide, result.sortPinnedCardsFirst, result.seedNewCardsFromTemplate, result.activeTemplateSetId,
+            result.clearActiveTemplateSetId) }; dismissEditorDuplicateWarning() }
 
     private fun saveDeckWithCards(
         deckId: String?,
@@ -1869,7 +2039,10 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         frontNoteTemplates: List<NoteField> = emptyList(),
         backNoteTemplates: List<NoteField> = emptyList(),
         defaultPromptSide: CardSide? = null,
-        sortPinnedCardsFirst: Boolean? = null
+        sortPinnedCardsFirst: Boolean? = null,
+        seedNewCardsFromTemplate: Boolean? = null,
+        activeTemplateSetId: String? = null,
+        clearActiveTemplateSetId: Boolean = false
     ) {
         viewModelScope.launch(Dispatchers.IO) {
             val id = deckId ?: UUID.randomUUID().toString()
@@ -1915,6 +2088,8 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
                 description = description,
                 dailyNewCardLimit = dailyNewCardLimit,
                 dailyReviewLimit = dailyReviewLimit,
+                seedNewCardsFromTemplate = seedNewCardsFromTemplate ?: existingDeck?.seedNewCardsFromTemplate ?: false,
+                activeTemplateSetId = if (clearActiveTemplateSetId) activeTemplateSetId else (activeTemplateSetId ?: existingDeck?.activeTemplateSetId),
                 isPendingSync = true
             )
 
@@ -1951,6 +2126,8 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
                     fsrsState = ex?.fsrsState ?: cd.fsrsState,
                     fsrsLastReview = ex?.fsrsLastReview ?: cd.fsrsLastReview,
                     fsrsLapses = ex?.fsrsLapses ?: cd.fsrsLapses,
+                    enforcedTemplateSetId = ex?.enforcedTemplateSetId,
+                    isDeckTemplateEnforced = ex?.isDeckTemplateEnforced ?: false,
                     isPendingSync = true
                 )
             }
@@ -2084,6 +2261,141 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
+    /**
+     * A true, independent duplicate of each deck/set in [deckIds] — including every nested child
+     * set, to arbitrary depth — as new rows with new ids, landing as a sibling of whatever it was
+     * cloned from (same `parentDeckId`). Review/scheduling progress resets to fresh on every
+     * cloned card; everything else (content, tags, flags, pin/known state) carries over unchanged.
+     * Distinct from [cloneDeckAsSet] ("Clone Parent" in Set Manager's creation menu), which makes
+     * a *linked* set sharing the original's own card rows rather than a real copy.
+     */
+    fun cloneDecksForSelection(deckIds: List<String>) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val allDecks = localDecks
+            // The authoritative source for "this deck's cards" is its own cardIds list, not
+            // ownerDeckId — a linked set's cardIds point at cards actually owned by its parent
+            // (DeckLinkageResolver.resolveEffectiveDecks does the same lookup), so grouping by
+            // ownerDeckId silently cloned zero cards for any linked set and could under/over-count
+            // for a deck whose cardIds had drifted from ownerDeckId.
+            val cardsById = localCards.associateBy { it.id }
+            val newDecks = mutableListOf<Deck>()
+            val newCards = mutableListOf<Card>()
+            val now = System.currentTimeMillis()
+
+            fun cloneSubtree(originalId: String, newParentId: String?) {
+                val original = allDecks.find { it.id == originalId } ?: return
+                val newId = UUID.randomUUID().toString()
+                val originalCards = original.cardIds.mapNotNull { cardsById[it] }
+                val idMap = originalCards.associate { it.id to UUID.randomUUID().toString() }
+                newCards.addAll(originalCards.map { card ->
+                    card.copy(
+                        id = idMap.getValue(card.id), ownerDeckId = newId,
+                        createdAt = now, updatedAt = now,
+                        reviewedAt = null, reviewedCount = 0,
+                        gradedAttempts = emptyList(), incorrectAttempts = emptyList(),
+                        reviewLogs = emptyList(), absoluteDueDate = null,
+                        fsrsStability = null, fsrsDifficulty = null, fsrsElapsedDays = null,
+                        fsrsScheduledDays = null, fsrsState = FsrsState.NEW, fsrsLastReview = null,
+                        fsrsLapses = 0, lastReviewDurationMs = 0L,
+                        isPendingSync = true, isDeleted = false
+                    )
+                })
+                newDecks.add(original.copy(
+                    id = newId, parentDeckId = newParentId,
+                    name = getApplication<Application>().getString(R.string.clone_name_format, original.name),
+                    cardIds = original.cardIds.mapNotNull { idMap[it] },
+                    createdAt = now, updatedAt = now,
+                    isPendingSync = true, isDeleted = false
+                ))
+                // Children of the ORIGINAL, reparented under the NEW clone — preserves the
+                // original's own hierarchy inside the cloned subtree.
+                allDecks.filter { it.parentDeckId == originalId }.forEach { child -> cloneSubtree(child.id, newId) }
+            }
+
+            deckIds.forEach { id -> cloneSubtree(id, allDecks.find { it.id == id }?.parentDeckId) }
+
+            database.withTransaction {
+                deckDao.insertOrUpdateAll(newDecks)
+                cardDao.insertOrUpdateAll(newCards)
+            }
+        }
+    }
+
+    /**
+     * Combines [selectedIds] (2+ decks/sets sharing the same parent — same level, per
+     * [onError]'s check) into one: the first-selected item survives (keeps its own name/settings)
+     * and absorbs every other selected item's cards plus any of their own child sets (reparented
+     * onto the survivor); the other selected items are soft-deleted. [lastMergeUndo] captures
+     * everything needed to put it all back — see [revertLastMerge].
+     */
+    fun mergeDecks(selectedIds: List<String>, onMerged: (survivorId: String) -> Unit, onError: (String) -> Unit) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val allDecks = localDecks
+            val selected = selectedIds.mapNotNull { id -> allDecks.find { it.id == id } }
+            if (selected.size < 2) return@launch
+            if (selected.map { it.parentDeckId }.distinct().size > 1) {
+                withContext(Dispatchers.Main) { onError(getApplication<Application>().getString(R.string.merge_same_level_required)) }
+                return@launch
+            }
+            val survivor = selected.find { it.id == selectedIds.first() } ?: selected.first()
+            val losers = selected.filter { it.id != survivor.id }
+            if (losers.isEmpty()) return@launch
+
+            val allCards = localCards
+            val movedCardOriginalOwner = mutableMapOf<String, String>()
+            losers.forEach { loser -> loser.cardIds.forEach { cardId -> movedCardOriginalOwner[cardId] = loser.id } }
+            val childSets = allDecks.filter { it.parentDeckId in losers.map { loser -> loser.id } }
+            val reparentedChildOriginalParent = childSets.associate { it.id to it.parentDeckId }
+
+            val snapshot = MergeUndoSnapshot(
+                survivorId = survivor.id,
+                originalSurvivorCardIds = survivor.cardIds,
+                mergedDecks = losers,
+                movedCardOriginalOwner = movedCardOriginalOwner,
+                reparentedChildOriginalParent = reparentedChildOriginalParent
+            )
+
+            val now = System.currentTimeMillis()
+            database.withTransaction {
+                movedCardOriginalOwner.keys.forEach { cardId ->
+                    allCards.find { it.id == cardId }?.let { cardDao.insertOrUpdate(it.copy(ownerDeckId = survivor.id, isPendingSync = true)) }
+                }
+                childSets.forEach { child -> deckDao.insertOrUpdate(child.copy(parentDeckId = survivor.id, isPendingSync = true)) }
+                deckDao.insertOrUpdate(survivor.copy(cardIds = survivor.cardIds + movedCardOriginalOwner.keys, updatedAt = now, isPendingSync = true))
+                losers.forEach { loser -> deckDao.softDelete(loser.id, now) }
+            }
+
+            withContext(Dispatchers.Main) {
+                lastMergeUndo = snapshot
+                onMerged(survivor.id)
+            }
+        }
+    }
+
+    /** Undoes the most recent [mergeDecks] call — restores the merged-away decks/sets (undeleted,
+     * exactly as they were), moves their cards' ownership back, reparents their child sets back,
+     * and restores the survivor's original card list. Cleared after use. */
+    fun revertLastMerge() {
+        val snapshot = lastMergeUndo ?: return
+        viewModelScope.launch(Dispatchers.IO) {
+            val allCards = localCards
+            val allDecks = localDecks
+            database.withTransaction {
+                snapshot.movedCardOriginalOwner.forEach { (cardId, originalOwnerId) ->
+                    allCards.find { it.id == cardId }?.let { cardDao.insertOrUpdate(it.copy(ownerDeckId = originalOwnerId, isPendingSync = true)) }
+                }
+                snapshot.reparentedChildOriginalParent.forEach { (childId, originalParentId) ->
+                    allDecks.find { it.id == childId }?.let { deckDao.insertOrUpdate(it.copy(parentDeckId = originalParentId, isPendingSync = true)) }
+                }
+                deckDao.getDeckById(snapshot.survivorId)?.let {
+                    deckDao.insertOrUpdate(it.copy(cardIds = snapshot.originalSurvivorCardIds, isPendingSync = true))
+                }
+                snapshot.mergedDecks.forEach { loser -> deckDao.insertOrUpdate(loser.copy(isDeleted = false, isPendingSync = true)) }
+            }
+            withContext(Dispatchers.Main) { lastMergeUndo = null }
+        }
+    }
+
     fun toggleDeckPinned(deck: Deck) {
         viewModelScope.launch(Dispatchers.IO) {
             deckDao.insertOrUpdate(deck.copy(isPinned = !deck.isPinned, updatedAt = System.currentTimeMillis(), isPendingSync = true))
@@ -2108,29 +2420,6 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
             decks.forEach { deckWithCards ->
                 deckDao.insertOrUpdate(deckWithCards.deck.copy(lastExportedAt = now, isPendingSync = true))
             }
-        }
-    }
-
-    fun deleteAllDecks() {
-        viewModelScope.launch(Dispatchers.IO) {
-            withContext(Dispatchers.Main) { isProcessing = true }
-            try {
-                val timestamp = System.currentTimeMillis()
-
-                val deckIds = localDecks.map { it.id }
-                val cardIds = localCards.map { it.id }
-
-                if (isUserAnonymous.value) {
-                    if (deckIds.isNotEmpty()) deckDao.hardDeleteDecks(deckIds)
-                    if (cardIds.isNotEmpty()) cardDao.hardDeleteCards(cardIds)
-                } else {
-                    if (deckIds.isNotEmpty()) deckDao.softDeleteDecks(deckIds, timestamp)
-                    if (cardIds.isNotEmpty()) cardDao.softDeleteCards(cardIds, timestamp)
-                }
-
-                preferenceManager.saveActiveSessions(emptyList())
-            } catch (e: Exception) { AppLogger.e(TAG, "deleteAllDecks failed", e) }
-            finally { withContext(Dispatchers.Main) { isProcessing = false } }
         }
     }
 
@@ -2335,14 +2624,60 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
     }
 
     // --- Template Set Operations (Delegated to Room) ---
-    fun saveAsTemplateSet(name: String, frontFields: List<NoteField>, backFields: List<NoteField>) {
+    /** Upserts (by [id]) a shared, global [TemplateSet] — one row, editable from any deck, rather
+     * than a deck-private copy. Used for both "Save" (same id as whatever's already being edited)
+     * and "Save As"/first-time creation (a freshly generated id) by `AdvancedDeckEditorDialog`. */
+    fun upsertDeckTemplateSet(id: String, name: String, frontFields: List<NoteField>, backFields: List<NoteField>) {
         viewModelScope.launch(Dispatchers.IO) {
-            templateSetDao.insertOrUpdate(TemplateSet(name = name.trim(), frontFields = frontFields, backFields = backFields))
+            templateSetDao.insertOrUpdate(TemplateSet(id = id, name = name.trim(), frontFields = frontFields, backFields = backFields))
         }
     }
 
+
+    /** Soft-deletes the template, then sweeps every deck still linked to it (by
+     * `activeTemplateSetId`) and clears that link the same way [removeDeckTemplate] does for one
+     * deck at a time. Without this, any OTHER deck using this template (not just the one open in
+     * the editor that triggered the delete, which the dialog already handles locally via its own
+     * "Remove" callback) would keep pointing at a now-nonexistent template id and its now-stale
+     * seed fields forever — showing the deleted template's name as blank (not found in the active
+     * list) but still seeding/displaying its fields. */
     fun deleteTemplateSet(templateSet: TemplateSet) {
-        viewModelScope.launch(Dispatchers.IO) { templateSetDao.softDelete(templateSet.id) }
+        viewModelScope.launch(Dispatchers.IO) {
+            templateSetDao.softDelete(templateSet.id)
+            val affectedDecks = localDecks.filter { it.activeTemplateSetId == templateSet.id }
+            if (affectedDecks.isNotEmpty()) {
+                val now = System.currentTimeMillis()
+                deckDao.insertOrUpdateAll(affectedDecks.map {
+                    it.copy(
+                        activeTemplateSetId = null,
+                        seedNewCardsFromTemplate = false,
+                        frontNoteTemplates = emptyList(),
+                        backNoteTemplates = emptyList(),
+                        updatedAt = now,
+                        isPendingSync = true
+                    )
+                })
+            }
+        }
+    }
+
+    /** Clears this deck's link to whatever shared [TemplateSet] it's currently using, and its own
+     * default seed fields — the Template Editor's "Remove" action. Never touches any card's
+     * existing fields; the template itself (shared, possibly still used elsewhere) is untouched
+     * too, only this one deck's reference to it. */
+    fun removeDeckTemplate(deck: DeckWithCards) {
+        viewModelScope.launch(Dispatchers.IO) {
+            deckDao.insertOrUpdate(
+                deck.deck.copy(
+                    activeTemplateSetId = null,
+                    seedNewCardsFromTemplate = false,
+                    frontNoteTemplates = emptyList(),
+                    backNoteTemplates = emptyList(),
+                    updatedAt = System.currentTimeMillis(),
+                    isPendingSync = true
+                )
+            )
+        }
     }
 
     fun renameTag(tag: TagDefinition, oldName: String) {
@@ -2478,6 +2813,16 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
     }
 
 }
+
+/** Snapshot [FlashcardViewModel.mergeDecks] captures right before merging, so
+ * [FlashcardViewModel.revertLastMerge] can put everything back exactly as it was. */
+data class MergeUndoSnapshot(
+    val survivorId: String,
+    val originalSurvivorCardIds: List<String>,
+    val mergedDecks: List<Deck>,
+    val movedCardOriginalOwner: Map<String, String>,
+    val reparentedChildOriginalParent: Map<String, String?>
+)
 
 class FlashcardViewModelFactory(private val application: Application) : androidx.lifecycle.ViewModelProvider.Factory {
     override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {

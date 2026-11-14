@@ -21,3 +21,5 @@ deploymentTargetSelector.xml
 todo.json*
 /.kotlin/sessions/*
 /keystore.properties.example
+/CLAUDE.md
+/.claude/settings.json

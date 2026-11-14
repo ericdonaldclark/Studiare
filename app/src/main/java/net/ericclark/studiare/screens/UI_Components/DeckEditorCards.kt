@@ -20,6 +20,8 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
@@ -66,6 +68,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import net.ericclark.studiare.components.*
 import net.ericclark.studiare.DifficultySlider
@@ -130,7 +133,10 @@ fun CardSelectionTable(
         state = listState,
         modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall / 2),
-        contentPadding = PaddingValues(vertical = dimensions.paddingSmall, horizontal = dimensions.paddingMedium)
+        // Extra bottom padding (matching the normal card list's own floating-toolbar clearance)
+        // so the last rows aren't hidden behind the selection action bar/Close FAB, which float
+        // over this table rather than pushing its layout up.
+        contentPadding = PaddingValues(start = dimensions.paddingMedium, end = dimensions.paddingMedium, top = dimensions.paddingSmall, bottom = 120.dp)
     ) {
         itemsIndexed(cards, key = { _, card -> card.id }) { _, card ->
             CardSelectionRow(
@@ -218,6 +224,10 @@ fun CardEditor(
     onDelete: () -> Unit,
     onKnownClick: () -> Unit,
     onPinClick: () -> Unit,
+    /** Null hides the overflow menu entirely — used by [net.ericclark.studiare.screens.Dialogs.CardEditDialog]'s Create mode, where there's no saved card yet to clone or move. */
+    onCloneClick: (() -> Unit)? = null,
+    onMoveClick: (() -> Unit)? = null,
+    onUseTemplateClick: (() -> Unit)? = null,
     allTags: List<TagDefinition>,
     currentDeckTags: Set<String>,
     onUpdateTags: (Set<String>) -> Unit,
@@ -235,9 +245,17 @@ fun CardEditor(
      * Editor's single-card dialog, where there is no next card to jump to. */
     nextCardFocusRequester: FocusRequester? = null,
     /** Where Shift+Tab moves focus from this card's first field (Front); see [nextCardFocusRequester]. */
-    previousCardFocusRequester: FocusRequester? = null
+    previousCardFocusRequester: FocusRequester? = null,
+    /** False while the Bulk Editor's own initial jump-to-bottom is still settling (see
+     * `cardAnimationsEnabled` in DeckEditorScreen.kt) — note fields that already existed when
+     * this card was first composed then render fully visible instead of playing their "note
+     * added" entrance animation, which was otherwise growing the scroll-pinned last card's height
+     * mid-animation and reading as that card visibly jumping right after opening the screen.
+     * Fields added afterward (via the "+" button, once this is already true) still animate in. */
+    playNoteEntranceAnimations: Boolean = true
 ) {
     val dimensions = LocalStudiareDimensions.current
+    val context = LocalContext.current
     var showInfo by remember { mutableStateOf(false) }
 
     ElevatedCard(
@@ -256,6 +274,7 @@ fun CardEditor(
             showCardNumberChip = canDelete,
             toggleButtonModifier = Modifier,
             frontTopBarExtra = {
+                val iconSpacing = dimensions.spacingSmall / 2
                 val deleteInteractionSource = remember { MutableInteractionSource() }
                 TooltipIconButton(
                     description = getText(R.string.delete),
@@ -270,7 +289,7 @@ fun CardEditor(
                         tint = if (canDelete) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
                     )
                 }
-                Spacer(Modifier.width(dimensions.spacingSmall))
+                Spacer(Modifier.width(iconSpacing))
                 val pinInteractionSource = remember { MutableInteractionSource() }
                 val isPinned = cardState.isPinned.value
                 TooltipIconButton(
@@ -285,7 +304,39 @@ fun CardEditor(
                         tint = if (isPinned) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-                Spacer(Modifier.width(dimensions.spacingSmall))
+                if (onCloneClick != null || onMoveClick != null || onUseTemplateClick != null) {
+                    Spacer(Modifier.width(iconSpacing))
+                    var showOverflowMenu by remember { mutableStateOf(false) }
+                    Box {
+                        TooltipIconButton(description = getText(R.string.more_options), onClick = { showOverflowMenu = true }) {
+                            Icon(Icons.Default.MoreVert, contentDescription = getText(R.string.more_options))
+                        }
+                        DropdownMenu(expanded = showOverflowMenu, onDismissRequest = { showOverflowMenu = false }) {
+                            if (onCloneClick != null) {
+                                DropdownMenuItem(
+                                    text = { Text(getText(R.string.clone)) },
+                                    leadingIcon = { Icon(Icons.Default.ContentCopy, contentDescription = null) },
+                                    onClick = { showOverflowMenu = false; onCloneClick() }
+                                )
+                            }
+                            if (onMoveClick != null) {
+                                DropdownMenuItem(
+                                    text = { Text(getText(R.string.move)) },
+                                    leadingIcon = { Icon(Icons.Default.DriveFileMove, contentDescription = null) },
+                                    onClick = { showOverflowMenu = false; onMoveClick() }
+                                )
+                            }
+                            if (onUseTemplateClick != null) {
+                                DropdownMenuItem(
+                                    text = { Text(getText(R.string.use_template)) },
+                                    leadingIcon = { Icon(Icons.Default.Description, contentDescription = null) },
+                                    onClick = { showOverflowMenu = false; onUseTemplateClick() }
+                                )
+                            }
+                        }
+                    }
+                }
+                Spacer(Modifier.width(iconSpacing))
             },
             infoContent = { CardMetadataContent(cardState) },
             frontContent = {
@@ -322,7 +373,7 @@ fun CardEditor(
                     )
 
                     cardState.frontNotes.value.forEachIndexed { index, note ->
-                        val enterTransition = remember { androidx.compose.animation.core.MutableTransitionState(false) }.apply { targetState = true }
+                        val enterTransition = remember { androidx.compose.animation.core.MutableTransitionState(!playNoteEntranceAnimations) }.apply { targetState = true }
                         AnimatedVisibility(
                             visibleState = enterTransition,
                             enter = fadeIn() + expandVertically(animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium))
@@ -347,8 +398,8 @@ fun CardEditor(
                                     coroutineScope.launch {
                                         snackbarHostState.currentSnackbarData?.dismiss()
                                         val result = snackbarHostState.showSnackbar(
-                                            message = "Note removed",
-                                            actionLabel = "Undo",
+                                            message = context.getString(R.string.field_removed_format, removedNote.type.toString()),
+                                            actionLabel = context.getString(R.string.undo),
                                             duration = androidx.compose.material3.SnackbarDuration.Short
                                         )
                                         if (result == androidx.compose.material3.SnackbarResult.ActionPerformed) {
@@ -358,13 +409,25 @@ fun CardEditor(
                                         }
                                     }
                                 },
-                                normalizationType = normalizationType
+                                normalizationType = normalizationType,
+                                onMoveUp = if (index > 0) {
+                                    { cardState.frontNotes.value = cardState.frontNotes.value.toMutableList().apply { add(index - 1, removeAt(index)) } }
+                                } else null,
+                                onMoveDown = if (index < cardState.frontNotes.value.lastIndex) {
+                                    { cardState.frontNotes.value = cardState.frontNotes.value.toMutableList().apply { add(index + 1, removeAt(index)) } }
+                                } else {
+                                    // Last front field's "down" carries it across to the back side instead of disabling.
+                                    {
+                                        cardState.frontNotes.value = cardState.frontNotes.value.toMutableList().apply { removeAt(index) }
+                                        cardState.backNotes.value = listOf(note) + cardState.backNotes.value
+                                    }
+                                }
                             )
                         }
                     }
-        
+
                     Spacer(Modifier.height(dimensions.spacingMedium))
-        
+
                     // --- BACK ---
                     CardSideEditor(
                         sideLabel = CardSide.BACK.asString(),
@@ -395,7 +458,7 @@ fun CardEditor(
                     )
 
                     cardState.backNotes.value.forEachIndexed { index, note ->
-                        val enterTransition = remember { androidx.compose.animation.core.MutableTransitionState(false) }.apply { targetState = true }
+                        val enterTransition = remember { androidx.compose.animation.core.MutableTransitionState(!playNoteEntranceAnimations) }.apply { targetState = true }
                         AnimatedVisibility(
                             visibleState = enterTransition,
                             enter = fadeIn() + expandVertically(animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium))
@@ -420,18 +483,32 @@ fun CardEditor(
                                     coroutineScope.launch {
                                         snackbarHostState.currentSnackbarData?.dismiss()
                                         val result = snackbarHostState.showSnackbar(
-                                            message = "Note removed",
-                                            actionLabel = "Undo",
-                                            duration = androidx.compose.material3.SnackbarDuration.Short // FIXED: Prevent permanent snackbar
+                                            message = context.getString(R.string.field_removed_format, removedNote.type.toString()),
+                                            actionLabel = context.getString(R.string.undo),
+                                            duration = androidx.compose.material3.SnackbarDuration.Short
                                         )
                                         if (result == androidx.compose.material3.SnackbarResult.ActionPerformed) {
-                                            val restoreList = cardState.frontNotes.value.toMutableList()
+                                            // Was restoring into frontNotes — a removed BACK note's
+                                            // Undo silently resurrected it on the wrong side.
+                                            val restoreList = cardState.backNotes.value.toMutableList()
                                             restoreList.add(index.coerceIn(0, restoreList.size), removedNote)
-                                            cardState.frontNotes.value = restoreList
+                                            cardState.backNotes.value = restoreList
                                         }
                                     }
                                 },
-                                normalizationType = normalizationType
+                                normalizationType = normalizationType,
+                                onMoveUp = if (index > 0) {
+                                    { cardState.backNotes.value = cardState.backNotes.value.toMutableList().apply { add(index - 1, removeAt(index)) } }
+                                } else {
+                                    // First back field's "up" carries it across to the front side instead of disabling.
+                                    {
+                                        cardState.backNotes.value = cardState.backNotes.value.toMutableList().apply { removeAt(index) }
+                                        cardState.frontNotes.value = cardState.frontNotes.value + note
+                                    }
+                                },
+                                onMoveDown = if (index < cardState.backNotes.value.lastIndex) {
+                                    { cardState.backNotes.value = cardState.backNotes.value.toMutableList().apply { add(index + 1, removeAt(index)) } }
+                                } else null
                             )
                         }
                     }
@@ -474,12 +551,58 @@ fun CardEditor(
 @Composable
 fun CustomVerticalScrollbar(
     listState: androidx.compose.foundation.lazy.LazyListState,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    bottomClearance: Dp = 0.dp
+) {
+    CustomVerticalScrollbarCore(
+        modifier = modifier,
+        bottomClearance = bottomClearance,
+        totalItemsCount = { listState.layoutInfo.totalItemsCount },
+        visibleItemsCount = { listState.layoutInfo.visibleItemsInfo.size },
+        position = { listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset },
+        scrollToItem = { index -> listState.scrollToItem(index) }
+    )
+}
+
+/** Same as the [androidx.compose.foundation.lazy.LazyListState] overload above, for a
+ * [androidx.compose.foundation.lazy.grid.LazyGridState] grid (e.g. Simple Editor's card grid)
+ * instead of a plain list — [LazyGridState] isn't a [androidx.compose.foundation.lazy.LazyListState]
+ * subtype, so this can't just accept either one, but exposes the identical shape/behavior. */
+@Composable
+fun CustomVerticalScrollbar(
+    gridState: androidx.compose.foundation.lazy.grid.LazyGridState,
+    modifier: Modifier = Modifier,
+    bottomClearance: Dp = 0.dp
+) {
+    CustomVerticalScrollbarCore(
+        modifier = modifier,
+        bottomClearance = bottomClearance,
+        totalItemsCount = { gridState.layoutInfo.totalItemsCount },
+        visibleItemsCount = { gridState.layoutInfo.visibleItemsInfo.size },
+        position = { gridState.firstVisibleItemIndex to gridState.firstVisibleItemScrollOffset },
+        scrollToItem = { index -> gridState.scrollToItem(index) }
+    )
+}
+
+@Composable
+private fun CustomVerticalScrollbarCore(
+    modifier: Modifier,
+    // Reserved purely for the drawn thumb — never for the draggable area itself, which always
+    // spans the full bar so a drag started near the bottom (where a floating toolbar/FAB may
+    // visually sit) still scrolls correctly. Shrinking the touch target to match previously meant
+    // the bottom strip wasn't draggable at all; a user grabbing it was being told to look 1-2
+    // toolbar-heights higher just to find where dragging "started working."
+    bottomClearance: Dp = 0.dp,
+    totalItemsCount: () -> Int,
+    visibleItemsCount: () -> Int,
+    position: () -> Pair<Int, Int>,
+    scrollToItem: suspend (Int) -> Unit
 ) {
     val coroutineScope = rememberCoroutineScope()
-    val totalItemsCount = listState.layoutInfo.totalItemsCount
+    val totalItems = totalItemsCount()
     val density = LocalDensity.current
     var barHeight by remember { mutableStateOf(0f) }
+    val clearancePx = with(density) { bottomClearance.toPx() }
 
     // Only shown for 3 seconds after the list actually moves (a fling/drag on the list itself, or
     // a drag on this scrollbar's own thumb — both change firstVisibleItemIndex/ScrollOffset),
@@ -487,8 +610,8 @@ fun CustomVerticalScrollbar(
     // every further movement instead of hiding mid-scroll; drop(1) skips the position snapshotFlow
     // emits immediately on first collection, so it doesn't show up uninvited on first composition.
     var visible by remember { mutableStateOf(false) }
-    LaunchedEffect(listState) {
-        snapshotFlow { listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset }
+    LaunchedEffect(Unit) {
+        snapshotFlow { position() }
             .drop(1)
             .collectLatest {
                 visible = true
@@ -497,35 +620,39 @@ fun CustomVerticalScrollbar(
             }
     }
 
-    if (totalItemsCount > 1) {
+    if (totalItems > 1) {
         Box(
             modifier = modifier
                 .onSizeChanged { barHeight = it.height.toFloat() }
-                .pointerInput(totalItemsCount, barHeight) {
+                .pointerInput(totalItems, barHeight) {
                     detectVerticalDragGestures(
                         onDragStart = { offset ->
                             if (barHeight > 0) {
                                 val percentage = (offset.y / barHeight).coerceIn(0f, 1f)
-                                val index = (percentage * (totalItemsCount - 1)).toInt()
-                                coroutineScope.launch { listState.scrollToItem(index) }
+                                val index = (percentage * (totalItems - 1)).toInt()
+                                coroutineScope.launch { scrollToItem(index) }
                             }
                         },
                         onVerticalDrag = { change, _ ->
                             if (barHeight > 0) {
                                 val percentage = (change.position.y / barHeight).coerceIn(0f, 1f)
-                                val index = (percentage * (totalItemsCount - 1)).toInt()
-                                coroutineScope.launch { listState.scrollToItem(index) }
+                                val index = (percentage * (totalItems - 1)).toInt()
+                                coroutineScope.launch { scrollToItem(index) }
                             }
                         }
                     )
                 }
         ) {
             AnimatedVisibility(visible = visible, enter = fadeIn(), exit = fadeOut()) {
-                if (barHeight > 0 && totalItemsCount > 0) {
-                    val visibleItems = listState.layoutInfo.visibleItemsInfo.size
-                    val thumbHeightPx = (barHeight * visibleItems / totalItemsCount).coerceAtLeast(100f)
-                    val firstVisible = listState.firstVisibleItemIndex
-                    val scrollOffsetPx = (firstVisible.toFloat() / totalItemsCount) * barHeight
+                if (barHeight > 0 && totalItems > 0) {
+                    // The thumb is drawn within this reduced height only — the drag detection
+                    // above still maps against the full, unreduced barHeight.
+                    val safeHeight = (barHeight - clearancePx).coerceAtLeast(0f)
+                    val visibleItems = visibleItemsCount()
+                    val thumbHeightPx = (safeHeight * visibleItems / totalItems).coerceIn(100f, safeHeight)
+                    val (firstVisible, _) = position()
+                    val maxOffsetPx = (safeHeight - thumbHeightPx).coerceAtLeast(0f)
+                    val scrollOffsetPx = ((firstVisible.toFloat() / totalItems) * safeHeight).coerceAtMost(maxOffsetPx)
 
                     val thumbHeightDp = with(density) { thumbHeightPx.toDp() }
                     val scrollOffsetDp = with(density) { scrollOffsetPx.toDp() }
@@ -633,7 +760,11 @@ fun DynamicNoteEditor(
     onNoteChange: (NoteField) -> Unit,
     onEditRichTextClick: () -> Unit,
     onRemove: () -> Unit,
-    normalizationType: NormalizationType = NormalizationType.NONE
+    normalizationType: NormalizationType = NormalizationType.NONE,
+    /** Null (and hidden, like [onRemove]) at the first/last position — mirrors
+     * [net.ericclark.studiare.screens.Dialogs.TemplateRow]'s own up/down buttons. */
+    onMoveUp: (() -> Unit)? = null,
+    onMoveDown: (() -> Unit)? = null
 ) {
     val dimensions = LocalStudiareDimensions.current
     var showTypeDropdown by remember { mutableStateOf(false) }
@@ -718,26 +849,61 @@ fun DynamicNoteEditor(
         bottomEnd = dimensions.cornerRadiusMedium
     )
 
+    // Reorderable whenever this field has a neighbor to swap with in at least one direction —
+    // occupies the same left-edge gutter the plain grouping dot used to sit in, instead of adding
+    // new buttons elsewhere on the card.
+    val reorderable = onMoveUp != null || onMoveDown != null
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(top = dimensions.spacingMedium),
+            .padding(top = dimensions.spacingMedium)
+            .height(IntrinsicSize.Max),
         verticalAlignment = Alignment.Top
     ) {
+        if (reorderable) {
+            // Stacked with no gap and centered down this field's full height, so the shared
+            // boundary between the two buttons lands on the divider between the name field
+            // (above) and the content field (below) — not just two buttons floating at the top.
+            Column(
+                modifier = Modifier.width(48.dp).fillMaxHeight(),
+                verticalArrangement = Arrangement.Center,
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                TooltipIconButton(
+                    description = getText(R.string.move_field_up),
+                    onClick = { onMoveUp?.invoke() },
+                    enabled = onMoveUp != null,
+                    modifier = Modifier.size(48.dp)
+                ) {
+                    Icon(Icons.Default.KeyboardArrowUp, contentDescription = getText(R.string.move_field_up))
+                }
+                TooltipIconButton(
+                    description = getText(R.string.move_field_down),
+                    onClick = { onMoveDown?.invoke() },
+                    enabled = onMoveDown != null,
+                    modifier = Modifier.size(48.dp)
+                ) {
+                    Icon(Icons.Default.KeyboardArrowDown, contentDescription = getText(R.string.move_field_down))
+                }
+            }
+        }
         Column(
             modifier = Modifier
                 .weight(1f)
-                // The visual grouping line
-                .drawBehind {
-                    val dotRadius = 4.dp.toPx() // Adjust this value to make the dot larger or smaller
-                    drawCircle(
-                        color = primaryColor.copy(alpha = 0.4f), // Remove the .copy() if you want a solid color
-                        radius = dotRadius,
-                        center = androidx.compose.ui.geometry.Offset(
-                            x = dotRadius,     // Places the dot right on the left edge
-                            y = size.height / 2f    // Centers the dot vertically
+                // The visual grouping line — only drawn when this field isn't reorderable (the
+                // up/down buttons above take its place in that gutter otherwise).
+                .let { base ->
+                    if (reorderable) base else base.drawBehind {
+                        val dotRadius = 4.dp.toPx() // Adjust this value to make the dot larger or smaller
+                        drawCircle(
+                            color = primaryColor.copy(alpha = 0.4f), // Remove the .copy() if you want a solid color
+                            radius = dotRadius,
+                            center = androidx.compose.ui.geometry.Offset(
+                                x = dotRadius,     // Places the dot right on the left edge
+                                y = size.height / 2f    // Centers the dot vertically
+                            )
                         )
-                    )
+                    }
                 }
                 .padding(start = dimensions.paddingMedium) // Indent away from the line
         ) {
@@ -769,7 +935,23 @@ fun DynamicNoteEditor(
             )
 
             // BOTTOM LINE: Content
-            when (note.type) {
+            // A note can hold an internal media file path while still tagged PLAIN_TEXT (e.g.
+            // imported/legacy data whose type never got corrected) — shown read-only and truncated
+            // like the real media branches below, not as a freely-editable field, since editing it
+            // as text would silently turn a file path into arbitrary content on the next save. Use
+            // the type dropdown to re-tag it if it's genuinely meant to be plain text.
+            if (note.type == MediaType.PLAIN_TEXT && note.content.startsWith(context.filesDir.absolutePath)) {
+                TextField(
+                    value = net.ericclark.studiare.components.MediaStorageUtils.truncatedDisplayPath(note.content),
+                    onValueChange = {},
+                    readOnly = true,
+                    enabled = false,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = bottomShape,
+                    colors = textFieldColors,
+                    trailingIcon = typeDropdown
+                )
+            } else when (note.type) {
                 MediaType.PLAIN_TEXT, MediaType.WEB_LINK, MediaType.HTML -> {
                     // The hint says what the box expects for the selected type, and disappears once typing starts
                     val hintRes = when (note.type) {
@@ -816,7 +998,7 @@ fun DynamicNoteEditor(
                 }
                 MediaType.IMAGE, MediaType.VIDEO -> {
                     val hasMedia = note.content.isNotBlank() && note.content.startsWith(context.filesDir.absolutePath)
-                    val displayInfo = if (!hasMedia) "Add Media..." else note.content.substringAfterLast('/')
+                    val displayInfo = if (!hasMedia) "Add Media..." else net.ericclark.studiare.components.MediaStorageUtils.truncatedDisplayPath(note.content)
                     Box(modifier = Modifier.fillMaxWidth().clickable {
                         val mimeType = if (note.type == MediaType.IMAGE) arrayOf("image/*") else arrayOf("video/*")
                         visualMediaLauncher.launch(mimeType)
@@ -836,7 +1018,7 @@ fun DynamicNoteEditor(
                 }
                 MediaType.AUDIO -> {
                     val hasMedia = note.content.isNotBlank() && note.content.startsWith(context.filesDir.absolutePath)
-                    val displayInfo = if (!hasMedia) "Add Audio..." else note.content.substringAfterLast('/')
+                    val displayInfo = if (!hasMedia) "Add Audio..." else net.ericclark.studiare.components.MediaStorageUtils.truncatedDisplayPath(note.content)
                     Box(modifier = Modifier.fillMaxWidth().clickable { audioLauncher.launch("audio/*") }) {
                         TextField(
                             value = displayInfo,
@@ -854,7 +1036,7 @@ fun DynamicNoteEditor(
             }
         }
 
-        TooltipIconButton(description = getText(R.string.remove_note), 
+        TooltipIconButton(description = getText(R.string.remove_note),
             onClick = onRemove,
             modifier = Modifier.padding(start = dimensions.spacingSmall, top = 8.dp)
         ) {

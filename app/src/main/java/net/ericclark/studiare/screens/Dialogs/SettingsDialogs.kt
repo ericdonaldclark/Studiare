@@ -332,7 +332,7 @@ internal fun ShortcutCaptureDialog(
                 Spacer(Modifier.height(dimensions.spacingSmall))
                 Text(
                     "Keyboard shortcuts are paused until you press a key or cancel.",
-                    style = MaterialTheme.typography.bodySmall,
+                    style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = androidx.compose.ui.text.style.TextAlign.Center
                 )

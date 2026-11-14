@@ -190,8 +190,8 @@ class ImportExportManager(
     private val getLocalDecks: () -> List<Deck>,
     private val getLocalCards: () -> List<Card>,
     private val onProcessingChanged: (Boolean) -> Unit,
-    private val onOverwriteConfirmationChanged: (OverwriteConfirmationData?) -> Unit,
-    private val getOverwriteConfirmation: () -> OverwriteConfirmationData?,
+    private val onOverwriteConfirmationChanged: (ImportSelectionData?) -> Unit,
+    private val getOverwriteConfirmation: () -> ImportSelectionData?,
     private val safeWrite: suspend (Task<*>) -> Unit,
     private val saveDeckToFirestore: (Deck) -> Unit,
     private val saveCardToFirestore: (Card) -> Unit,
@@ -357,20 +357,18 @@ class ImportExportManager(
                 }
 
                 val existingDecksInDb = getLocalDecks().filter { it.id in parsedDeckIds }
-                if (existingDecksInDb.isNotEmpty()) {
+                if (parsedDecks.isNotEmpty()) {
                     withContext(Dispatchers.Main) {
                         onOverwriteConfirmationChanged(
-                            OverwriteConfirmationData(
-                                existingDecksInDb,
+                            ImportSelectionData(
                                 parsedDecks,
+                                existingDecksInDb.map { it.id }.toSet(),
                                 allParsedCards
                             )
                         )
                         onProcessingChanged(false)
                         handedOffToDialog = true
                     }
-                } else {
-                    importParsedData(parsedDecks, allParsedCards, emptyMap())
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "JSON Parse failed", e)
@@ -385,7 +383,7 @@ class ImportExportManager(
         onOverwriteConfirmationChanged(null)
     }
 
-    fun proceedWithImport(selectedIdsToOverwrite: List<String>) {
+    fun proceedWithImport(selectedIdsToImport: Set<String>, selectedIdsToOverwrite: Set<String>) {
         val confirmationData = getOverwriteConfirmation() ?: return
         onOverwriteConfirmationChanged(null)
         viewModelScope.launch(Dispatchers.IO) {
@@ -395,8 +393,10 @@ class ImportExportManager(
                 val existingDecksMap = getLocalDecks().associateBy { it.id }
                 val existingCardsMap = getLocalCards().associateBy { it.id }
 
+                val chosenDecks = confirmationData.parsedDecks.filter { it.oldDeckId in selectedIdsToImport }
+
                 // 1. Overwrites
-                val overwrites = confirmationData.parsedDecks.filter { it.oldDeckId in selectedIdsToOverwrite }
+                val overwrites = chosenDecks.filter { it.oldDeckId in selectedIdsToOverwrite }
                 overwrites.forEach { parsed ->
                     yield()
                     val imported = parsed.deck
@@ -418,7 +418,7 @@ class ImportExportManager(
                 }
 
                 // 2 & 3. New Decks
-                val others = confirmationData.parsedDecks.filter { it.oldDeckId !in selectedIdsToOverwrite }
+                val others = chosenDecks.filter { it.oldDeckId !in selectedIdsToOverwrite }
                 if (others.isNotEmpty()) {
                     val remapping = mutableMapOf<String, String>()
                     others.forEach { if(existingDecksMap.containsKey(it.oldDeckId)) remapping[it.oldDeckId] = UUID.randomUUID().toString() }
@@ -498,6 +498,7 @@ class ImportExportManager(
 
     private fun importDecksFromCsv(csvString: String) {
         viewModelScope.launch(Dispatchers.IO) {
+            var handedOffToDialog = false
             try {
                 val reader = CSVReaderBuilder(StringReader(csvString)).withSkipLines(1).build()
                 val records = reader.readAll()
@@ -566,19 +567,22 @@ class ImportExportManager(
                     decksMap[dId] = deck.copy(cardIds = deck.cardIds + card.id)
                 }
 
-                cardsMap.values.forEach { saveCardToFirestore(it) }
+                // Translate each deck's parentDeckId from the CSV's own (file-local) deck id to
+                // the fresh id generated for that sibling above — an external parent (not present
+                // in this file) keeps whatever id it already carries, which is treated as a real
+                // existing local deck id by the shared importParsedData merge below.
                 val finalDecksToSave = decksMap.values.map { deck -> if (deck.parentDeckId != null && decksMap.containsKey(deck.parentDeckId)) deck.copy(parentDeckId = decksMap[deck.parentDeckId]?.id) else deck }
-                val decksToSaveMap = finalDecksToSave.associateBy { it.id }.toMutableMap()
-                val extraParentsToUpdate = mutableMapOf<String, Deck>()
-                val existingDecksMap = getLocalDecks().associateBy { it.id }
-                finalDecksToSave.forEach { deck -> if (deck.parentDeckId != null) { val parentId = deck.parentDeckId; if (decksToSaveMap.containsKey(parentId)) { val parent = decksToSaveMap[parentId]!!; decksToSaveMap[parentId] = parent.copy(cardIds = (parent.cardIds + deck.cardIds).distinct()) } else if (existingDecksMap.containsKey(parentId)) { val parent = extraParentsToUpdate[parentId] ?: existingDecksMap[parentId]!!; extraParentsToUpdate[parentId] = parent.copy(cardIds = (parent.cardIds + deck.cardIds).distinct()) } } }
-                (decksToSaveMap.values + extraParentsToUpdate.values).forEach { yield(); saveDeckToFirestore(it) }
+                val parsedDecks = finalDecksToSave.map { deck -> ParsedDeck(deck, deck.cardIds, deck.id) }
 
+                withContext(Dispatchers.Main) {
+                    onOverwriteConfirmationChanged(ImportSelectionData(parsedDecks, emptySet(), cardsMap))
+                    handedOffToDialog = true
+                }
             } catch (e: Exception) {
                 Log.e(TAG, "CSV Import failed", e)
                 withContext(Dispatchers.Main) { onError(e.stackTraceToString()) }
             } finally {
-                withContext(Dispatchers.Main) { onProcessingChanged(false) }
+                if (!handedOffToDialog) withContext(Dispatchers.Main) { onProcessingChanged(false) }
             }
         }
     }
@@ -894,12 +898,12 @@ class ImportExportManager(
         val parsedDecks = buildDeckHierarchy(ankiDeckNames, parsedDecksMap)
 
         val existingDecksInDb = getLocalDecks().filter { dbDeck -> parsedDecks.any { it.oldDeckId == dbDeck.id } }
-        if (existingDecksInDb.isNotEmpty()) {
+        if (parsedDecks.isNotEmpty()) {
             withContext(Dispatchers.Main) {
-                onOverwriteConfirmationChanged(OverwriteConfirmationData(existingDecksInDb, parsedDecks, allParsedCards))
+                onOverwriteConfirmationChanged(
+                    ImportSelectionData(parsedDecks, existingDecksInDb.map { it.id }.toSet(), allParsedCards)
+                )
             }
-        } else {
-            importParsedData(parsedDecks, allParsedCards, emptyMap())
         }
     }
 
@@ -1118,10 +1122,37 @@ class ImportExportManager(
         return finalDecks.values.toList()
     }
 
+    // File extensions Anki's own [sound:...] field syntax covers — it's used for both audio and
+    // video alike (the Anki player itself dispatches by extension), unlike Studiare's own export
+    // which always writes an explicit <audio>/<video> tag.
+    private val audioFileExtensions = setOf("mp3", "wav", "ogg", "oga", "m4a", "flac", "aac", "opus", "wma")
+    private val videoFileExtensions = setOf("mp4", "webm", "mov", "mkv", "avi", "m4v", "3gp")
+
+    private fun mediaTypeForFilename(filename: String): net.ericclark.studiare.data.MediaType {
+        val extension = filename.substringAfterLast('.', "").lowercase()
+        return when (extension) {
+            in videoFileExtensions -> net.ericclark.studiare.data.MediaType.VIDEO
+            // Anki's [sound:...] tag always means audio or video, never anything else — an
+            // unrecognized extension still defaults to audio (its more common use) rather than
+            // falling through to plain text, which would otherwise show the bracket syntax itself.
+            else -> net.ericclark.studiare.data.MediaType.AUDIO
+        }
+    }
+
     // --- REFACTORED: 4. Content Type Parser ---
     private fun parseNoteFieldContent(html: String): Pair<net.ericclark.studiare.data.MediaType, String> {
         val trimmed = html.trim()
         if (trimmed.isEmpty()) return net.ericclark.studiare.data.MediaType.PLAIN_TEXT to ""
+
+        // Anki's native field syntax for audio/video — [sound:filename.ext] — never appears as an
+        // <audio>/<video> tag until resolveAnkiMedia rewrites it, so a raw/unresolved field (e.g.
+        // during analyzeAnkiPackage's auto-detection pass, which never calls resolveAnkiMedia) was
+        // falling all the way through to PLAIN_TEXT without this check.
+        val soundMatch = Regex("^\\[sound:([^\\]]+)\\]$").matchEntire(trimmed)
+        if (soundMatch != null) {
+            val filename = soundMatch.groupValues[1]
+            return mediaTypeForFilename(filename) to filename
+        }
 
         val audioMatch = Regex("^<audio[^>]+src=[\"']([^\"']+)[\"'][^>]*></audio>$", RegexOption.IGNORE_CASE).matchEntire(trimmed)
         if (audioMatch != null) return net.ericclark.studiare.data.MediaType.AUDIO to audioMatch.groupValues[1]
@@ -1212,7 +1243,13 @@ class ImportExportManager(
         resolvedHtml = soundRegex.replace(resolvedHtml) { matchResult ->
             val filename = matchResult.groupValues[1]
             val localPath = copyMediaToLocal(filename)
-            if (localPath != null) "<audio src=\"$localPath\" controls></audio>" else matchResult.value
+            if (localPath == null) {
+                matchResult.value
+            } else if (mediaTypeForFilename(filename) == net.ericclark.studiare.data.MediaType.VIDEO) {
+                "<video src=\"$localPath\" controls></video>"
+            } else {
+                "<audio src=\"$localPath\" controls></audio>"
+            }
         }
 
         val imgRegex = Regex("<img[^>]+src=[\"'](.*?)[\"'][^>]*>")

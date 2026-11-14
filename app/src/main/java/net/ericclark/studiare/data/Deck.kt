@@ -46,5 +46,25 @@ data class Deck(
 
     // --- NEW: SYNC METADATA ---
     val isPendingSync: Boolean = true,
-    val isDeleted: Boolean = false
+    val isDeleted: Boolean = false,
+
+    // --- TEMPLATE LOCKING ---
+    // Superseded by seedNewCardsFromTemplate/enforceTemplate below — kept declared (unread,
+    // unwritten by any app logic) only so Room's schema still matches the existing `templateMode`
+    // column without a destructive column-drop migration.
+    val templateMode: TemplateMode = TemplateMode.MANUAL,
+    // Whether newly-created cards start pre-filled with this deck's own frontNoteTemplates/
+    // backNoteTemplates. Set by the Template Editor's "Apply to New"/"Apply to All" buttons —
+    // both turn this on; "Apply to All" additionally sweeps existing cards, one-time, at save.
+    val seedNewCardsFromTemplate: Boolean = false,
+    // Whether this deck's own template fields are shape-locked (name/order/type; content stays
+    // editable) — implies seeding too, since a card can't be locked to fields it was never given.
+    // templateScope decides whether that lock reaches existing cards too, or only new ones.
+    val enforceTemplate: Boolean = false,
+    val templateScope: TemplateScope = TemplateScope.NEW_CARDS,
+    // The named TemplateSet backing this deck's own template fields — every save of the Template
+    // Editor requires a name, which upserts this same TemplateSet (by id) rather than leaving the
+    // deck's template as an anonymous, un-shareable field list. Null only for a deck whose
+    // template has never been saved since this requirement was added.
+    val activeTemplateSetId: String? = null
 )

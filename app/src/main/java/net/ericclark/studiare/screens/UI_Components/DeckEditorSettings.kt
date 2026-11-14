@@ -20,7 +20,13 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.Button
@@ -30,6 +36,7 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.MenuDefaults
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
@@ -318,13 +325,30 @@ fun DeckSettingsDialog(
     onDismiss: () -> Unit,
     onSave: (String, NormalizationType, DeckSortMode, Boolean, CardSide, String, String) -> Unit,
     onClearReviewData: () -> Unit,
-    onOpenTemplateEditor: () -> Unit = {},
+    /** Carries this dialog's current (possibly-unsaved) draft values out before it's torn down to
+     * open the Template Editor — otherwise, for a deck that hasn't been saved/created yet, nothing
+     * here has landed anywhere else, and this dialog's own `remember`ed state (including whatever
+     * the user just typed) is simply lost when it's no longer composed. The caller is expected to
+     * stash these into whatever it hands back as `initialX` next time this dialog reopens. */
+    onOpenTemplateEditor: (
+        deckName: String,
+        normalizationType: NormalizationType,
+        sortType: DeckSortMode,
+        sortPinnedCardsFirst: Boolean,
+        defaultPromptSide: CardSide,
+        frontLanguage: String,
+        backLanguage: String
+    ) -> Unit = { _, _, _, _, _, _, _ -> },
     canOpenTemplateEditor: Boolean = true,
     // Global (not per-deck) default-editor preference — same StateFlow/setter FlashcardViewModel
     // exposes to Settings' Customization > Editor section, shown here too as a shortcut so it
     // doesn't need its own trip to Settings.
     alwaysOpenBulkEditor: Boolean = false,
-    onSetAlwaysOpenBulkEditor: (Boolean) -> Unit = {}
+    onSetAlwaysOpenBulkEditor: (Boolean) -> Unit = {},
+    // Non-null only when this dialog was auto-opened right after a multi-select Merge — shows a
+    // one-tap "put it back" section at the top, since this is the one moment undoing is simple
+    // (nothing else has touched the survivor deck yet).
+    onRevertMerge: (() -> Unit)? = null
 ) {
     val dimensions = LocalStudiareDimensions.current
     var deckName by remember { mutableStateOf(initialDeckName) }
@@ -335,6 +359,29 @@ fun DeckSettingsDialog(
     var frontLanguage by remember { mutableStateOf(initialFrontLanguage) }
     var backLanguage by remember { mutableStateOf(initialBackLanguage) }
     var showClearConfirm by remember { mutableStateOf(false) }
+
+    // Scrolls the main content area so a tapped section lands at the very top of the visible
+    // area (not just "somewhere visible") — a plain BringIntoViewRequester only nudges a target
+    // into view by the minimum amount, which stops short of the top for anything already partly
+    // visible. Each section reports its absolute offset from the top of the scrollable content
+    // (independent of the current scroll position) via onGloballyPositioned below; jumping there
+    // is then just an animateScrollTo, clamped to maxValue so the last section(s) — which can
+    // never reach the very top without overscrolling past the end of the content — settle as far
+    // up as the content allows instead of being treated as a failure.
+    val jumpScope = rememberCoroutineScope()
+    val mainScrollState = rememberScrollState()
+    val containerCoordinates = remember { arrayOfNulls<LayoutCoordinates>(1) }
+    val sectionOffsets = remember { mutableMapOf<String, Float>() }
+    fun jumpTo(key: String) {
+        val target = sectionOffsets[key] ?: return
+        jumpScope.launch {
+            mainScrollState.animateScrollTo(target.roundToInt().coerceIn(0, mainScrollState.maxValue))
+        }
+    }
+    fun trackSection(key: String): Modifier = Modifier.onGloballyPositioned { coordinates ->
+        val container = containerCoordinates[0] ?: return@onGloballyPositioned
+        sectionOffsets[key] = mainScrollState.value + (coordinates.positionInRoot().y - container.positionInRoot().y)
+    }
 
     // Moved from the old LanguageSelectionDialog
     val availableLanguages = remember {
@@ -382,7 +429,7 @@ fun DeckSettingsDialog(
             // problem as before, just at a different threshold. A fraction of the available space
             // (matching AdvancedDeckEditorDialog/RichTextEditorDialog's own sizing) scales with
             // the actual screen instead.
-            modifier = Modifier.widthIn(min = 280.dp, max = 560.dp).fillMaxHeight(0.85f),
+            modifier = Modifier.widthIn(min = 280.dp, max = 560.dp).fillMaxHeight(0.9f),
             shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)
         ) {
@@ -398,9 +445,68 @@ fun DeckSettingsDialog(
                 Column(
                     modifier = Modifier
                         .weight(1f, fill = false) // Allows scrolling without forcing full screen height
-                        .verticalScroll(rememberScrollState())
+                        .verticalScroll(mainScrollState)
+                        .onGloballyPositioned { containerCoordinates[0] = it }
                 ) {
+                    if (onRevertMerge != null) {
+                        DialogSection(title = getText(R.string.revert_merge_section_title), contentTopSpacing = 0.dp, titleColor = MaterialTheme.colorScheme.primary) {
+                            Text(
+                                getText(R.string.revert_merge_message),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Spacer(Modifier.height(dimensions.spacingSmall))
+                            FilledTonalButton(
+                                onClick = onRevertMerge,
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(dimensions.cornerRadiusButton),
+                                colors = androidx.compose.material3.ButtonDefaults.filledTonalButtonColors(
+                                    containerColor = MaterialTheme.colorScheme.errorContainer,
+                                    contentColor = MaterialTheme.colorScheme.onErrorContainer
+                                )
+                            ) {
+                                Text(getText(R.string.revert_merge))
+                            }
+                        }
+                    }
+
+                    // Section-jump row — scrolls with the rest of the content (not pinned), and
+                    // scrolls horizontally itself since the section names don't all fit at once.
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)
+                    ) {
+                        OutlinedButton(onClick = { jumpTo("deckName") }, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
+                            Text(getText(R.string.deck_name), style = MaterialTheme.typography.labelLarge)
+                        }
+                        OutlinedButton(onClick = { jumpTo("cardOrder") }, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
+                            Text(stringResource(R.string.sort_card_order), style = MaterialTheme.typography.labelLarge)
+                        }
+                        OutlinedButton(onClick = { jumpTo("promptSide") }, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
+                            Text(getText(R.string.default_prompt_side), style = MaterialTheme.typography.labelLarge)
+                        }
+                        OutlinedButton(onClick = { jumpTo("language") }, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
+                            Text(getText(R.string.language_set), style = MaterialTheme.typography.labelLarge)
+                        }
+                        OutlinedButton(onClick = { jumpTo("normalization") }, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
+                            Text(getText(R.string.case_normalization), style = MaterialTheme.typography.labelLarge)
+                        }
+                        OutlinedButton(onClick = { jumpTo("templateEditor") }, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
+                            Text(getText(R.string.advanced_editor), style = MaterialTheme.typography.labelLarge)
+                        }
+                        OutlinedButton(onClick = { jumpTo("defaultEditor") }, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
+                            Text(getText(R.string.select_global_default_deck_editor), style = MaterialTheme.typography.labelLarge)
+                        }
+                        OutlinedButton(onClick = { jumpTo("reviewData") }, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
+                            Text(getText(R.string.review_data_section_title), style = MaterialTheme.typography.labelLarge)
+                        }
+                    }
+                    Spacer(Modifier.height(dimensions.spacingSmall))
+
                     // Deck Name Section
+                    Column(modifier = trackSection("deckName")) {
                     DialogSection(title = getText(R.string.deck_name), contentTopSpacing = 0.dp, titleColor = MaterialTheme.colorScheme.primary) {
                         Text(
                             getText(R.string.deck_name_explainer),
@@ -422,8 +528,10 @@ fun DeckSettingsDialog(
                             )
                         )
                     }
+                    }
 
                     // Sorting Section (Card Order)
+                    Column(modifier = trackSection("cardOrder")) {
                     DialogSection(title = stringResource(R.string.sort_card_order), contentTopSpacing = 0.dp, titleColor = MaterialTheme.colorScheme.primary) {
                         Text(
                             getText(R.string.sort_card_order_explainer),
@@ -446,8 +554,10 @@ fun DeckSettingsDialog(
                             StudiareSwitch(checked = sortPinnedCardsFirst, onCheckedChange = { sortPinnedCardsFirst = it })
                         }
                     }
+                    }
 
                     // Default Prompt Side Section
+                    Column(modifier = trackSection("promptSide")) {
                     DialogSection(title = getText(R.string.default_prompt_side), contentTopSpacing = 0.dp, titleColor = MaterialTheme.colorScheme.primary) {
                         Text(
                             getText(R.string.default_prompt_side_explainer),
@@ -462,8 +572,10 @@ fun DeckSettingsDialog(
                             onSelect = { defaultPromptSide = it }
                         )
                     }
+                    }
 
                     // NEW: Language Section
+                    Column(modifier = trackSection("language")) {
                     DialogSection(title = getText(R.string.language_set), contentTopSpacing = 0.dp, titleColor = MaterialTheme.colorScheme.primary) {
                         Column(verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)) {
                         Text(
@@ -491,8 +603,10 @@ fun DeckSettingsDialog(
                         )
                     }
                 }
+                }
 
                 // Normalization Section
+                Column(modifier = trackSection("normalization")) {
                 DialogSection(title = getText(R.string.case_normalization), contentTopSpacing = 0.dp, titleColor = MaterialTheme.colorScheme.primary) {
                     Text(
                         getText(R.string.case_normalization_explainer),
@@ -507,8 +621,10 @@ fun DeckSettingsDialog(
                         onSelect = { normalizationType = it }
                     )
                 }
+                }
 
                 // Template Editor Section
+                Column(modifier = trackSection("templateEditor")) {
                 DialogSection(title = getText(R.string.advanced_editor), contentTopSpacing = 0.dp, titleColor = MaterialTheme.colorScheme.primary) {
                     Text(
                         getText(R.string.define_default_note_fields_desc),
@@ -517,7 +633,17 @@ fun DeckSettingsDialog(
                     )
                     Spacer(Modifier.height(dimensions.spacingSmall))
                     OutlinedButton(
-                        onClick = { onDismiss(); onOpenTemplateEditor() },
+                        // Not `onDismiss()` — for a brand-new deck that dismiss also abandons
+                        // deck creation (pops the whole screen), which closed both dialogs with
+                        // nothing saved. `onOpenTemplateEditor` is responsible for hiding this
+                        // dialog itself (and reopening it later), independent of Cancel/dismiss —
+                        // and is handed the live draft values so they aren't lost in the meantime.
+                        onClick = {
+                            onOpenTemplateEditor(
+                                deckName.trim(), normalizationType, sortType, sortPinnedCardsFirst,
+                                defaultPromptSide, frontLanguage, backLanguage
+                            )
+                        },
                         enabled = canOpenTemplateEditor,
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(dimensions.cornerRadiusButton)
@@ -525,8 +651,10 @@ fun DeckSettingsDialog(
                         Text(getText(R.string.advanced_editor))
                     }
                 }
+                }
 
                 // Default Deck Editor Section (global, not per-deck)
+                Column(modifier = trackSection("defaultEditor")) {
                 DialogSection(title = getText(R.string.select_global_default_deck_editor), contentTopSpacing = 0.dp, titleColor = MaterialTheme.colorScheme.primary) {
                     Text(
                         getText(R.string.select_global_default_deck_editor_desc),
@@ -542,8 +670,10 @@ fun DeckSettingsDialog(
                         modifier = Modifier.fillMaxWidth()
                     )
                 }
+                }
 
                 // Review Data Section
+                Column(modifier = trackSection("reviewData")) {
                 DialogSection(title = getText(R.string.review_data_section_title), showDivider = false, contentTopSpacing = 0.dp, titleColor = MaterialTheme.colorScheme.primary) {
                     Text(
                         getText(R.string.review_data_clear_message),
@@ -562,6 +692,7 @@ fun DeckSettingsDialog(
                         Text(getText(R.string.review_data_clear))
                     }
                 }
+                }
             }
                 Spacer(Modifier.height(dimensions.spacingMedium))
 
@@ -578,7 +709,7 @@ fun DeckSettingsDialog(
                             enabled = deckName.isNotBlank(),
                             shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                         ) {
-                            Text(getText(if (isCreatingNewDeck) R.string.save_and_create else R.string.save_and_close))
+                            Text(getText(if (isCreatingNewDeck) R.string.create else R.string.save_and_close))
                         }
                     }
                 }

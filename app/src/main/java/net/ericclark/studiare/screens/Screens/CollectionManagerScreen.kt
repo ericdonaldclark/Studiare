@@ -183,7 +183,7 @@ fun CollectionManagerScreen(
                                     )
                                     Text(
                                         text = "${collectionData.decks.size} Decks assigned",
-                                        style = MaterialTheme.typography.bodySmall,
+                                        style = MaterialTheme.typography.bodyMedium,
                                         color = MaterialTheme.colorScheme.secondary
                                     )
                                 }

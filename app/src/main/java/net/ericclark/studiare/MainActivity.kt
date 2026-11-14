@@ -789,14 +789,21 @@ fun StudiareNavGraph(
                         )
                     }
                 }
-                composable("deckEditor?deckId={deckId}") { backStackEntry ->
+                composable(
+                    route = "deckEditor?deckId={deckId}&cameFromMerge={cameFromMerge}",
+                    arguments = listOf(
+                        navArgument("cameFromMerge") { type = NavType.BoolType; defaultValue = false }
+                    )
+                ) { backStackEntry ->
                     CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides this@composable) {
                         val deckId = backStackEntry.arguments?.getString("deckId")
                         val deck = decks.find { it.deck.id == deckId }
+                        val cameFromMerge = backStackEntry.arguments?.getBoolean("cameFromMerge") ?: false
                         net.ericclark.studiare.screens.Screens.DeckEditorScreen(
                             navController = navController,
                             deckWithCards = deck,
-                            viewModel = viewModel
+                            viewModel = viewModel,
+                            cameFromMerge = cameFromMerge
                         )
                     }
                 }

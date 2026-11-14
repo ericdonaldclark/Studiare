@@ -49,6 +49,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.livedata.observeAsState
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
@@ -119,7 +120,8 @@ import androidx.compose.material3.SnackbarResult
 fun DeckEditorScreen(
     navController: NavController,
     deckWithCards: DeckWithCards?,
-    viewModel: FlashcardViewModel
+    viewModel: FlashcardViewModel,
+    cameFromMerge: Boolean = false
 ) {
     val context = LocalContext.current
     val dimensions = LocalStudiareDimensions.current
@@ -162,6 +164,9 @@ fun DeckEditorScreen(
     // permanently locking onto the empty-list fallback it saw on that first pass.
     var frontNoteTemplates by remember(deckWithCards?.deck?.id) { mutableStateOf(deckWithCards?.deck?.frontNoteTemplates ?: emptyList()) }
     var backNoteTemplates by remember(deckWithCards?.deck?.id) { mutableStateOf(deckWithCards?.deck?.backNoteTemplates ?: emptyList()) }
+    var seedNewCardsFromTemplate by remember(deckWithCards?.deck?.id) { mutableStateOf(deckWithCards?.deck?.seedNewCardsFromTemplate ?: false) }
+    var activeTemplateSetId by remember(deckWithCards?.deck?.id) { mutableStateOf(deckWithCards?.deck?.activeTemplateSetId) }
+    var showExportDialog by remember { mutableStateOf(false) }
     var showAdvancedEditor by remember { mutableStateOf(false) }
 
     // Linkage State
@@ -206,7 +211,14 @@ fun DeckEditorScreen(
     // State for showing the settings dialog
     // New decks open straight into Deck Options so the user sets a name (and other properties)
     // before landing on the empty card list.
-    var showSettingsDialog by remember { mutableStateOf(deckWithCards == null) }
+    var showSettingsDialog by remember { mutableStateOf(deckWithCards == null || cameFromMerge) }
+    var showTagDialogForSelection by remember { mutableStateOf<Set<String>?>(null) }
+    var showMoveDialogForSelection by remember { mutableStateOf<Set<String>?>(null) }
+    var showUseTemplateDialogForSelection by remember { mutableStateOf<Set<String>?>(null) }
+    // Set only when the Template Editor was opened via the Use Template dialog's "Open Template
+    // Editor" button — Cancel/Save there should return to that dialog (with the same selection),
+    // not to Deck Options, which is where this screen's *other* entry point (the gear icon) leads.
+    var pendingUseTemplateIds by remember { mutableStateOf<Set<String>?>(null) }
     // True only for that very first auto-opened dialog — Cancel there abandons deck creation
     // entirely (navigates back) instead of just closing to reveal the empty editor. Cleared after
     // the first save so a later re-open (gear icon) cancels normally.
@@ -223,6 +235,7 @@ fun DeckEditorScreen(
     val allTags by viewModel.tags.collectAsState()
     val savedTemplateSets by viewModel.templateSets.collectAsState()
     val alwaysOpenBulkEditor by viewModel.alwaysOpenBulkEditor.collectAsState()
+    val allDecksState by viewModel.allDecks.observeAsState(emptyList())
 
     // Builds a brand-new empty card. The editor always keeps exactly one of these at the end of
     // `cards` (see the trailing-blank-card effect below), so it behaves like an endless growing
@@ -235,8 +248,8 @@ fun DeckEditorScreen(
         back = mutableStateOf(""),
         backRichTextInfo = mutableStateOf(null),
         isBackRichText = mutableStateOf(false),
-        frontNotes = mutableStateOf(frontNoteTemplates),
-        backNotes = mutableStateOf(backNoteTemplates),
+        frontNotes = mutableStateOf(if (seedNewCardsFromTemplate) frontNoteTemplates else emptyList()),
+        backNotes = mutableStateOf(if (seedNewCardsFromTemplate) backNoteTemplates else emptyList()),
         difficulty = mutableStateOf(DifficultySetting.FIVE),
         isKnown = mutableStateOf(false),
         reviewedCount = mutableStateOf(0),
@@ -449,12 +462,116 @@ fun DeckEditorScreen(
         }
     }
 
+    // True independent duplicates, same reset-metadata semantics as the Simple Editor's/decks'
+    // own Clone (see CardDataForSave.asClone) — built as fresh CardEditorState here instead of
+    // going through the ViewModel, since this screen's `cards` is in-memory/unsaved until Save.
+    // Inserted right after each source card (reversed so earlier insertions don't shift later
+    // sources' indices) rather than appended at the end, so a clone stays next to what it came from.
+    fun cloneCardStates(ids: Set<String>) {
+        val sources = cards.withIndex().filter { (_, card) -> card.id in ids }
+        sources.reversed().forEach { (index, source) ->
+            val clone = CardEditorState(
+                id = UUID.randomUUID().toString(),
+                front = mutableStateOf(source.front.value),
+                frontRichTextInfo = mutableStateOf(source.frontRichTextInfo.value),
+                isFrontRichText = mutableStateOf(source.isFrontRichText.value),
+                back = mutableStateOf(source.back.value),
+                backRichTextInfo = mutableStateOf(source.backRichTextInfo.value),
+                isBackRichText = mutableStateOf(source.isBackRichText.value),
+                frontNotes = mutableStateOf(source.frontNotes.value),
+                backNotes = mutableStateOf(source.backNotes.value),
+                difficulty = mutableStateOf(source.difficulty.value),
+                isKnown = mutableStateOf(false),
+                reviewedCount = mutableStateOf(0),
+                gradedAttempts = mutableStateOf(emptyList()),
+                incorrectAttempts = mutableStateOf(emptyList()),
+                reviewLogs = mutableStateOf(emptyList()),
+                absoluteDueDate = mutableStateOf(null),
+                tags = mutableStateOf(source.tags.value),
+                isSuspended = mutableStateOf(false),
+                flag = mutableStateOf(CardFlag.NONE),
+                isPinned = mutableStateOf(false),
+                createdAt = mutableLongStateOf(System.currentTimeMillis()),
+                updatedAt = mutableStateOf(System.currentTimeMillis())
+            )
+            cards.add(index + 1, clone)
+        }
+    }
+
+    fun cardDataFrom(cardState: CardEditorState): CardDataForSave = CardDataForSave(
+        id = cardState.id,
+        front = cardState.front.value.trim(),
+        frontRichText = cardState.frontRichTextInfo.value?.trim(),
+        back = cardState.back.value.trim(),
+        backRichText = cardState.backRichTextInfo.value?.trim(),
+        frontNotes = cardState.frontNotes.value,
+        backNotes = cardState.backNotes.value,
+        difficulty = cardState.difficulty.value,
+        isKnown = cardState.isKnown.value,
+        reviewedCount = cardState.reviewedCount.value,
+        gradedAttempts = cardState.gradedAttempts.value,
+        incorrectAttempts = cardState.incorrectAttempts.value,
+        reviewLogs = cardState.reviewLogs.value,
+        absoluteDueDate = cardState.absoluteDueDate.value,
+        tags = cardState.tags.value,
+        isSuspended = cardState.isSuspended.value,
+        flag = cardState.flag.value,
+        isPinned = cardState.isPinned.value,
+        createdAt = cardState.createdAt.value,
+        updatedAt = cardState.updatedAt.value
+    )
+
+    // Move is an immediate cross-deck DB write (unlike every other action here, which only
+    // touches the in-memory `cards` list until the screen's own Save) — there's no destination
+    // CardEditorState list loaded in this screen to move into, so it goes straight through
+    // FlashcardViewModel.moveCardsToDeck/moveCardsToNewDeck (built from this card's *current*
+    // in-memory edits, so a move also commits any in-progress change), then the moved rows are
+    // dropped from this screen's own `cards` list so they stop appearing here immediately.
+    fun moveCardStatesToExisting(ids: Set<String>, toDeckId: String) {
+        val fromDeckId = deckWithCards?.deck?.id ?: return
+        val toMove = cards.filter { it.id in ids }
+        if (toMove.isEmpty()) return
+        viewModel.moveCardsToDeck(toMove.map { cardDataFrom(it) }, fromDeckId = fromDeckId, toDeckId = toDeckId)
+        cards.removeAll(toMove)
+        showMoveDialogForSelection = null
+    }
+
+    fun moveCardStatesToNewDeck(ids: Set<String>, newDeckName: String) {
+        val fromDeckId = deckWithCards?.deck?.id ?: return
+        val toMove = cards.filter { it.id in ids }
+        if (toMove.isEmpty()) return
+        viewModel.moveCardsToNewDeck(toMove.map { cardDataFrom(it) }, fromDeckId = fromDeckId, newDeckName = newDeckName) {}
+        cards.removeAll(toMove)
+        showMoveDialogForSelection = null
+    }
+
+    // Unlike Move, "Use Template" never needs a persisted deck — it only mutates this screen's
+    // in-memory `cards`, same as Clone/Tag/Known/Pin, deferred to this screen's own Save.
+    // Use Template's own Apply/Enforce/Remove-Enforcement actions stay on the dialog so the user
+    // can keep trying different templates — only Close/dismiss and Open Template Editor leave it.
+    fun applyTemplateToCardStates(ids: Set<String>, templateSet: net.ericclark.studiare.data.TemplateSet) {
+        cards.filter { it.id in ids }.forEach { card ->
+            val currentFront = card.frontNotes.value.map { it.name to it.type }
+            val currentBack = card.backNotes.value.map { it.name to it.type }
+            val missingFront = templateSet.frontFields.filter { (it.name to it.type) !in currentFront }.map { it.copy(content = "") }
+            val missingBack = templateSet.backFields.filter { (it.name to it.type) !in currentBack }.map { it.copy(content = "") }
+            if (missingFront.isNotEmpty()) card.frontNotes.value = card.frontNotes.value + missingFront
+            if (missingBack.isNotEmpty()) card.backNotes.value = card.backNotes.value + missingBack
+        }
+    }
+
     fun setKnownForSelection(ids: Set<String>, known: Boolean) {
         cards.filter { it.id in ids }.forEach { it.isKnown.value = known }
     }
 
     fun setPinnedForSelection(ids: Set<String>, pinned: Boolean) {
         cards.filter { it.id in ids }.forEach { it.isPinned.value = pinned }
+    }
+
+    fun applyTagsForSelection(ids: Set<String>, addTags: Set<String>, removeTags: Set<String>) {
+        cards.filter { it.id in ids }.forEach { card ->
+            card.tags.value = (card.tags.value.toSet() + addTags - removeTags).toList()
+        }
     }
 
     // --- Save Action ---
@@ -538,7 +655,12 @@ fun DeckEditorScreen(
             frontNoteTemplates, // NEW: Pass templates
             backNoteTemplates,  // NEW: Pass templates
             defaultPromptSide,
-            sortPinnedCardsFirst
+            sortPinnedCardsFirst,
+            seedNewCardsFromTemplate,
+            activeTemplateSetId,
+            // This screen always knows the deck's definitive current template link (even when
+            // null, meaning Remove was pressed) — never "unspecified, preserve whatever's saved."
+            clearActiveTemplateSetId = true
         )
 
         if (viewModel.editorDuplicateResult.value == null) {
@@ -582,7 +704,17 @@ fun DeckEditorScreen(
                 isInitialNewDeckDialog = false
                 showSettingsDialog = false
             },
-            onOpenTemplateEditor = { showAdvancedEditor = true },
+            onOpenTemplateEditor = { newName, newNorm, newSort, newPinnedFirst, newPromptSide, newFrontLang, newBackLang ->
+                deckName = newName
+                normalizationType = newNorm
+                sortType = newSort
+                sortPinnedCardsFirst = newPinnedFirst
+                defaultPromptSide = newPromptSide
+                frontLanguage = newFrontLang
+                backLanguage = newBackLang
+                showSettingsDialog = false
+                showAdvancedEditor = true
+            },
             canOpenTemplateEditor = !(isChildSet && linkageSettings.linkFieldConfig),
             onClearReviewData = {
                 // 1. Call ViewModel to reset persistent data (if deck exists)
@@ -600,7 +732,13 @@ fun DeckEditorScreen(
                 showSettingsDialog = false
             },
             alwaysOpenBulkEditor = alwaysOpenBulkEditor,
-            onSetAlwaysOpenBulkEditor = { viewModel.setAlwaysOpenBulkEditor(it) }
+            onSetAlwaysOpenBulkEditor = { viewModel.setAlwaysOpenBulkEditor(it) },
+            onRevertMerge = if (cameFromMerge) {
+                {
+                    viewModel.revertLastMerge()
+                    navController.popBackStack()
+                }
+            } else null
         )
     }
 
@@ -626,18 +764,32 @@ fun DeckEditorScreen(
             frontTemplates = frontNoteTemplates,
             backTemplates = backNoteTemplates,
             onDismiss = {
-                // Template Editor is only ever reached from Deck Options' "Open Template Editor"
-                // button, which closes Deck Options before opening this — so cancelling here (via
-                // the Cancel button, back, or tap-outside) needs to explicitly reopen it, or the
-                // user lands back on the editor screen with both dialogs gone.
+                // Template Editor is reached either from Deck Options' "Open Template Editor"
+                // button, or from the Use Template dialog's own button of the same name — so
+                // cancelling here (via the Cancel button, back, or tap-outside) needs to reopen
+                // whichever of those it came from, or the user lands back on the editor screen
+                // with both dialogs gone.
                 showAdvancedEditor = false
-                showSettingsDialog = true
+                val returnIds = pendingUseTemplateIds
+                if (returnIds != null) {
+                    pendingUseTemplateIds = null
+                    showUseTemplateDialogForSelection = returnIds
+                } else {
+                    showSettingsDialog = true
+                }
             },
-            onSave = { newFront, newBack, addToExistingCards ->
+            onSave = { newFront, newBack, resolvedTemplateSetId, _, applyToAll ->
                 frontNoteTemplates = newFront
                 backNoteTemplates = newBack
+                seedNewCardsFromTemplate = true
+                // The template itself was already persisted by the dialog before calling onSave
+                // — this screen only needs to adopt the resolved id; the deck's own
+                // seedNewCardsFromTemplate/activeTemplateSetId fields stay deferred to this
+                // screen's own main Save button below, same as frontNoteTemplates/backNoteTemplates
+                // always have been.
+                activeTemplateSetId = resolvedTemplateSetId
 
-                if (addToExistingCards) {
+                if (applyToAll) {
                     cards.forEach { card ->
                         val currentFrontNames = card.frontNotes.value.map { it.name }
                         val currentBackNames = card.backNotes.value.map { it.name }
@@ -658,15 +810,61 @@ fun DeckEditorScreen(
                         }
                     }
                 }
+                // The still-unfilled trailing placeholder represents "the next new card," not an
+                // existing one — re-seed it immediately to match the new template. Without this,
+                // Apply had no visible effect until you first typed something (which spawns a
+                // *different* fresh blank card under the new policy) and came back to this one.
+                cards.lastOrNull()?.let { trailing ->
+                    if (trailing.front.value.isBlank() && trailing.back.value.isBlank()) {
+                        trailing.frontNotes.value = newFront
+                        trailing.backNotes.value = newBack
+                    }
+                }
 
                 showAdvancedEditor = false
-                showSettingsDialog = true
+                val returnIds = pendingUseTemplateIds
+                if (returnIds != null) {
+                    pendingUseTemplateIds = null
+                    showUseTemplateDialogForSelection = returnIds
+                } else {
+                    showSettingsDialog = true
+                }
             },
+            initialTemplateName = savedTemplateSets.find { it.id == activeTemplateSetId }?.name ?: "",
+            initialEditingTemplateId = activeTemplateSetId,
             savedTemplateSets = savedTemplateSets,
-            onSaveAsTemplate = { name, front, back -> viewModel.saveAsTemplateSet(name, front, back) },
-            onDeleteTemplateSet = { templateSet -> viewModel.deleteTemplateSet(templateSet) }
+            onPersistTemplate = { id, name, front, back -> viewModel.upsertDeckTemplateSet(id, name, front, back) },
+            onDeleteTemplateSet = { templateSet -> viewModel.deleteTemplateSet(templateSet) },
+            decksUsingTemplate = { templateId -> allDecksState.filter { it.deck.activeTemplateSetId == templateId }.map { it.deck.name } },
+            onOpenExportDialog = { showExportDialog = true },
+            // Deferred to this screen's own main Save button below, same as every other field
+            // here — the Template Editor dialog stays open afterward, resetting its own fields to
+            // blank, so this only needs to clear the screen's own state in step with that.
+            onRemoveTemplate = {
+                frontNoteTemplates = emptyList()
+                backNoteTemplates = emptyList()
+                seedNewCardsFromTemplate = false
+                activeTemplateSetId = null
+                // Mirrors the trailing-placeholder re-seed in onSave above — without this, the
+                // still-unfilled last row keeps whatever fields it was seeded with by the template
+                // this deck no longer uses, even after Cancel (since it was already stamped onto
+                // that in-memory CardEditorState before Remove was ever pressed).
+                cards.lastOrNull()?.let { trailing ->
+                    if (trailing.front.value.isBlank() && trailing.back.value.isBlank()) {
+                        trailing.frontNotes.value = emptyList()
+                        trailing.backNotes.value = emptyList()
+                    }
+                }
+            },
+            hasExistingCards = cards.any { it.front.value.isNotBlank() || it.back.value.isNotBlank() }
         )
     }
+
+    net.ericclark.studiare.screens.Dialogs.ExportDecksLauncher(
+        show = showExportDialog,
+        onDismiss = { showExportDialog = false },
+        viewModel = viewModel
+    )
 
     // Linkage Dialog Trigger
     if (showLinkageDialog) {
@@ -724,9 +922,12 @@ fun DeckEditorScreen(
         )
     }
 
-    // Start scrolled all the way to the bottom (past the trailing placeholder, including the
-    // bottom content padding) instead of the first card — scrollToItem alone only pins the last
-    // item's top at the viewport's start, not its bottom at the viewport's end; a scrollOffset of
+    // Restore position only if the Simple Editor toggle button just handed one off for this deck
+    // (see goToSimpleEditor's capture below) — any other way of arriving here (Decks list, back
+    // navigation, etc.) finds nothing to consume and falls back to the original behavior: start
+    // scrolled all the way to the bottom (past the trailing placeholder, including the bottom
+    // content padding) instead of the first card. scrollToItem alone only pins the last item's
+    // top at the viewport's start, not its bottom at the viewport's end; a scrollOffset of
     // Int.MAX_VALUE is the standard trick to clamp to the true end of scrollable content instead.
     //
     // cardAnimationsEnabled stays false until this jump finishes, so none of the cards have
@@ -737,7 +938,13 @@ fun DeckEditorScreen(
     // only suppressed for this one initial settle, not turned off altogether.
     var cardAnimationsEnabled by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
-        lazyListState.scrollToItem((cards.size - 1).coerceAtLeast(0), scrollOffset = Int.MAX_VALUE)
+        val deckId = deckWithCards?.deck?.id
+        val handoffPosition = deckId?.let { viewModel.consumeBulkEditorScrollHandoff(it) }
+        if (handoffPosition != null) {
+            lazyListState.scrollToItem(handoffPosition.first.coerceIn(0, (cards.size - 1).coerceAtLeast(0)), handoffPosition.second)
+        } else {
+            lazyListState.scrollToItem((cards.size - 1).coerceAtLeast(0), scrollOffset = Int.MAX_VALUE)
+        }
         cardAnimationsEnabled = true
     }
 
@@ -772,6 +979,48 @@ fun DeckEditorScreen(
 
     val currentDeckTags = remember(cards.map { it.tags.value }) {
         cards.flatMap { it.tags.value }.toSet()
+    }
+
+    showTagDialogForSelection?.let { ids ->
+        net.ericclark.studiare.components.MultiCardTagSelectionDialog(
+            selectedCardsTags = cards.filter { it.id in ids }.map { it.tags.value.toSet() },
+            allTags = allTags,
+            currentDeckTags = currentDeckTags,
+            onDismiss = { showTagDialogForSelection = null },
+            onSave = { addTags, removeTags ->
+                applyTagsForSelection(ids, addTags, removeTags)
+                showTagDialogForSelection = null
+            },
+            onCreateTag = { name, color ->
+                viewModel.saveTagDefinition(TagDefinition(name = name, color = color))
+            }
+        )
+    }
+
+    showMoveDialogForSelection?.let { ids ->
+        net.ericclark.studiare.screens.Dialogs.MoveCardsDialog(
+            decks = allDecksState,
+            onDismiss = { showMoveDialogForSelection = null },
+            onMoveToExisting = { toDeckId -> moveCardStatesToExisting(ids, toDeckId) },
+            onMoveToNewDeck = { name -> moveCardStatesToNewDeck(ids, name) }
+        )
+    }
+
+    showUseTemplateDialogForSelection?.let { ids ->
+        net.ericclark.studiare.screens.Dialogs.UseTemplateDialog(
+            templateSets = savedTemplateSets,
+            onDismiss = { showUseTemplateDialogForSelection = null },
+            onApply = { templateSet -> applyTemplateToCardStates(ids, templateSet) },
+            onOpenTemplateEditor = {
+                pendingUseTemplateIds = ids
+                showUseTemplateDialogForSelection = null
+                showAdvancedEditor = true
+            },
+            matchStatusFor = { templateSet ->
+                val single = ids.singleOrNull()?.let { singleId -> cards.find { it.id == singleId } }
+                if (single != null) templateSet.matchStatus(single.frontNotes.value, single.backNotes.value) else TemplateMatchStatus.NOT_MATCHING
+            }
+        )
     }
 
     // Selection table's own filtered/sorted list — see selectionSortType/selectionFilterText
@@ -829,6 +1078,15 @@ fun DeckEditorScreen(
                                 // it, so Simple Editor's back button (and save/discard) exits straight
                                 // past Bulk Editor too — mirrors Simple Editor's own Bulk Editor button.
                                 val goToSimpleEditor = {
+                                    // Saved under Bulk Editor's own key, not Simple's — this is
+                                    // what lets *returning* to Bulk Editor (via its own toggle
+                                    // button) restore where Bulk Editor itself was left, not a
+                                    // position borrowed from Simple Editor's different layout.
+                                    viewModel.setBulkEditorScrollHandoff(
+                                        deckWithCards.deck.id,
+                                        lazyListState.firstVisibleItemIndex,
+                                        lazyListState.firstVisibleItemScrollOffset
+                                    )
                                     val bulkEditorRoute = navController.currentBackStackEntry?.destination?.route ?: "deckEditor?deckId={deckId}"
                                     navController.navigate("simpleEditor?deckId=${deckWithCards.deck.id}") {
                                         popUpTo(bulkEditorRoute) { inclusive = true }
@@ -912,6 +1170,42 @@ fun DeckEditorScreen(
                                 onClick = { setKnownForSelection(selection.selected, true) }
                             ),
                             SelectionAction(
+                                id = "tag",
+                                icon = Icons.Default.Label,
+                                label = getText(context, R.string.tag),
+                                onClick = { showTagDialogForSelection = selection.selected }
+                            ),
+                            SelectionAction(
+                                id = "clone",
+                                icon = Icons.Default.ContentCopy,
+                                label = getText(context, R.string.clone),
+                                onClick = {
+                                    val ids = selection.selected
+                                    selection.exit()
+                                    cloneCardStates(ids)
+                                }
+                            ),
+                            SelectionAction(
+                                id = "move",
+                                icon = Icons.Default.DriveFileMove,
+                                label = getText(context, R.string.move),
+                                onClick = {
+                                    val ids = selection.selected
+                                    selection.exit()
+                                    showMoveDialogForSelection = ids
+                                }
+                            ),
+                            SelectionAction(
+                                id = "useTemplate",
+                                icon = Icons.Default.Description,
+                                label = getText(context, R.string.use_template),
+                                onClick = {
+                                    val ids = selection.selected
+                                    selection.exit()
+                                    showUseTemplateDialogForSelection = ids
+                                }
+                            ),
+                            SelectionAction(
                                 id = "edit",
                                 icon = Icons.Default.Edit,
                                 label = getText(context, R.string.edit),
@@ -934,8 +1228,11 @@ fun DeckEditorScreen(
                                 }
                             )
                         )
-                        // "Edit" only once exactly one card is selected; everything else needs ≥1.
-                        others.filter { it.id != "edit" || selection.selected.size == 1 } + selectAll
+                        // "Edit" only once exactly one card is selected; "Move" needs an existing,
+                        // already-persisted deck to move out of (see moveCardStatesToExisting/
+                        // ...ToNewDeck). Everything else needs ≥1.
+                        others.filter { it.id != "edit" || selection.selected.size == 1 }
+                            .filter { it.id != "move" || deckWithCards != null } + selectAll
                     }
                 }
                 Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)) {
@@ -1073,11 +1370,12 @@ fun DeckEditorScreen(
                             // Same grabbable fast-scroll slider the normal card list uses.
                             CustomVerticalScrollbar(
                                 listState = lazyListState,
+                                bottomClearance = 120.dp,
                                 modifier = Modifier
                                     .align(Alignment.CenterEnd)
                                     .width(30.dp)
                                     .fillMaxHeight()
-                                    .padding(vertical = dimensions.paddingMedium)
+                                    .padding(top = dimensions.paddingMedium)
                             )
                         }
                     }
@@ -1119,6 +1417,9 @@ fun DeckEditorScreen(
                                             onPinClick = {
                                                 cardState.isPinned.value = !cardState.isPinned.value
                                             },
+                                            onCloneClick = { cloneCardStates(setOf(cardState.id)) },
+                                            onMoveClick = if (deckWithCards != null) { { showMoveDialogForSelection = setOf(cardState.id) } } else null,
+                                            onUseTemplateClick = { showUseTemplateDialogForSelection = setOf(cardState.id) },
                                             allTags = allTags,
                                             currentDeckTags = currentDeckTags,
                                             onUpdateTags = { newTags ->
@@ -1147,7 +1448,8 @@ fun DeckEditorScreen(
                                             ) else Modifier,
                                             normalizationType = normalizationType,
                                             nextCardFocusRequester = filteredCards.getOrNull(index + 1)?.frontFocusRequester,
-                                            previousCardFocusRequester = filteredCards.getOrNull(index - 1)?.backFocusRequester
+                                            previousCardFocusRequester = filteredCards.getOrNull(index - 1)?.backFocusRequester,
+                                            playNoteEntranceAnimations = cardAnimationsEnabled
                                         )
                                     }
                                 }
@@ -1156,11 +1458,12 @@ fun DeckEditorScreen(
                                     // Custom Fast Scroll Slider (Wide Mode)
                                     CustomVerticalScrollbar(
                                         listState = lazyListState,
+                                        bottomClearance = 120.dp,
                                         modifier = Modifier
                                             .align(Alignment.CenterEnd)
                                             .width(30.dp)
                                             .fillMaxHeight()
-                                            .padding(vertical = dimensions.paddingMedium)
+                                            .padding(top = dimensions.paddingMedium)
                                     )
                                 }
                             }
@@ -1195,6 +1498,9 @@ fun DeckEditorScreen(
                                         onDelete = { deleteCardsWithUndo(listOf(cardState)) },
                                         onKnownClick = { cardState.isKnown.value = !cardState.isKnown.value },
                                         onPinClick = { cardState.isPinned.value = !cardState.isPinned.value },
+                                        onCloneClick = { cloneCardStates(setOf(cardState.id)) },
+                                        onMoveClick = if (deckWithCards != null) { { showMoveDialogForSelection = setOf(cardState.id) } } else null,
+                                        onUseTemplateClick = { showUseTemplateDialogForSelection = setOf(cardState.id) },
                                         allTags = allTags,
                                         currentDeckTags = currentDeckTags,
                                         onUpdateTags = { newTags -> cardState.tags.value = newTags.toList() },
@@ -1219,7 +1525,8 @@ fun DeckEditorScreen(
                                         ) else Modifier,
                                         normalizationType = normalizationType,
                                         nextCardFocusRequester = filteredCards.getOrNull(index + 1)?.frontFocusRequester,
-                                        previousCardFocusRequester = filteredCards.getOrNull(index - 1)?.backFocusRequester
+                                        previousCardFocusRequester = filteredCards.getOrNull(index - 1)?.backFocusRequester,
+                                        playNoteEntranceAnimations = cardAnimationsEnabled
                                     )
                                 }
                             }
@@ -1229,11 +1536,12 @@ fun DeckEditorScreen(
                                 // Custom Fast Scroll Slider (Narrow Mode)
                                 CustomVerticalScrollbar(
                                     listState = lazyListState,
+                                    bottomClearance = 120.dp,
                                     modifier = Modifier
                                         .align(Alignment.CenterEnd)
                                         .width(30.dp)
                                         .fillMaxHeight()
-                                        .padding(vertical = dimensions.paddingMedium)
+                                        .padding(top = dimensions.paddingMedium)
                                 )
                             }
                         }

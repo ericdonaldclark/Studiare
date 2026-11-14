@@ -521,7 +521,7 @@ object FreeformSwipeNavigation : ModeOption(R.string.freeform_swipe_navigation) 
             verticalArrangement = Arrangement.spacedBy(LocalStudiareDimensions.current.spacingSmall)
         ) {
             Text(getText(labelRes))
-            Text(getText(R.string.freeform_swipe_navigation_desc), style = MaterialTheme.typography.bodySmall)
+            Text(getText(R.string.freeform_swipe_navigation_desc), style = MaterialTheme.typography.bodyMedium)
             ConnectedButtonGroup(
                 items = listOf(SWIPE, BUTTON, BOTH),
                 selected = mode,

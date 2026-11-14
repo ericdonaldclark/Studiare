@@ -14,7 +14,7 @@
     <string name="reset">Reset</string>
     <string name="remove">Remove</string>
     <string name="create">Create</string>
-    <string name="close">close</string>
+    <string name="close">Close</string>
     <string name="front">Front</string>
     <string name="back">Back</string>
     <string name="difficulty">Difficulty</string>
@@ -77,7 +77,7 @@
     <string name="add_more">Add More</string>
     <string name="decks_mapped_count_format">%1$d of %2$d Decks</string>
     <string name="sets_detected_count_format">%1$d Sets Detected</string>
-    <string name="create_separated_deck">Create Separated Deck</string>
+    <string name="create_separated_deck">Create Separate Deck</string>
     <string name="unmapped_fields">Unmapped Fields</string>
     <string name="custom_text">Custom Text</string>
     <string name="drag_handle">Drag Handle</string>
@@ -96,7 +96,7 @@
     <string name="add_missing_fields_desc">Add missing fields to existing cards</string>
     <string name="save_templates">Save Templates</string>
     <string name="start_from_template">Start from Template</string>
-    <string name="save_as_template">Save as Template</string>
+    <string name="save_as_template">Save as</string>
     <string name="save_as_template_desc">Save this field layout so you can reuse it to start other decks, including this one, later.</string>
     <string name="no_saved_templates">No saved templates</string>
     <string name="default_template_name">Default</string>
@@ -375,6 +375,8 @@
     <string name="tags_in_this_deck">In This Deck</string>
     <string name="tags_from_other_decks">From Other Decks</string>
     <string name="tags_none_found">No tags found.</string>
+    <string name="tag_multi_select_hint">Tap a tag to add it to every selected card; tap again to remove it from all. A dash means only some of the selected cards currently have it.</string>
+    <string name="tag_partially_selected">On some selected cards</string>
     <string name="default_hex_color">#0D47A1</string>
 
     <!-- StudySessionDialog -->
@@ -542,14 +544,46 @@
     <string name="decks_all">All Decks</string>
     <string name="options_more">More Options</string>
     <string name="open">Open</string>
-    <string name="advanced_selection">Advanced Select</string>
-    <string name="advanced_selection_title">Advanced Select</string>
+    <string name="advanced_selection">Pro Select</string>
+    <string name="advanced_selection_title">Pro Select</string>
+    <string name="clone">Clone</string>
+    <string name="clone_name_format">%1$s (Copy)</string>
+    <string name="merge">Merge</string>
+    <string name="merge_same_level_required">Can only merge items at the same level</string>
+    <string name="revert_merge_section_title">Undo Merge</string>
+    <string name="revert_merge_message">This deck was just created by merging the selected items together.</string>
+    <string name="revert_merge">Revert Merge</string>
+    <string name="move">Move</string>
+    <string name="move_cards_title">Move Cards</string>
+    <string name="move_cards_subtitle">Choose a destination deck or set, or create a new deck</string>
+    <string name="create_new_deck">Create New Deck</string>
+    <string name="new_deck_name_hint">New deck name</string>
+    <string name="template_mode_manual">Manual</string>
+    <string name="template_mode_apply">Apply</string>
+    <string name="template_mode_enforce">Enforce</string>
+    <string name="template_scope_new_cards">New cards only</string>
+    <string name="template_scope_all_cards">All cards</string>
+    <string name="apply_to_new">Apply to New</string>
+    <string name="apply_to_all">Apply to All</string>
+    <string name="enforce_backup_advisory">Applying changes here can affect your existing cards. Consider backing up your decks first.</string>
+    <string name="use_template">Use Template</string>
+    <string name="use_template_dialog_title">Use Template</string>
+    <string name="use_template_dialog_subtitle">Apply a saved template</string>
+    <string name="applied">Applied</string>
+    <string name="template_match_matching">Matching</string>
+    <string name="template_match_same_fields">Same Fields</string>
+    <string name="template_match_extra_fields">Extra Fields</string>
+    <string name="template_match_not_matching">Not Matching</string>
+    <string name="open_template_editor">Open Template Editor</string>
     <string name="export_decks">All Decks</string>
     <string name="no_decks_yet">No decks yet.</string>
     <string name="create_or_import_to_start">Create one or import to start.</string>
     <string name="delete_deck_question">Delete Deck?</string>
     <string name="delete_deck_confirm">Are you sure you want to delete \"%1$s\"? This cannot be undone.</string>
     <string name="delete_decks_confirm_format">Are you sure you want to delete these %1$d items? This cannot be undone.</string>
+    <string name="delete_template_question">Delete Template?</string>
+    <string name="delete_template_confirm">Are you sure you want to delete \"%1$s\"? This cannot be undone.</string>
+    <string name="delete_template_not_in_use">This template isn\'t currently used by any deck.</string>
     <string name="delete">Delete</string>
     <string name="edit">Edit</string>
     <string name="manage_sets">Manage Sets</string>
@@ -560,9 +594,13 @@
     <string name="unpin_deck">Unpin Deck</string>
     <string name="show_pinned_first">Show pinned first</string>
     <string name="processing">Processing…</string>
-    <string name="overwrite_existing">Overwrite Existing?</string>
-    <string name="select_decks_to_overwrite">Select decks to overwrite:</string>
-    <string name="overwrite_selected">Overwrite Selected</string>
+    <string name="select_decks_to_import">Select Decks to Import</string>
+    <string name="import_selected">Import Selected</string>
+    <string name="overwrite">Overwrite</string>
+    <string name="new_copy">New Copy</string>
+    <string name="import_overwrite_warning">This will overwrite an existing deck.</string>
+    <string name="import_overwrite_warning_set">This will overwrite an existing set.</string>
+    <string name="import_no_conflict">(no conflict)</string>
     <string name="duplicates_found">Duplicates Found</string>
     <string name="duplicates_found_message">Duplicates were found in \'%1$s\'. Remove them before saving?</string>
     <string name="duplicate_item_format">• \"%1$s\" (%2$d)</string>
@@ -615,8 +653,6 @@
     <string name="merge_keep_cloud">Merge (Keep Cloud Matches)</string>
     <string name="use_local_wipe_cloud">Use Local (Delete All Cloud Data)</string>
     <string name="use_cloud_wipe_local">Use Cloud (Discard Local)</string>
-    <string name="delete_all_decks_question">Delete All Decks?</string>
-    <string name="delete_all_decks_confirm">Are you sure you want to delete ALL decks? This action cannot be undone.</string>
     <string name="download_language_question">Download Language?</string>
     <string name="download_language_later">You can download HD audio later in Settings</string>
     <string name="download_language_confirm">Download the high-definition model for %1$s?</string>
@@ -745,9 +781,10 @@
     <string name="display_sets_off">Off</string>
     <string name="display_sets_under_decks_option">Under Decks</string>
     <string name="display_sets_beside_decks_option">Beside Decks</string>
-    <string name="delete_all_decks">Delete All Decks</string>
     <string name="action_cannot_be_undone">This action cannot be undone.</string>
     <string name="debug">Debug</string>
+    <string name="app_tools_and_info">App Tools &amp; Info</string>
+    <string name="app_tools_and_info_subtitle">Debug, info, help &amp; about</string>
     <string name="window_size">Window size</string>
     <string name="notification_explainer_title">Notifications (optional)</string>
     <string name="notification_explainer_desc">Audio study can show playback controls in your notification shade and on the lock screen. This is optional: audio study works fully inside the app without notifications, so you can choose Not now.</string>
@@ -780,7 +817,10 @@
     <string name="developer_tools">Developer Tools</string>
     <string name="about">About</string>
     <string name="help">Help</string>
+    <string name="help_subtitle">Tutorial and sample deck</string>
     <string name="replay_tutorial">Replay Tutorial</string>
+    <string name="import_sample_deck">Import Sample Deck</string>
+    <string name="import_sample_deck_confirmation">Sample deck imported — check your Decks screen.</string>
     <string name="tutorial_welcome_title">Welcome to Studiare</string>
     <string name="tutorial_decks_title">Add a Deck</string>
     <string name="tutorial_decks_body">Tap the + button in the bottom right, then choose \"Add Deck.\" Give it a name and you\'re ready to add cards.</string>
@@ -983,6 +1023,7 @@
     <string name="expand">Expand</string>
     <string name="add_note">Add Note</string>
     <string name="remove_note">Remove Note</string>
+    <string name="field_removed_format">%1$s field removed</string>
     <string name="add_front_note">Add Front Note</string>
     <string name="note_hint_plain_text">Type the text for this field</string>
     <string name="note_hint_web_link">Paste a web link</string>
@@ -1171,6 +1212,14 @@
         <item quantity="one">%1$d Card</item>
         <item quantity="other">%1$d Cards</item>
     </plurals>
+    <plurals name="import_sets_summary">
+        <item quantity="one">Includes %1$d set</item>
+        <item quantity="other">Includes %1$d sets</item>
+    </plurals>
+    <plurals name="import_sets_overwrite_summary">
+        <item quantity="one">This will also overwrite %1$d of %2$d set</item>
+        <item quantity="other">This will also overwrite %1$d of %2$d sets</item>
+    </plurals>
     <plurals name="cards_count_lowercase">
         <item quantity="one">%1$d card</item>
         <item quantity="other">%1$d cards</item>
@@ -1178,6 +1227,10 @@
     <plurals name="review_missed_cards_format">
         <item quantity="one">Review %1$d Missed Card</item>
         <item quantity="other">Review %1$d Missed Cards</item>
+    </plurals>
+    <plurals name="delete_template_in_use">
+        <item quantity="one">This template is currently used by %1$d deck: %2$s.</item>
+        <item quantity="other">This template is currently used by %1$d decks: %2$s.</item>
     </plurals>
     <!--
     <string name=""></string>

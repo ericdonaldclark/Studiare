@@ -7,6 +7,14 @@ import java.io.FileOutputStream
 import java.util.UUID
 
 object MediaStorageUtils {
+    /** Shortens an absolute file path to just its last 3 segments (item, parent, grandparent) for
+     * display — e.g. "/home/eric/.claude/plans/foo.md" -> "/.claude/plans/foo.md" — so a long
+     * internal-storage media path never dominates a card tile or field over the actual content. */
+    fun truncatedDisplayPath(path: String): String {
+        val segments = path.split('/').filter { it.isNotEmpty() }
+        return "/" + segments.takeLast(3).joinToString("/")
+    }
+
     fun copyMediaToInternalStorage(context: Context, uri: Uri, prefix: String): String? {
         return try {
             val extension = context.contentResolver.getType(uri)?.split("/")?.lastOrNull() ?: "bin"

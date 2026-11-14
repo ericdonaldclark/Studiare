@@ -17,5 +17,10 @@ data class DuplicateCheckResult(
     val frontNoteTemplates: List<NoteField> = emptyList(),
     val backNoteTemplates: List<NoteField> = emptyList(),
     val defaultPromptSide: CardSide? = null,
-    val sortPinnedCardsFirst: Boolean? = null
+    val sortPinnedCardsFirst: Boolean? = null,
+    val seedNewCardsFromTemplate: Boolean? = null,
+    val activeTemplateSetId: String? = null,
+    // True when `activeTemplateSetId` above is the deck's definitive new value (even if null,
+    // meaning "no template") rather than merely "not specified, keep whatever's already saved."
+    val clearActiveTemplateSetId: Boolean = false
 )

@@ -6,6 +6,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -55,6 +57,7 @@ fun CategoryPickerContent(
     Box(
         modifier = modifier
             .fillMaxSize()
+            .verticalScroll(rememberScrollState())
             .padding(horizontal = 32.dp),
         contentAlignment = Alignment.Center
     ) {
@@ -106,7 +109,7 @@ fun CategoryPickerContent(
             Spacer(Modifier.height(8.dp))
             Text(
                 text = getText(R.string.category_learn_desc),
-                style = MaterialTheme.typography.bodySmall,
+                style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center
             )
@@ -135,7 +138,7 @@ fun CategoryPickerContent(
             Spacer(Modifier.height(8.dp))
             Text(
                 text = getText(R.string.category_practice_desc),
-                style = MaterialTheme.typography.bodySmall,
+                style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center
             )
@@ -164,7 +167,7 @@ fun CategoryPickerContent(
             Spacer(Modifier.height(8.dp))
             Text(
                 text = getText(R.string.category_quiz_desc),
-                style = MaterialTheme.typography.bodySmall,
+                style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center
             )
@@ -193,7 +196,7 @@ fun CategoryPickerContent(
             Spacer(Modifier.height(8.dp))
             Text(
                 text = getText(R.string.category_game_desc),
-                style = MaterialTheme.typography.bodySmall,
+                style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center
             )
@@ -222,7 +225,7 @@ fun CategoryPickerContent(
             Spacer(Modifier.height(8.dp))
             Text(
                 text = getText(R.string.category_smart_desc),
-                style = MaterialTheme.typography.bodySmall,
+                style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center
             )
@@ -347,7 +350,7 @@ fun HdLanguageSelectionDialog(
                 Spacer(Modifier.height(dimensions.spacingMedium))
                 Text(
                     getText(R.string.voice_settings_note),
-                    style = MaterialTheme.typography.bodySmall,
+                    style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }

@@ -1,7 +1,7 @@
 package net.ericclark.studiare.data
 
-data class OverwriteConfirmationData(
-    val decksToOverwrite: List<Deck>,
+data class ImportSelectionData(
     val parsedDecks: List<ParsedDeck>,
+    val conflictingDeckIds: Set<String>,
     val allParsedCards: Map<String, Card>
 )

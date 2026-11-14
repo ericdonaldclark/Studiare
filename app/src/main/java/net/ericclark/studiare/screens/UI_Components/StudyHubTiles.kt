@@ -608,7 +608,7 @@ fun SessionTile(
                                         SessionMode.TYPING_SCORED, SessionMode.TYPING, SessionMode.LIST, SessionMode.ANAGRAM, SessionMode.HANGMAN, SessionMode.CROSSWORD -> if (resolvedPromptSide == CardSide.BACK) card.back else card.front
                                         else -> if (session.isFlipped) card.back else card.front
                                     }
-                                    Text(text = textToShow, textAlign = TextAlign.Center, maxLines = 4, overflow = TextOverflow.Ellipsis, color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.bodySmall)
+                                    Text(text = textToShow, textAlign = TextAlign.Center, maxLines = 4, overflow = TextOverflow.Ellipsis, color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.bodyMedium)
                                 }
                             }
                         }
@@ -826,13 +826,21 @@ fun SessionPresetCard(
         Column(modifier = Modifier.padding(dimensions.paddingMedium)) {
             if (showTitle) {
                 Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    TextWithOverflowTooltip(
-                        text = titleText,
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.weight(1f)
-                    )
+                    // weight(1f) goes on this wrapping Box, not directly on
+                    // TextWithOverflowTooltip's own modifier — putting it there instead made
+                    // the underlying TooltipBox claim the Row's entire width, leaving nothing
+                    // for overflowMenu() (reproduced: it composed every time, per logging, just
+                    // with zero width — confirmed by toggling "Show Title" off in the UI
+                    // Playground, which uses the sibling branch below's plain-Text pattern and
+                    // renders the button fine).
+                    Box(modifier = Modifier.weight(1f)) {
+                        TextWithOverflowTooltip(
+                            text = titleText,
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
                     overflowMenu()
                 }
                 Spacer(Modifier.height(2.dp))

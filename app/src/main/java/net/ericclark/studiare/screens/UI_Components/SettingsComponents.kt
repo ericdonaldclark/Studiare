@@ -129,7 +129,7 @@ fun ColorPickerRow(
         if (description != null) {
             Text(
                 description,
-                style = MaterialTheme.typography.bodySmall,
+                style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
@@ -257,7 +257,7 @@ internal fun SettingsSegmentedSetting(
                 Column(modifier = Modifier.weight(1f).padding(end = dimensions.spacingLarge)) {
                     title()
                     if (description != null) {
-                        Text(description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 4.dp))
+                        Text(description, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 4.dp))
                     }
                 }
                 // ConnectedButtonGroup's own "wrap content" sizing comes out narrower than its labels need,
@@ -270,7 +270,7 @@ internal fun SettingsSegmentedSetting(
                 title()
                 segmented(Modifier.fillMaxWidth())
                 if (description != null) {
-                    Text(description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 8.dp))
+                    Text(description, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 8.dp))
                 }
             }
         }
@@ -437,7 +437,7 @@ internal fun VoiceLanguageRow(
         headlineContent = { Text(languageName, fontWeight = FontWeight.SemiBold) },
         supportingContent = {
             Column {
-                Text(stringResource(R.string.voice_model_desc, languageName, sizeText), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(stringResource(R.string.voice_model_desc, languageName, sizeText), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 if (isDownloading) {
                     Spacer(Modifier.height(dimensions.spacingSmall))
                     LinearProgressIndicator(

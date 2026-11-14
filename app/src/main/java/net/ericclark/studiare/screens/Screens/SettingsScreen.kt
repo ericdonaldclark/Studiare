@@ -103,6 +103,15 @@ internal data class SettingCategoryData(
     val content: @Composable () -> Unit
 )
 
+/** One row (Debug/Info/About/Help) inside the "App Tools & Info" category — metadata only, so
+ * [SettingsScreen]'s own top app bar can show the open sub-category's title/back behavior the
+ * same way it does for a top-level category, without needing its content composable. */
+internal data class AppToolsSubCategory(
+    val id: String,
+    val title: String,
+    val subtitle: String
+)
+
 @SuppressLint("LocalContextGetResourceValueCall")
 @Composable
 fun SettingsScreen(
@@ -217,8 +226,6 @@ fun SettingsScreen(
     var whisperDownloadJob by whisperDownloadJobState
 
     // Dialog States
-    val showDeleteAllDecksDialogState = rememberSaveable { mutableStateOf(false) }
-    var showDeleteAllDecksDialog by showDeleteAllDecksDialogState
     var showCustomThemeDialog by remember { mutableStateOf(false) }
 
     // Dialog States for Language Management
@@ -306,16 +313,6 @@ fun SettingsScreen(
                 viewModel.setCustomThemeColors(p, s, t, b)
                 showCustomThemeDialog = false
             }
-        )
-    }
-
-    if (showDeleteAllDecksDialog) {
-        ConfirmationDialog(
-            title = getText(R.string.delete_all_decks_question),
-            text = getText(R.string.delete_all_decks_confirm),
-            onConfirm = { viewModel.deleteAllDecks(); showDeleteAllDecksDialog = false },
-            onDismiss = { showDeleteAllDecksDialog = false },
-            confirmButtonText = getText(R.string.delete_all)
         )
     }
 
@@ -489,6 +486,25 @@ fun SettingsScreen(
 
     val snackbarHostState = remember { SnackbarHostState() }
 
+    // Hoisted (rather than local to AppToolsAndInfoCategoryContent) so the top app bar below can
+    // show the open sub-category's own title/back behavior, the same way it does for a
+    // top-level category.
+    var openAppToolsSubCategoryId by rememberSaveable { mutableStateOf<String?>(null) }
+    val appToolsSubCategories = listOfNotNull(
+        if (!isDebug) null else AppToolsSubCategory(
+            id = "debug", title = getText(R.string.debug), subtitle = getText(R.string.developer_tools)
+        ),
+        AppToolsSubCategory(
+            id = "info", title = getText(R.string.info), subtitle = getText(R.string.stats_for_nerds)
+        ),
+        AppToolsSubCategory(
+            id = "about", title = getText(R.string.about), subtitle = stringResource(R.string.app_info)
+        ),
+        AppToolsSubCategory(
+            id = "help", title = getText(R.string.help), subtitle = getText(R.string.help_subtitle)
+        )
+    )
+
     // --- Data-Driven Category Definitions ---
     val categories = listOfNotNull(
         SettingCategoryData(
@@ -548,30 +564,31 @@ fun SettingsScreen(
             }
         ),
         SettingCategoryData(
-            id = "delete",
-            title = getText(R.string.delete_all_decks),
-            subtitle = getText(R.string.action_cannot_be_undone),
-            content = { DeleteAllDecksCategoryContent(showDeleteAllDecksDialogState) }
-        ),
-        if (!isDebug) null else SettingCategoryData(
-            id = "troubleshooting",
-            title = getText(R.string.debug),
-            subtitle = getText(R.string.developer_tools),
-            content = { TroubleshootingCategoryContent(viewModel, navController, showFieldMapperState) }
-        ),
-        SettingCategoryData(
-            id = "info",
-            title = getText(R.string.info),
-            subtitle = getText(R.string.stats_for_nerds),
+            id = "app_tools_info",
+            title = getText(R.string.app_tools_and_info),
+            subtitle = getText(R.string.app_tools_and_info_subtitle),
             content = {
-                InfoCategoryContent(tags.size, totalDecks, totalSets, totalCards, collectionCount, activeSessionCount, cardStats, storageUsage)
+                AppToolsAndInfoCategoryContent(
+                    viewModel = viewModel,
+                    navController = navController,
+                    subCategories = appToolsSubCategories,
+                    openSubCategoryId = openAppToolsSubCategoryId,
+                    onOpenSubCategory = { openAppToolsSubCategoryId = it },
+                    showFieldMapperState = showFieldMapperState,
+                    tagCount = tags.size,
+                    totalDecks = totalDecks,
+                    totalSets = totalSets,
+                    totalCards = totalCards,
+                    collectionCount = collectionCount,
+                    activeSessionCount = activeSessionCount,
+                    cardStats = cardStats,
+                    storageUsage = storageUsage,
+                    versionNum = versionNum,
+                    buildDateString = buildDateString,
+                    lastExportTimestamp = lastExportTimestamp,
+                    lastImportTimestamp = lastImportTimestamp
+                )
             }
-        ),
-        SettingCategoryData(
-            id = "about",
-            title = getText(R.string.about),
-            subtitle = stringResource(R.string.app_info),
-            content = { AboutCategoryContent(viewModel, versionNum, buildDateString, lastExportTimestamp, lastImportTimestamp) }
         )
     )
 
@@ -583,7 +600,12 @@ fun SettingsScreen(
     var selectedWideCategoryIndex by rememberSaveable { mutableStateOf(0) }
     val isWideLayout = windowWidthSizeClass >= WindowWidthSizeClass.Expanded
     val openCategory = if (isWideLayout) null else categories.firstOrNull { it.id == openCategoryId }
-    BackHandler(enabled = !isWideLayout && openCategory != null) { openCategoryId = null }
+    val currentCategoryId = if (isWideLayout) categories.getOrNull(selectedWideCategoryIndex)?.id else openCategory?.id
+    val openAppToolsSubCategory = if (currentCategoryId == "app_tools_info") {
+        appToolsSubCategories.firstOrNull { it.id == openAppToolsSubCategoryId }
+    } else null
+    BackHandler(enabled = openAppToolsSubCategory != null) { openAppToolsSubCategoryId = null }
+    BackHandler(enabled = openAppToolsSubCategory == null && !isWideLayout && openCategory != null) { openCategoryId = null }
 
     // --- Main UI Scaffold ---
     Scaffold(
@@ -593,13 +615,20 @@ fun SettingsScreen(
                 viewModel = viewModel,
                 screenId = ShortcutScreen.SETTINGS,
                 title = {
-                    val title = if (isWideLayout) categories.getOrNull(selectedWideCategoryIndex)?.title else openCategory?.title
+                    val title = openAppToolsSubCategory?.title
+                        ?: (if (isWideLayout) categories.getOrNull(selectedWideCategoryIndex)?.title else openCategory?.title)
                     Text(title ?: getText(R.string.settings))
                 },
                 navigationIcon = {
                     TooltipIconButton(
                         description = getText(R.string.back),
-                        onClick = { if (!isWideLayout && openCategory != null) openCategoryId = null else navController.popBackStack() }
+                        onClick = {
+                            when {
+                                openAppToolsSubCategory != null -> openAppToolsSubCategoryId = null
+                                !isWideLayout && openCategory != null -> openCategoryId = null
+                                else -> navController.popBackStack()
+                            }
+                        }
                     ) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = getText(R.string.back))
                     }
@@ -1017,18 +1046,6 @@ private fun AboutCategoryContent(
 
         }
 
-        SettingsSubsection(getText(R.string.help)) {
-            val replayTutorialInteractionSource = remember { MutableInteractionSource() }
-            Button(
-                onClick = { viewModel.requestShowTutorial() },
-                interactionSource = replayTutorialInteractionSource,
-                modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = 56.dp).pressSquish(replayTutorialInteractionSource),
-                shape = RoundedCornerShape(dimensions.cornerRadiusButton)
-            ) {
-                Text(getText(R.string.replay_tutorial))
-            }
-        }
-
         SettingsSubsection("Device") {
             SettingsInfoRow("Model", "${android.os.Build.MANUFACTURER.replaceFirstChar { it.uppercase() }} ${android.os.Build.MODEL}", isAlternate = false)
             SettingsInfoRow("Android", "${android.os.Build.VERSION.RELEASE} (API ${android.os.Build.VERSION.SDK_INT})", isAlternate = true)
@@ -1057,30 +1074,123 @@ private fun AboutCategoryContent(
 }
 
 @Composable
-private fun DeleteAllDecksCategoryContent(showDeleteAllDecksDialogState: MutableState<Boolean>) {
+private fun HelpCategoryContent(viewModel: FlashcardViewModel) {
+    val context = LocalContext.current
     val dimensions = LocalStudiareDimensions.current
-    val windowWidthSizeClass = LocalWindowWidthSizeClass.current
-    val isWideSettingsLayout = windowWidthSizeClass >= WindowWidthSizeClass.Expanded
-    var showDeleteAllDecksDialog by showDeleteAllDecksDialogState
 
     Column {
-        val deleteAllDecksInteractionSource = remember { MutableInteractionSource() }
+        Spacer(Modifier.height(dimensions.paddingSmall))
+
+        val replayTutorialInteractionSource = remember { MutableInteractionSource() }
         Button(
-            onClick = { showDeleteAllDecksDialog = true },
-            interactionSource = deleteAllDecksInteractionSource,
-            modifier = Modifier.align(Alignment.CenterHorizontally).fillMaxWidth(if (isWideSettingsLayout) 0.5f else 1f).defaultMinSize(minHeight = 56.dp).pressSquish(deleteAllDecksInteractionSource),
-            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+            onClick = { viewModel.requestShowTutorial() },
+            interactionSource = replayTutorialInteractionSource,
+            modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = 56.dp).pressSquish(replayTutorialInteractionSource),
             shape = RoundedCornerShape(dimensions.cornerRadiusButton)
         ) {
-            Text(getText(R.string.delete_all_decks))
+            Text(getText(R.string.replay_tutorial))
         }
+
+        Spacer(Modifier.height(dimensions.spacingSmall))
+
+        val importSampleDeckConfirmation = getText(R.string.import_sample_deck_confirmation)
+        val importSampleDeckInteractionSource = remember { MutableInteractionSource() }
+        Button(
+            onClick = {
+                viewModel.importSampleDeck()
+                Toast.makeText(context, importSampleDeckConfirmation, Toast.LENGTH_SHORT).show()
+            },
+            interactionSource = importSampleDeckInteractionSource,
+            modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = 56.dp).pressSquish(importSampleDeckInteractionSource),
+            shape = RoundedCornerShape(dimensions.cornerRadiusButton)
+        ) {
+            Text(getText(R.string.import_sample_deck))
+        }
+    }
+}
+
+/**
+ * Groups the four lower-priority categories (Debug, Info, About, Help) behind one entry in the
+ * main Settings list, instead of each taking its own top-level slot — a second, nested level of
+ * the same list-row-opens-a-page pattern [SettingsScreen] already uses for its top-level
+ * categories. [openSubCategoryId] is local to this composable (not hoisted to [SettingsScreen])
+ * since nothing outside this page ever needs to know which of the four is open.
+ */
+@Composable
+private fun AppToolsAndInfoCategoryContent(
+    viewModel: FlashcardViewModel,
+    navController: NavController,
+    subCategories: List<AppToolsSubCategory>,
+    openSubCategoryId: String?,
+    onOpenSubCategory: (String?) -> Unit,
+    showFieldMapperState: MutableState<Boolean>,
+    tagCount: Int,
+    totalDecks: Int,
+    totalSets: Int,
+    totalCards: Int,
+    collectionCount: Int,
+    activeSessionCount: Int,
+    cardStats: FlashcardViewModel.CardStats,
+    storageUsage: Pair<Long, Long>,
+    versionNum: String,
+    buildDateString: String,
+    lastExportTimestamp: Long,
+    lastImportTimestamp: Long
+) {
+    val dimensions = LocalStudiareDimensions.current
+    val openSubCategory = subCategories.firstOrNull { it.id == openSubCategoryId }
+
+    // Title/back for the open sub-category are handled by SettingsScreen's own top app bar
+    // (same as a top-level category), so this only ever renders either the row list or the
+    // chosen sub-category's bare content — no title/back row of its own.
+    if (openSubCategory == null) {
+        // Not SettingsCategoryRow: its horizontal = dimensions.paddingLarge is meant for the main
+        // category list, which isn't nested inside any other category's own content wrapper. This
+        // list IS that wrapper's content (SettingsScreen already applies horizontal =
+        // dimensions.paddingLarge around whichever category's content is showing), so reusing it
+        // here doubled the left/right inset. AppToolsSubCategoryRow is the same row, just without
+        // its own horizontal padding.
+        Column {
+            subCategories.forEach { sub ->
+                AppToolsSubCategoryRow(
+                    title = sub.title,
+                    subtitle = sub.subtitle,
+                    onClick = { onOpenSubCategory(sub.id) }
+                )
+            }
+        }
+    } else {
+        when (openSubCategory.id) {
+            "debug" -> TroubleshootingCategoryContent(viewModel, navController, showFieldMapperState)
+            "info" -> InfoCategoryContent(tagCount, totalDecks, totalSets, totalCards, collectionCount, activeSessionCount, cardStats, storageUsage)
+            "about" -> AboutCategoryContent(viewModel, versionNum, buildDateString, lastExportTimestamp, lastImportTimestamp)
+            "help" -> HelpCategoryContent(viewModel)
+        }
+    }
+}
+
+/** [SettingsCategoryRow] without its own horizontal padding — see [AppToolsAndInfoCategoryContent]. */
+@Composable
+private fun AppToolsSubCategoryRow(title: String, subtitle: String?, onClick: () -> Unit) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(vertical = 20.dp)
+    ) {
         Text(
-            getText(R.string.action_cannot_be_undone),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.error,
-            modifier = Modifier.fillMaxWidth().padding(top = dimensions.paddingSmall),
-            textAlign = TextAlign.Center
+            text = title,
+            style = MaterialTheme.typography.titleLarge,
+            color = MaterialTheme.colorScheme.primary,
+            fontWeight = FontWeight.Bold
         )
+        if (subtitle != null) {
+            Text(
+                text = subtitle,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
     }
 }
 
@@ -1435,7 +1545,7 @@ private fun AudioVoiceCategoryContent(
                             },
                             supportingContent = {
                                 Column {
-                                    Text(stringResource(size.descriptionResId), style = MaterialTheme.typography.bodySmall)
+                                    Text(stringResource(size.descriptionResId), style = MaterialTheme.typography.bodyMedium)
                                     if (isDownloadingThis) {
                                         Spacer(Modifier.height(dimensions.spacingSmall))
                                         LinearProgressIndicator(
@@ -1875,7 +1985,7 @@ private fun BackupSyncCategoryContent(
                                         }
                                         Text(
                                             text = getText(R.string.sync_automatically_minimized),
-                                            style = MaterialTheme.typography.bodySmall,
+                                            style = MaterialTheme.typography.bodyMedium,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                                             textAlign = TextAlign.Center,
                                             modifier = Modifier.padding(top = 4.dp, bottom = 12.dp)
@@ -2179,7 +2289,7 @@ private fun AutomaticBackupsSection(viewModel: FlashcardViewModel) {
     Column {
         Text(
             getText(R.string.automatic_backups_desc),
-            style = MaterialTheme.typography.bodySmall,
+            style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(vertical = 4.dp)
         )
@@ -2213,12 +2323,12 @@ private fun AutomaticBackupsSection(viewModel: FlashcardViewModel) {
             }
             Text(
                 stringResource(R.string.backup_format_label, formatLabel),
-                style = MaterialTheme.typography.bodySmall,
+                style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Text(
                 if (backupDeckIds == null && backupIncludeMetadata) getText(R.string.backup_content_all) else getText(R.string.backup_content_selected),
-                style = MaterialTheme.typography.bodySmall,
+                style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
@@ -2336,7 +2446,7 @@ private fun AutomaticBackupsSection(viewModel: FlashcardViewModel) {
                                 )
                                 Text(
                                     getText(R.string.drive_disconnect_desc),
-                                    style = MaterialTheme.typography.bodySmall,
+                                    style = MaterialTheme.typography.bodyMedium,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     modifier = Modifier.padding(top = 4.dp, bottom = dimensions.spacingSmall)
                                 )
@@ -2357,7 +2467,7 @@ private fun AutomaticBackupsSection(viewModel: FlashcardViewModel) {
             Spacer(Modifier.height(4.dp))
             Text(
                 getText(R.string.retention_desc),
-                style = MaterialTheme.typography.bodySmall,
+                style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Spacer(Modifier.height(dimensions.spacingSmall))

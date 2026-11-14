@@ -1,5 +1,6 @@
 package net.ericclark.studiare.screens.Screens
 
+import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -21,6 +22,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AccountTree
+import androidx.compose.material.icons.filled.CallMerge
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Edit
@@ -386,7 +388,7 @@ fun SetManagerScreen(
                                             modifier = Modifier.align(Alignment.CenterStart)
                                         )
                                         Text(
-                                            text = "Clone Entire Deck",
+                                            text = "Clone Parent",
                                             style = MaterialTheme.typography.titleMedium,
                                             modifier = Modifier.align(Alignment.Center)
                                         )
@@ -619,9 +621,37 @@ fun SetManagerScreen(
                             label = getText(context, R.string.advanced_selection),
                             onClick = { showAdvancedSelectionDialog = true }
                         )
+                        val clone = net.ericclark.studiare.screens.UI_Components.SelectionAction(
+                            id = "clone",
+                            icon = Icons.Default.ContentCopy,
+                            label = getText(context, R.string.clone),
+                            onClick = {
+                                viewModel.cloneDecksForSelection(selection.selected.toList())
+                                selection.exit()
+                            }
+                        )
+                        val merge = net.ericclark.studiare.screens.UI_Components.SelectionAction(
+                            id = "merge",
+                            icon = Icons.Default.CallMerge,
+                            label = getText(context, R.string.merge),
+                            onClick = {
+                                val ids = selection.selected.toList()
+                                viewModel.mergeDecks(
+                                    selectedIds = ids,
+                                    onMerged = { survivorId ->
+                                        selection.exit()
+                                        navController.navigate("deckEditor?deckId=$survivorId&cameFromMerge=true")
+                                    },
+                                    onError = { message -> Toast.makeText(context, message, Toast.LENGTH_SHORT).show() }
+                                )
+                            }
+                        )
                         if (selection.selected.isEmpty()) {
                             listOf(advancedSelection, selectAll)
                         } else {
+                            val canMerge = selection.selected.size >= 2 &&
+                                allDecksWithCards.filter { it.deck.id in selection.selected }.map { it.deck.parentDeckId }.distinct().size == 1
+                            val cloneMerge = listOfNotNull(clone, merge.takeIf { canMerge })
                             val others = listOf(
                                 net.ericclark.studiare.screens.UI_Components.SelectionAction(
                                     id = "unpin",
@@ -666,7 +696,7 @@ fun SetManagerScreen(
                                     }
                                 )
                             )
-                            listOf(advancedSelection) + others.filter { it.id != "edit" || selection.selected.size == 1 } + selectAll
+                            listOf(advancedSelection) + cloneMerge + others.filter { it.id != "edit" || selection.selected.size == 1 } + selectAll
                         }
                     }
                     Row(
@@ -778,7 +808,7 @@ fun SetManagerScreen(
                                     },
                                     text = {
                                         Text(
-                                            "Clone Entire Deck",
+                                            "Clone Parent",
                                             style = MaterialTheme.typography.labelLarge
                                         )
                                     },
