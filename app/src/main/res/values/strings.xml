@@ -537,6 +537,11 @@
     <string name="review_data_clear_question">Clear Review Data?</string>
     <string name="review_data_clear_message">This will reset reviews, known status, and FSRS scheduling for all cards in this deck. This cannot be undone.</string>
     <string name="review_data_clear">Clear Review Data</string>
+    <string name="clear_data_question">Clear Data?</string>
+    <plurals name="clear_data_message">
+        <item quantity="one">This will reset review, known status, and FSRS scheduling for this card. This cannot be undone.</item>
+        <item quantity="other">This will reset review, known status, and FSRS scheduling for these %1$d cards. This cannot be undone.</item>
+    </plurals>
 
     <!-- Decks screen -->
     <string name="output_file_name">studiare_data_%1$s.%2$s</string>
@@ -1253,7 +1258,7 @@
     <string name="editor_header">Editor</string>
     <string name="always_open_bulk_editor">Select default deck editor</string>
     <string name="always_open_bulk_editor_desc">Open the deck editor in simple editor or bulk editor.</string>
-    <string name="select_global_default_deck_editor">Select global default deck editor</string>
+    <string name="default_deck_editor">Default Deck Editor</string>
     <string name="select_global_default_deck_editor_desc">This will update the same setting globally, not individually per deck.</string>
     <string name="bulk_editor">Bulk Editor</string>
     <string name="simple_editor">Simple Editor</string>

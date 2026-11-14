@@ -1963,9 +1963,16 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
 
     fun clearDeckReviewData(deckId: String) {
         val deck = localDecks.find { it.id == deckId } ?: return
-        val cardIds = deck.cardIds
-        val cardsToReset = localCards.filter { it.id in cardIds }
+        clearReviewDataForCards(deck.cardIds.toSet())
+    }
 
+    /** Same reset [clearDeckReviewData] applies deck-wide, but scoped to just the given cards —
+     * backs the per-card/multi-select "Clear Data" action in both deck editors' card overflow
+     * menus, which should only ever touch the card(s) it was invoked on. */
+    fun clearCardReviewData(cardIds: Set<String>) = clearReviewDataForCards(cardIds)
+
+    private fun clearReviewDataForCards(cardIds: Set<String>) {
+        val cardsToReset = localCards.filter { it.id in cardIds }
         if (cardsToReset.isEmpty()) return
 
         viewModelScope.launch(Dispatchers.IO) {

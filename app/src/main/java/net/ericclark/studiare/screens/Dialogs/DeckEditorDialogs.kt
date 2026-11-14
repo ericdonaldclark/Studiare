@@ -66,7 +66,7 @@ import net.ericclark.studiare.screens.UI_Components.DynamicNoteEditor
 
 /** The action buttons at the bottom of a [CardEditDialog] — either Cancel/Save (editing an existing card) or Cancel/Add More/Add (creating a new one). */
 sealed class CardEditDialogMode {
-    data class Edit(val onSave: () -> Unit, val onDelete: () -> Unit, val onClone: () -> Unit, val onMove: () -> Unit, val onUseTemplate: () -> Unit) : CardEditDialogMode()
+    data class Edit(val onSave: () -> Unit, val onDelete: () -> Unit, val onClone: () -> Unit, val onMove: () -> Unit, val onUseTemplate: () -> Unit, val onClearData: () -> Unit) : CardEditDialogMode()
     data class Create(val onAdd: () -> Unit, val onAddMore: () -> Unit) : CardEditDialogMode()
 }
 
@@ -143,57 +143,70 @@ fun CardEditDialog(
         ) {
             Box {
                 Column(
-                    modifier = Modifier
-                        .padding(dimensions.paddingMedium)
-                        .verticalScroll(rememberScrollState())
+                    modifier = Modifier.padding(dimensions.paddingMedium)
                 ) {
-                    CardEditor(
-                        cardState = cardState,
-                        cardNumber = cardNumber,
-                        totalCards = totalCards,
-                        onDelete = { if (mode is CardEditDialogMode.Edit) mode.onDelete() },
-                        onCloneClick = if (mode is CardEditDialogMode.Edit) mode.onClone else null,
-                        onMoveClick = if (mode is CardEditDialogMode.Edit) mode.onMove else null,
-                        onUseTemplateClick = if (mode is CardEditDialogMode.Edit) mode.onUseTemplate else null,
-                        onKnownClick = { cardState.isKnown.value = !cardState.isKnown.value },
-                        onPinClick = { cardState.isPinned.value = !cardState.isPinned.value },
-                        allTags = allTags,
-                        currentDeckTags = currentDeckTags,
-                        onUpdateTags = onUpdateTags,
-                        onCreateTag = onCreateTag,
-                        onOpenRichTextEditor = { target, initialHtml, title ->
-                            richTextTarget = target
-                            richTextInitialHtml = initialHtml
-                            richTextTitle = title
-                        },
-                        snackbarHostState = dialogSnackbarHostState,
-                        coroutineScope = coroutineScope,
-                        showInfoButton = false,
-                        normalizationType = normalizationType
-                    )
+                    // Scrolls on its own, bounded by the Surface's heightIn above, so the
+                    // Cancel/Save row below stays pinned to the bottom instead of scrolling away
+                    // with long card content.
+                    Column(
+                        modifier = Modifier
+                            .weight(1f, fill = false)
+                            .verticalScroll(rememberScrollState())
+                    ) {
+                        CardEditor(
+                            cardState = cardState,
+                            cardNumber = cardNumber,
+                            totalCards = totalCards,
+                            onDelete = { if (mode is CardEditDialogMode.Edit) mode.onDelete() },
+                            onCloneClick = if (mode is CardEditDialogMode.Edit) mode.onClone else null,
+                            onMoveClick = if (mode is CardEditDialogMode.Edit) mode.onMove else null,
+                            onUseTemplateClick = if (mode is CardEditDialogMode.Edit) mode.onUseTemplate else null,
+                            onClearDataClick = if (mode is CardEditDialogMode.Edit) mode.onClearData else null,
+                            onKnownClick = { cardState.isKnown.value = !cardState.isKnown.value },
+                            onPinClick = { cardState.isPinned.value = !cardState.isPinned.value },
+                            allTags = allTags,
+                            currentDeckTags = currentDeckTags,
+                            onUpdateTags = onUpdateTags,
+                            onCreateTag = onCreateTag,
+                            onOpenRichTextEditor = { target, initialHtml, title ->
+                                richTextTarget = target
+                                richTextInitialHtml = initialHtml
+                                richTextTitle = title
+                            },
+                            snackbarHostState = dialogSnackbarHostState,
+                            coroutineScope = coroutineScope,
+                            showInfoButton = false,
+                            normalizationType = normalizationType
+                        )
+                    }
 
                     Spacer(Modifier.height(dimensions.spacingMedium))
 
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
                         TextButton(onClick = onCancel, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
                             Text(getText(R.string.cancel))
                         }
-                        Spacer(Modifier.width(dimensions.spacingSmall))
-                        when (mode) {
-                            is CardEditDialogMode.Edit -> {
-                                val hasContent = cardState.front.value.isNotBlank() && cardState.back.value.isNotBlank()
-                                Button(onClick = mode.onSave, enabled = hasContent, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
-                                    Text(getText(R.string.save))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            when (mode) {
+                                is CardEditDialogMode.Edit -> {
+                                    val hasContent = cardState.front.value.isNotBlank() && cardState.back.value.isNotBlank()
+                                    Button(onClick = mode.onSave, enabled = hasContent, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
+                                        Text(getText(R.string.save))
+                                    }
                                 }
-                            }
-                            is CardEditDialogMode.Create -> {
-                                val hasContent = cardState.front.value.isNotBlank() && cardState.back.value.isNotBlank()
-                                OutlinedButton(onClick = mode.onAddMore, enabled = hasContent, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
-                                    Text(getText(R.string.add_more))
-                                }
-                                Spacer(Modifier.width(dimensions.spacingSmall))
-                                Button(onClick = mode.onAdd, enabled = hasContent, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
-                                    Text(getText(R.string.add))
+                                is CardEditDialogMode.Create -> {
+                                    val hasContent = cardState.front.value.isNotBlank() && cardState.back.value.isNotBlank()
+                                    OutlinedButton(onClick = mode.onAddMore, enabled = hasContent, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
+                                        Text(getText(R.string.add_more))
+                                    }
+                                    Spacer(Modifier.width(dimensions.spacingSmall))
+                                    Button(onClick = mode.onAdd, enabled = hasContent, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
+                                        Text(getText(R.string.add))
+                                    }
                                 }
                             }
                         }
@@ -224,6 +237,41 @@ fun UnsavedChangesDialog(onDismiss: () -> Unit, onDiscard: () -> Unit, onSave: (
                     TextButton(onClick = onDiscard, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(getText(R.string.discard)) }
                     Spacer(Modifier.width(dimensions.spacingSmall))
                     Button(onClick = onSave, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(getText(R.string.save)) }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Same warning [DeckSettingsDialog]'s "Clear Review Data" confirms, scoped down to the card(s)
+ * this was invoked on — the per-card overflow menu's and multi-select's own "Clear Data" action,
+ * in both deck editors. [cardCount] only changes the message's wording (singular/plural); it
+ * never resets anything outside the specific card id(s) the caller already captured before
+ * showing this.
+ */
+@Composable
+fun ClearCardDataConfirmDialog(cardCount: Int, onDismiss: () -> Unit, onConfirm: () -> Unit) {
+    val dimensions = LocalStudiareDimensions.current
+    AnimatedDialog(onDismissRequest = onDismiss) {
+        Surface(
+            shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+            color = MaterialTheme.colorScheme.surfaceContainer,
+            tonalElevation = 6.dp
+        ) {
+            Column(modifier = Modifier.padding(dimensions.paddingLarge).widthIn(min = 280.dp, max = 560.dp)) {
+                Text(getText(R.string.clear_data_question), style = MaterialTheme.typography.headlineSmall, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+                Spacer(Modifier.height(dimensions.spacingSmall))
+                Text(pluralStringResource(R.plurals.clear_data_message, cardCount, cardCount))
+                Spacer(Modifier.height(dimensions.spacingLarge))
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                    TextButton(onClick = onDismiss, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(getText(R.string.cancel)) }
+                    Spacer(Modifier.width(dimensions.spacingSmall))
+                    Button(
+                        onClick = onConfirm,
+                        shape = RoundedCornerShape(dimensions.cornerRadiusButton),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                    ) { Text(getText(R.string.clear_data)) }
                 }
             }
         }

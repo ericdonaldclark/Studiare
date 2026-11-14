@@ -228,6 +228,8 @@ fun CardEditor(
     onCloneClick: (() -> Unit)? = null,
     onMoveClick: (() -> Unit)? = null,
     onUseTemplateClick: (() -> Unit)? = null,
+    /** Null for the same reason as [onCloneClick] — nothing to clear yet on an unsaved card. */
+    onClearDataClick: (() -> Unit)? = null,
     allTags: List<TagDefinition>,
     currentDeckTags: Set<String>,
     onUpdateTags: (Set<String>) -> Unit,
@@ -304,7 +306,7 @@ fun CardEditor(
                         tint = if (isPinned) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-                if (onCloneClick != null || onMoveClick != null || onUseTemplateClick != null) {
+                if (onCloneClick != null || onMoveClick != null || onUseTemplateClick != null || onClearDataClick != null) {
                     Spacer(Modifier.width(iconSpacing))
                     var showOverflowMenu by remember { mutableStateOf(false) }
                     Box {
@@ -331,6 +333,13 @@ fun CardEditor(
                                     text = { Text(getText(R.string.use_template)) },
                                     leadingIcon = { Icon(Icons.Default.Description, contentDescription = null) },
                                     onClick = { showOverflowMenu = false; onUseTemplateClick() }
+                                )
+                            }
+                            if (onClearDataClick != null) {
+                                DropdownMenuItem(
+                                    text = { Text(getText(R.string.clear_data)) },
+                                    leadingIcon = { Icon(Icons.Default.RestartAlt, contentDescription = null) },
+                                    onClick = { showOverflowMenu = false; onClearDataClick() }
                                 )
                             }
                         }

@@ -61,6 +61,7 @@ import net.ericclark.studiare.components.getText
 import net.ericclark.studiare.data.*
 import net.ericclark.studiare.screens.Dialogs.CardEditDialog
 import net.ericclark.studiare.screens.Dialogs.CardEditDialogMode
+import net.ericclark.studiare.screens.Dialogs.ClearCardDataConfirmDialog
 import net.ericclark.studiare.screens.Dialogs.createStudySessionRoute
 import net.ericclark.studiare.screens.Dialogs.studyRouteFor
 import net.ericclark.studiare.screens.UI_Components.DeckListItem
@@ -147,6 +148,7 @@ fun PinnedScreen(navController: NavController, viewModel: FlashcardViewModel) {
     var editingCard by remember { mutableStateOf<Card?>(null) }
     var showMoveDialogForCard by remember { mutableStateOf<Card?>(null) }
     var showUseTemplateDialogForCard by remember { mutableStateOf<Card?>(null) }
+    var showClearDataConfirmForCard by remember { mutableStateOf<Card?>(null) }
     var showRestartDialog by remember { mutableStateOf<ActiveSession?>(null) }
     var showDeleteSessionDialog by remember { mutableStateOf<ActiveSession?>(null) }
     var showDeleteDeckDialog by remember { mutableStateOf<DeckSummary?>(null) }
@@ -656,10 +658,24 @@ fun PinnedScreen(navController: NavController, viewModel: FlashcardViewModel) {
                 onUseTemplate = {
                     showUseTemplateDialogForCard = card
                     editingCard = null
+                },
+                onClearData = {
+                    showClearDataConfirmForCard = card
                 }
             ),
             onCancel = { editingCard = null },
             normalizationType = deck?.deck?.normalizationType ?: NormalizationType.NONE
+        )
+    }
+
+    showClearDataConfirmForCard?.let { card ->
+        ClearCardDataConfirmDialog(
+            cardCount = 1,
+            onDismiss = { showClearDataConfirmForCard = null },
+            onConfirm = {
+                viewModel.clearCardReviewData(setOf(card.id))
+                showClearDataConfirmForCard = null
+            }
         )
     }
 

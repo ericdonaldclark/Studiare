@@ -29,6 +29,7 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Label
 import androidx.compose.material.icons.filled.PushPin
+import androidx.compose.material.icons.filled.RestartAlt
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SelectAll
 import androidx.compose.material.icons.filled.Settings
@@ -117,6 +118,7 @@ import java.util.UUID
 import net.ericclark.studiare.screens.Dialogs.AdvancedDeckEditorDialog
 import net.ericclark.studiare.screens.Dialogs.CardEditDialog
 import net.ericclark.studiare.screens.Dialogs.CardEditDialogMode
+import net.ericclark.studiare.screens.Dialogs.ClearCardDataConfirmDialog
 import net.ericclark.studiare.screens.UI_Components.DeckInfoDialog
 import net.ericclark.studiare.screens.UI_Components.DeckSettingsDialog
 import net.ericclark.studiare.screens.UI_Components.FlowRow
@@ -185,6 +187,9 @@ fun SimpleEditorScreen(
     var showTagDialogForSelection by remember { mutableStateOf<Set<String>?>(null) }
     var showMoveDialogForSelection by remember { mutableStateOf<Set<String>?>(null) }
     var showUseTemplateDialogForSelection by remember { mutableStateOf<Set<String>?>(null) }
+    // Null hides the confirmation dialog; non-null is the captured id(s) to clear once confirmed —
+    // same capture-before-confirm shape as showMoveDialogForSelection/showUseTemplateDialogForSelection.
+    var showClearDataConfirmForSelection by remember { mutableStateOf<Set<String>?>(null) }
     // Set only when the Template Editor was opened via the Use Template dialog's own "Open
     // Template Editor" button — Cancel/Save there should return to that dialog, not Deck Options.
     var pendingUseTemplateIds by remember { mutableStateOf<Set<String>?>(null) }
@@ -337,6 +342,14 @@ fun SimpleEditorScreen(
         viewModel.cloneCardsForSelection(deck, ids)
     }
 
+    /** Immediate, unstaged DB write — same "Clear Review Data" semantics as Deck Options'
+     * deck-wide version, just scoped to the already-confirmed card id(s). `deckWithCards` is a
+     * reactively observed Room query, so the grid/dialog reflects the reset the moment it lands. */
+    fun clearDataForSelection(ids: Set<String>) {
+        viewModel.clearCardReviewData(ids)
+        showClearDataConfirmForSelection = null
+    }
+
     fun moveCardsForSelectionToExisting(ids: Set<String>, toDeckId: String) {
         val deck = deckWithCards ?: return
         val cardsToMove = deck.cards.filter { it.id in ids }.map { it.toCardDataForSave() }
@@ -468,6 +481,16 @@ fun SimpleEditorScreen(
                                     editingCard = displayedCards.firstOrNull { it.id == targetId }
                                     selection.exit()
                                 }
+                            ),
+                            SelectionAction(
+                                id = "clearData",
+                                icon = Icons.Default.RestartAlt,
+                                label = getText(context, R.string.clear_data),
+                                isDestructive = true,
+                                // Doesn't exit selection — clearing data removes nothing, so
+                                // (unlike clone/move/delete) there's no reason to drop out of
+                                // multi-select; the confirmation dialog floats on top of it.
+                                onClick = { showClearDataConfirmForSelection = selection.selected }
                             ),
                             SelectionAction(
                                 id = "delete",
@@ -639,6 +662,14 @@ fun SimpleEditorScreen(
         }
     }
 
+    showClearDataConfirmForSelection?.let { ids ->
+        ClearCardDataConfirmDialog(
+            cardCount = ids.size,
+            onDismiss = { showClearDataConfirmForSelection = null },
+            onConfirm = { clearDataForSelection(ids) }
+        )
+    }
+
     showMoveDialogForSelection?.let { ids ->
         net.ericclark.studiare.screens.Dialogs.MoveCardsDialog(
             decks = allDecksState,
@@ -694,6 +725,9 @@ fun SimpleEditorScreen(
                 onUseTemplate = {
                     showUseTemplateDialogForSelection = setOf(card.id)
                     editingCard = null
+                },
+                onClearData = {
+                    showClearDataConfirmForSelection = setOf(card.id)
                 }
             ),
             onCancel = { editingCard = null },

@@ -88,6 +88,7 @@ import androidx.compose.ui.platform.LocalContext
 import net.ericclark.studiare.FlashcardViewModel
 import net.ericclark.studiare.LocalWindowWidthSizeClass
 import net.ericclark.studiare.screens.Dialogs.AdvancedDeckEditorDialog
+import net.ericclark.studiare.screens.Dialogs.ClearCardDataConfirmDialog
 import net.ericclark.studiare.screens.Dialogs.DuplicateWarningDialog
 import net.ericclark.studiare.screens.Dialogs.RichTextEditorDialog
 import net.ericclark.studiare.screens.Dialogs.UnsavedChangesDialog
@@ -214,6 +215,8 @@ fun DeckEditorScreen(
     var showSettingsDialog by remember { mutableStateOf(deckWithCards == null || cameFromMerge) }
     var showTagDialogForSelection by remember { mutableStateOf<Set<String>?>(null) }
     var showMoveDialogForSelection by remember { mutableStateOf<Set<String>?>(null) }
+    // Null hides the confirmation dialog; non-null is the captured id(s) to clear once confirmed.
+    var showClearDataConfirmForSelection by remember { mutableStateOf<Set<String>?>(null) }
     var showUseTemplateDialogForSelection by remember { mutableStateOf<Set<String>?>(null) }
     // Set only when the Template Editor was opened via the Use Template dialog's "Open Template
     // Editor" button — Cancel/Save there should return to that dialog (with the same selection),
@@ -566,6 +569,33 @@ fun DeckEditorScreen(
 
     fun setPinnedForSelection(ids: Set<String>, pinned: Boolean) {
         cards.filter { it.id in ids }.forEach { it.isPinned.value = pinned }
+    }
+
+    /** Immediate, unstaged DB write — same "Clear Review Data" semantics as Deck Options'
+     * deck-wide version, just scoped to the already-confirmed card id(s). Also resets the
+     * matching local [CardEditorState]s so this editor's still-open, in-memory cards reflect the
+     * clear right away instead of showing stale values until the screen is reopened — unlike
+     * isKnown/isPinned above, the FSRS fields cleared here are otherwise never written back by
+     * this editor's own Save (see CardEditorState's fsrs* doc comment), so without this they'd
+     * only catch up the next time the deck is loaded fresh from the DB. */
+    fun clearDataForSelection(ids: Set<String>) {
+        viewModel.clearCardReviewData(ids)
+        cards.filter { it.id in ids }.forEach { card ->
+            card.isKnown.value = false
+            card.reviewedCount.value = 0
+            card.gradedAttempts.value = emptyList()
+            card.incorrectAttempts.value = emptyList()
+            card.reviewLogs.value = emptyList()
+            card.absoluteDueDate.value = null
+            card.fsrsStability.value = null
+            card.fsrsDifficulty.value = null
+            card.fsrsElapsedDays.value = null
+            card.fsrsScheduledDays.value = null
+            card.fsrsState.value = FsrsState.NEW
+            card.fsrsLastReview.value = null
+            card.fsrsLapses.value = 0
+        }
+        showClearDataConfirmForSelection = null
     }
 
     fun applyTagsForSelection(ids: Set<String>, addTags: Set<String>, removeTags: Set<String>) {
@@ -997,6 +1027,14 @@ fun DeckEditorScreen(
         )
     }
 
+    showClearDataConfirmForSelection?.let { ids ->
+        ClearCardDataConfirmDialog(
+            cardCount = ids.size,
+            onDismiss = { showClearDataConfirmForSelection = null },
+            onConfirm = { clearDataForSelection(ids) }
+        )
+    }
+
     showMoveDialogForSelection?.let { ids ->
         net.ericclark.studiare.screens.Dialogs.MoveCardsDialog(
             decks = allDecksState,
@@ -1217,6 +1255,16 @@ fun DeckEditorScreen(
                                 }
                             ),
                             SelectionAction(
+                                id = "clearData",
+                                icon = Icons.Default.RestartAlt,
+                                label = getText(context, R.string.clear_data),
+                                isDestructive = true,
+                                // Doesn't exit selection — clearing data removes nothing, so
+                                // (unlike clone/move/delete) there's no reason to drop out of
+                                // multi-select; the confirmation dialog floats on top of it.
+                                onClick = { showClearDataConfirmForSelection = selection.selected }
+                            ),
+                            SelectionAction(
                                 id = "delete",
                                 icon = Icons.Default.Delete,
                                 label = getText(context, R.string.delete),
@@ -1420,6 +1468,7 @@ fun DeckEditorScreen(
                                             onCloneClick = { cloneCardStates(setOf(cardState.id)) },
                                             onMoveClick = if (deckWithCards != null) { { showMoveDialogForSelection = setOf(cardState.id) } } else null,
                                             onUseTemplateClick = { showUseTemplateDialogForSelection = setOf(cardState.id) },
+                                            onClearDataClick = { showClearDataConfirmForSelection = setOf(cardState.id) },
                                             allTags = allTags,
                                             currentDeckTags = currentDeckTags,
                                             onUpdateTags = { newTags ->
@@ -1501,6 +1550,7 @@ fun DeckEditorScreen(
                                         onCloneClick = { cloneCardStates(setOf(cardState.id)) },
                                         onMoveClick = if (deckWithCards != null) { { showMoveDialogForSelection = setOf(cardState.id) } } else null,
                                         onUseTemplateClick = { showUseTemplateDialogForSelection = setOf(cardState.id) },
+                                        onClearDataClick = { showClearDataConfirmForSelection = setOf(cardState.id) },
                                         allTags = allTags,
                                         currentDeckTags = currentDeckTags,
                                         onUpdateTags = { newTags -> cardState.tags.value = newTags.toList() },

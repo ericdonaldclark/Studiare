@@ -5,6 +5,7 @@ import net.ericclark.studiare.StudiareSwitch
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.widthIn
@@ -16,7 +17,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.verticalScroll
@@ -28,6 +28,7 @@ import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.launch
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -56,6 +57,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
+import net.ericclark.studiare.LocalWindowWidthSizeClass
 import net.ericclark.studiare.components.*
 import net.ericclark.studiare.DialogSection
 import java.text.SimpleDateFormat
@@ -95,6 +98,24 @@ fun LanguageDropdown(
 private fun expressiveSwatchColors(): List<Color> {
     val scheme = MaterialTheme.colorScheme
     return listOf(scheme.primary, scheme.inversePrimary, scheme.secondary)
+}
+
+/**
+ * Alternates section-jump buttons between two of the theme's own tonal container roles —
+ * secondary and tertiary — each already paired with a matching "on" content color designed to
+ * read clearly on it. These roles are muted by Material3 design intent (unlike the vivid
+ * primary/error roles), so adjacent buttons land as distinct without any of them reading as a
+ * loud accent that would compete with the error-red "Remove"/"Clear" buttons elsewhere in these
+ * dialogs.
+ */
+@Composable
+private fun alternatingSectionColors(index: Int): Pair<Color, Color> {
+    val scheme = MaterialTheme.colorScheme
+    return if (index % 2 == 0) {
+        scheme.secondaryContainer to scheme.onSecondaryContainer
+    } else {
+        scheme.tertiaryContainer to scheme.onTertiaryContainer
+    }
 }
 
 /**
@@ -383,6 +404,27 @@ fun DeckSettingsDialog(
         sectionOffsets[key] = mainScrollState.value + (coordinates.positionInRoot().y - container.positionInRoot().y)
     }
 
+    // Each section-jump button alternates between two of the theme's muted container roles (see
+    // alternatingSectionColors) so they read as distinct destinations at a glance instead of a
+    // row of identical outlined buttons. On wider screens the same list is pinned in a left-hand
+    // column instead of scrolling away with the rest of the content, matching the
+    // "always-visible nav rail" pattern used elsewhere in the app for wide layouts (e.g.
+    // NavigationDrawerTree).
+    val navItems = remember {
+        listOf(
+            "deckName" to R.string.deck_name,
+            "cardOrder" to R.string.sort_card_order,
+            "promptSide" to R.string.default_prompt_side,
+            "language" to R.string.language_set,
+            "normalization" to R.string.case_normalization,
+            "templateEditor" to R.string.advanced_editor,
+            "defaultEditor" to R.string.default_deck_editor,
+            "reviewData" to R.string.review_data_section_title
+        )
+    }
+    val navColors = navItems.indices.map { alternatingSectionColors(it) }
+    val isWideScreen = LocalWindowWidthSizeClass.current != WindowWidthSizeClass.Compact
+
     // Moved from the old LanguageSelectionDialog
     val availableLanguages = remember {
         Locale.getAvailableLocales()
@@ -428,8 +470,10 @@ fun DeckSettingsDialog(
             // clipped by the screen before the cap is ever reached, which is the same underlying
             // problem as before, just at a different threshold. A fraction of the available space
             // (matching AdvancedDeckEditorDialog/RichTextEditorDialog's own sizing) scales with
-            // the actual screen instead.
-            modifier = Modifier.widthIn(min = 280.dp, max = 560.dp).fillMaxHeight(0.9f),
+            // the actual screen instead. On wide screens the cap is raised so the pinned nav
+            // rail (a third of this width — see the Row below) has room without squeezing the
+            // section content into something cramped.
+            modifier = Modifier.widthIn(min = 280.dp, max = if (isWideScreen) 700.dp else 560.dp).fillMaxHeight(0.9f),
             shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)
         ) {
@@ -441,13 +485,29 @@ fun DeckSettingsDialog(
                 Text(getText(R.string.deck_options), style = MaterialTheme.typography.headlineSmall, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
                 Spacer(Modifier.height(dimensions.spacingSmall))
 
-                // Scrollable content area
-                Column(
-                    modifier = Modifier
-                        .weight(1f, fill = false) // Allows scrolling without forcing full screen height
-                        .verticalScroll(mainScrollState)
-                        .onGloballyPositioned { containerCoordinates[0] = it }
-                ) {
+                // Each section-jump button alternates between two theme container roles
+                // (navColors) so they read as distinct destinations rather than a row of
+                // identical outlined buttons. On a wide screen the whole nav list is pinned in a
+                // left-hand rail instead of scrolling away with the rest of the content; on a
+                // narrow screen it stays inline at the top of the scrollable content, scrolling
+                // horizontally since the section names don't all fit at once.
+                val sectionNavButton: @Composable (Int, Modifier) -> Unit = { index, buttonModifier ->
+                    val (key, labelRes) = navItems[index]
+                    val (bg, onBg) = navColors[index]
+                    Button(
+                        onClick = { jumpTo(key) },
+                        modifier = buttonModifier,
+                        shape = RoundedCornerShape(dimensions.cornerRadiusButton),
+                        colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+                            containerColor = bg,
+                            contentColor = onBg
+                        )
+                    ) {
+                        Text(getText(labelRes), style = MaterialTheme.typography.labelLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                }
+
+                val sectionsContent: @Composable () -> Unit = {
                     if (onRevertMerge != null) {
                         DialogSection(title = getText(R.string.revert_merge_section_title), contentTopSpacing = 0.dp, titleColor = MaterialTheme.colorScheme.primary) {
                             Text(
@@ -469,41 +529,6 @@ fun DeckSettingsDialog(
                             }
                         }
                     }
-
-                    // Section-jump row — scrolls with the rest of the content (not pinned), and
-                    // scrolls horizontally itself since the section names don't all fit at once.
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .horizontalScroll(rememberScrollState()),
-                        horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)
-                    ) {
-                        OutlinedButton(onClick = { jumpTo("deckName") }, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
-                            Text(getText(R.string.deck_name), style = MaterialTheme.typography.labelLarge)
-                        }
-                        OutlinedButton(onClick = { jumpTo("cardOrder") }, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
-                            Text(stringResource(R.string.sort_card_order), style = MaterialTheme.typography.labelLarge)
-                        }
-                        OutlinedButton(onClick = { jumpTo("promptSide") }, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
-                            Text(getText(R.string.default_prompt_side), style = MaterialTheme.typography.labelLarge)
-                        }
-                        OutlinedButton(onClick = { jumpTo("language") }, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
-                            Text(getText(R.string.language_set), style = MaterialTheme.typography.labelLarge)
-                        }
-                        OutlinedButton(onClick = { jumpTo("normalization") }, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
-                            Text(getText(R.string.case_normalization), style = MaterialTheme.typography.labelLarge)
-                        }
-                        OutlinedButton(onClick = { jumpTo("templateEditor") }, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
-                            Text(getText(R.string.advanced_editor), style = MaterialTheme.typography.labelLarge)
-                        }
-                        OutlinedButton(onClick = { jumpTo("defaultEditor") }, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
-                            Text(getText(R.string.select_global_default_deck_editor), style = MaterialTheme.typography.labelLarge)
-                        }
-                        OutlinedButton(onClick = { jumpTo("reviewData") }, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
-                            Text(getText(R.string.review_data_section_title), style = MaterialTheme.typography.labelLarge)
-                        }
-                    }
-                    Spacer(Modifier.height(dimensions.spacingSmall))
 
                     // Deck Name Section
                     Column(modifier = trackSection("deckName")) {
@@ -632,7 +657,7 @@ fun DeckSettingsDialog(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Spacer(Modifier.height(dimensions.spacingSmall))
-                    OutlinedButton(
+                    FilledTonalButton(
                         // Not `onDismiss()` — for a brand-new deck that dismiss also abandons
                         // deck creation (pops the whole screen), which closed both dialogs with
                         // nothing saved. `onOpenTemplateEditor` is responsible for hiding this
@@ -648,14 +673,24 @@ fun DeckSettingsDialog(
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                     ) {
-                        Text(getText(R.string.advanced_editor))
+                        // Text centered on the full button width — not just the remaining space
+                        // next to the icon — so the icon sits at the trailing edge without
+                        // pulling the label off-center.
+                        Box(modifier = Modifier.fillMaxWidth()) {
+                            Text(getText(R.string.advanced_editor), modifier = Modifier.align(Alignment.Center))
+                            Icon(
+                                Icons.AutoMirrored.Filled.OpenInNew,
+                                contentDescription = null,
+                                modifier = Modifier.align(Alignment.CenterEnd)
+                            )
+                        }
                     }
                 }
                 }
 
                 // Default Deck Editor Section (global, not per-deck)
                 Column(modifier = trackSection("defaultEditor")) {
-                DialogSection(title = getText(R.string.select_global_default_deck_editor), contentTopSpacing = 0.dp, titleColor = MaterialTheme.colorScheme.primary) {
+                DialogSection(title = getText(R.string.default_deck_editor), contentTopSpacing = 0.dp, titleColor = MaterialTheme.colorScheme.primary) {
                     Text(
                         getText(R.string.select_global_default_deck_editor_desc),
                         style = MaterialTheme.typography.bodyMedium,
@@ -693,7 +728,54 @@ fun DeckSettingsDialog(
                     }
                 }
                 }
-            }
+                }
+
+                if (isWideScreen) {
+                    Row(modifier = Modifier.weight(1f, fill = false)) {
+                        Column(
+                            modifier = Modifier
+                                .width(200.dp)
+                                .verticalScroll(rememberScrollState()),
+                            verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)
+                        ) {
+                            navItems.indices.forEach { index ->
+                                sectionNavButton(index, Modifier.fillMaxWidth())
+                            }
+                        }
+                        Spacer(Modifier.width(dimensions.spacingMedium))
+                        Column(
+                            modifier = Modifier
+                                .weight(1f)
+                                .verticalScroll(mainScrollState)
+                                .onGloballyPositioned { containerCoordinates[0] = it }
+                        ) {
+                            sectionsContent()
+                        }
+                    }
+                } else {
+                    Column(
+                        modifier = Modifier
+                            .weight(1f, fill = false) // Allows scrolling without forcing full screen height
+                            .verticalScroll(mainScrollState)
+                            .onGloballyPositioned { containerCoordinates[0] = it }
+                    ) {
+                        // Section-jump row — scrolls with the rest of the content (not pinned),
+                        // and scrolls horizontally itself since the section names don't all fit.
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)
+                        ) {
+                            navItems.indices.forEach { index ->
+                                sectionNavButton(index, Modifier)
+                            }
+                        }
+                        Spacer(Modifier.height(dimensions.spacingSmall))
+
+                        sectionsContent()
+                    }
+                }
                 Spacer(Modifier.height(dimensions.spacingMedium))
 
                 // Action Buttons
