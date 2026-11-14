@@ -39,11 +39,6 @@ data class CardEditorState(
     val fsrsLastReview: MutableState<Long?> = mutableStateOf(null),
     val fsrsLapses: MutableState<Int> = mutableStateOf(0),
     val lastReviewDurationMs: MutableState<Long> = mutableStateOf(0),
-    // Template-lock state — unlike the read-only FSRS fields above, these ARE written back (by
-    // the "Use Template" action), driving the editor UI's field-shape lock. See
-    // CardDataForSave.enforcedTemplateSetId/isDeckTemplateEnforced.
-    val enforcedTemplateSetId: MutableState<String?> = mutableStateOf(null),
-    val isDeckTemplateEnforced: MutableState<Boolean> = mutableStateOf(false),
     // Stable per-card so Tab/Shift+Tab can jump straight to this card's front/back field from
     // elsewhere (an adjacent card's last/first field) without relying on default focus-traversal
     // order, which would also stop on every icon button in between.
@@ -82,7 +77,5 @@ fun Card.toEditorState(): CardEditorState = CardEditorState(
     fsrsState = mutableStateOf(fsrsState),
     fsrsLastReview = mutableStateOf(fsrsLastReview),
     fsrsLapses = mutableStateOf(fsrsLapses),
-    lastReviewDurationMs = mutableStateOf(lastReviewDurationMs),
-    enforcedTemplateSetId = mutableStateOf(enforcedTemplateSetId),
-    isDeckTemplateEnforced = mutableStateOf(isDeckTemplateEnforced)
+    lastReviewDurationMs = mutableStateOf(lastReviewDurationMs)
 )

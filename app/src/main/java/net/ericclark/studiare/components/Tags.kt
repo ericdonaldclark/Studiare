@@ -199,7 +199,7 @@ fun TagEditorDialog(
                     Text(
                         text = errorText ?: "",
                         color = MaterialTheme.colorScheme.error,
-                        style = MaterialTheme.typography.bodySmall,
+                        style = MaterialTheme.typography.bodyMedium,
                         modifier = Modifier.padding(start = dimensions.paddingMedium, top = 4.dp)
                     )
                 }
@@ -391,7 +391,7 @@ fun TagCleanupDialog(
                                             )
                                             Text(
                                                 text = card.back,
-                                                style = MaterialTheme.typography.bodySmall,
+                                                style = MaterialTheme.typography.bodyMedium,
                                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                                 maxLines = 1
                                             )
@@ -897,7 +897,7 @@ fun MultiCardTagSelectionDialog(
                 )
                 Text(
                     getText(R.string.tag_multi_select_hint),
-                    style = MaterialTheme.typography.bodySmall,
+                    style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(bottom = dimensions.spacingMedium)
                 )

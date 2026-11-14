@@ -186,9 +186,6 @@ fun DeckListScreen(
     // Map spacing mode to Dimensions
     val dimensions = LocalStudiareDimensions.current
 
-    var decksToExport by remember { mutableStateOf<List<DeckWithCards>?>(null) }
-    var exportIncludeMetadata by remember { mutableStateOf(true) }
-
     // --- Dialogs ---
     if (showSortDialog) {
         val showPinnedFirst by viewModel.showPinnedDecksFirst.collectAsState()
@@ -260,90 +257,12 @@ fun DeckListScreen(
         LoadingOverlay()
     }
 
-    // --- Export Logic ---
-    val jsonExportLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.CreateDocument("application/json"),
-        onResult = { uri: Uri? ->
-            uri?.let {
-                decksToExport?.let { decks ->
-                    val content = viewModel.getDecksAsString(
-                        decks,
-                        "JSON",
-                        exportIncludeMetadata
-                    ) // ADDED PARAM
-                    context.contentResolver.openOutputStream(it)
-                        ?.use { stream -> stream.write(content.toByteArray()) }
-                    viewModel.markDecksExported(decks)
-                }
-            }
-            decksToExport = null
-        }
-    )
-
-    val csvExportLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.CreateDocument("text/csv"),
-        onResult = { uri: Uri? ->
-            uri?.let {
-                decksToExport?.let { decks ->
-                    val content = viewModel.getDecksAsString(
-                        decks,
-                        "CSV",
-                        exportIncludeMetadata
-                    ) // ADDED PARAM
-                    context.contentResolver.openOutputStream(it)
-                        ?.use { stream -> stream.write(content.toByteArray()) }
-                    viewModel.markDecksExported(decks)
-                }
-            }
-            decksToExport = null
-        }
-    )
-
-    // Anki Export Launcher
-    val ankiExportLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.CreateDocument("application/octet-stream"),
-        onResult = { uri: Uri? ->
-            uri?.let {
-                decksToExport?.let { decks ->
-                    viewModel.exportToAnkiPackage(
-                        context,
-                        decks,
-                        it,
-                        exportIncludeMetadata
-                    ) // ADDED PARAM
-                    viewModel.markDecksExported(decks)
-                }
-            }
-            decksToExport = null
-        }
-    )
-
     val allDecksWithCards by viewModel.allDecks.observeAsState(emptyList())
-    if (showExportDialog) {
-        ExportDecksDialog(
-            decks = allDecksWithCards,
-            onDismiss = { showExportDialog = false },
-            onExport = { selectedDecks, format, includeMetadata -> // NEW PARAM
-                showExportDialog = false
-                decksToExport = selectedDecks
-                exportIncludeMetadata = includeMetadata // SAVE STATE
-                val dateFormat = SimpleDateFormat("yyMMddHHmmss", Locale.getDefault())
-                val dtFormat = dateFormat.format(Date())
-
-                // Route to the correct launcher based on selection
-                when (format) {
-                    "CSV" -> {
-                        val fileName = context.getString(R.string.output_file_name, dtFormat, "csv")
-                        csvExportLauncher.launch(fileName)
-                    }
-
-                    "ANKI_APKG" -> ankiExportLauncher.launch("Studiare_Export_${dtFormat}.apkg")
-                    "ANKI_COLPKG" -> ankiExportLauncher.launch("Studiare_Export_${dtFormat}.colpkg")
-                    else -> jsonExportLauncher.launch("flashcard_decks_${dtFormat}.json")
-                }
-            }
-        )
-    }
+    net.ericclark.studiare.screens.Dialogs.ExportDecksLauncher(
+        show = showExportDialog,
+        onDismiss = { showExportDialog = false },
+        viewModel = viewModel
+    )
 
     if (showCollectionDialog) {
         CollectionPickerDialog(

@@ -114,7 +114,7 @@ fun KeyboardShortcutsDialog(
                         Text(getText(R.string.current_screen_only), style = MaterialTheme.typography.bodyMedium)
                         Text(
                             "Only show shortcuts that work here",
-                            style = MaterialTheme.typography.bodySmall,
+                            style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }

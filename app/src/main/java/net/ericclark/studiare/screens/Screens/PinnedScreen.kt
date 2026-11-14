@@ -615,12 +615,6 @@ fun PinnedScreen(navController: NavController, viewModel: FlashcardViewModel) {
         val deck = remember(card.id, allDecks) { allDecks.find { it.cards.any { c -> c.id == card.id } } }
         val editState = remember(card.id) { card.toEditorState() }
         val currentDeckTags = remember(deck?.cards) { deck?.cards?.flatMap { it.tags }?.toSet() ?: emptySet() }
-        val lockedFields = net.ericclark.studiare.data.effectiveLockedFields(
-            enforcedTemplateSetId = card.enforcedTemplateSetId,
-            isDeckTemplateEnforced = card.isDeckTemplateEnforced,
-            templateSets = savedTemplateSets,
-            deck = deck?.deck
-        )
         CardEditDialog(
             cardState = editState,
             cardNumber = 1,
@@ -665,8 +659,7 @@ fun PinnedScreen(navController: NavController, viewModel: FlashcardViewModel) {
                 }
             ),
             onCancel = { editingCard = null },
-            normalizationType = deck?.deck?.normalizationType ?: NormalizationType.NONE,
-            lockedFields = lockedFields
+            normalizationType = deck?.deck?.normalizationType ?: NormalizationType.NONE
         )
     }
 
@@ -691,23 +684,16 @@ fun PinnedScreen(navController: NavController, viewModel: FlashcardViewModel) {
         net.ericclark.studiare.screens.Dialogs.UseTemplateDialog(
             templateSets = savedTemplateSets,
             onDismiss = { showUseTemplateDialogForCard = null },
-            // Use Template's own Apply/Enforce/Remove-Enforcement actions stay on the dialog so
-            // the user can keep trying different templates — only Close/dismiss and Open
-            // Template Editor leave it.
+            // Use Template's own Apply action stays on the dialog so the user can keep trying
+            // different templates — only Close/dismiss and Open Template Editor leave it.
             onApply = { templateSet ->
                 deck?.let { viewModel.applyTemplateToCards(it, setOf(card.id), templateSet) }
-            },
-            onEnforce = { templateSet ->
-                deck?.let { viewModel.enforceTemplateOnCards(it, setOf(card.id), templateSet) }
             },
             onOpenTemplateEditor = {
                 showUseTemplateDialogForCard = null
                 deck?.let { navController.navigate(viewModel.deckEditRoute(it.deck.id)) }
             },
-            onRemoveEnforcement = {
-                deck?.let { viewModel.clearTemplateEnforcement(it, setOf(card.id)) }
-            },
-            activeTemplateSetId = card.enforcedTemplateSetId
+            matchStatusFor = { templateSet -> templateSet.matchStatus(card.frontNotes, card.backNotes) }
         )
     }
 }
@@ -734,9 +720,7 @@ private fun cardDataFromState(state: CardEditorState): CardDataForSave = CardDat
     flag = state.flag.value,
     isPinned = state.isPinned.value,
     createdAt = state.createdAt.value,
-    updatedAt = System.currentTimeMillis(),
-    enforcedTemplateSetId = state.enforcedTemplateSetId.value,
-    isDeckTemplateEnforced = state.isDeckTemplateEnforced.value
+    updatedAt = System.currentTimeMillis()
 )
 
 /**

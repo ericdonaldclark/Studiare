@@ -228,10 +228,6 @@ fun CardEditor(
     onCloneClick: (() -> Unit)? = null,
     onMoveClick: (() -> Unit)? = null,
     onUseTemplateClick: (() -> Unit)? = null,
-    /** Non-null when this card's field shape is locked (per-card enforce, or the deck's own
-     * Enforce policy) — see [net.ericclark.studiare.data.effectiveLockedFields]. Hides the "+ add
-     * field" action and locks each templated [DynamicNoteEditor]'s name/type/remove. */
-    lockedFields: LockedTemplateFields? = null,
     allTags: List<TagDefinition>,
     currentDeckTags: Set<String>,
     onUpdateTags: (Set<String>) -> Unit,
@@ -363,15 +359,13 @@ fun CardEditor(
                         onEditRichTextClick = {
                             onOpenRichTextEditor("front", cardState.frontRichTextInfo.value ?: cardState.front.value, "Edit Front (Rich Text)")
                         },
-                        actionIcon = if (lockedFields == null) {
-                            {
-                                TooltipIconButton(description = getText(R.string.add_front_note), onClick = {
-                                    cardState.frontNotes.value = cardState.frontNotes.value + NoteField(name = "", content = "", type = MediaType.PLAIN_TEXT)
-                                }) {
-                                    Icon(Icons.Default.Add, contentDescription = getText(R.string.add_front_note), tint = MaterialTheme.colorScheme.primary)
-                                }
+                        actionIcon = {
+                            TooltipIconButton(description = getText(R.string.add_front_note), onClick = {
+                                cardState.frontNotes.value = cardState.frontNotes.value + NoteField(name = "", content = "", type = MediaType.PLAIN_TEXT)
+                            }) {
+                                Icon(Icons.Default.Add, contentDescription = getText(R.string.add_front_note), tint = MaterialTheme.colorScheme.primary)
                             }
-                        } else null,
+                        },
                         normalizationType = normalizationType,
                         focusRequester = cardState.frontFocusRequester,
                         nextFocusRequester = cardState.backFocusRequester,
@@ -416,7 +410,6 @@ fun CardEditor(
                                     }
                                 },
                                 normalizationType = normalizationType,
-                                locked = lockedFields?.front?.containsShapeOf(note) == true,
                                 onMoveUp = if (index > 0) {
                                     { cardState.frontNotes.value = cardState.frontNotes.value.toMutableList().apply { add(index - 1, removeAt(index)) } }
                                 } else null,
@@ -451,15 +444,13 @@ fun CardEditor(
                         onEditRichTextClick = {
                             onOpenRichTextEditor("back", cardState.backRichTextInfo.value ?: cardState.back.value, "Edit Back (Rich Text)")
                         },
-                        actionIcon = if (lockedFields == null) {
-                            {
-                                TooltipIconButton(description = getText(R.string.add_back_note), onClick = {
-                                    cardState.backNotes.value = cardState.backNotes.value + NoteField(name = "", content = "", type = MediaType.PLAIN_TEXT)
-                                }) {
-                                    Icon(Icons.Default.Add, contentDescription = getText(R.string.add_back_note), tint = MaterialTheme.colorScheme.primary)
-                                }
+                        actionIcon = {
+                            TooltipIconButton(description = getText(R.string.add_back_note), onClick = {
+                                cardState.backNotes.value = cardState.backNotes.value + NoteField(name = "", content = "", type = MediaType.PLAIN_TEXT)
+                            }) {
+                                Icon(Icons.Default.Add, contentDescription = getText(R.string.add_back_note), tint = MaterialTheme.colorScheme.primary)
                             }
-                        } else null,
+                        },
                         normalizationType = normalizationType,
                         focusRequester = cardState.backFocusRequester,
                         nextFocusRequester = nextCardFocusRequester,
@@ -506,7 +497,6 @@ fun CardEditor(
                                     }
                                 },
                                 normalizationType = normalizationType,
-                                locked = lockedFields?.back?.containsShapeOf(note) == true,
                                 onMoveUp = if (index > 0) {
                                     { cardState.backNotes.value = cardState.backNotes.value.toMutableList().apply { add(index - 1, removeAt(index)) } }
                                 } else {
@@ -771,11 +761,8 @@ fun DynamicNoteEditor(
     onEditRichTextClick: () -> Unit,
     onRemove: () -> Unit,
     normalizationType: NormalizationType = NormalizationType.NONE,
-    /** True when this field belongs to a template the card is enforcing — shape (name/order/
-     * type) is locked, but content stays freely editable. See effectiveLockedFields(). */
-    locked: Boolean = false,
-    /** Null (and hidden, like [onRemove]) at the first/last position, or whenever [locked] —
-     * mirrors [net.ericclark.studiare.screens.Dialogs.TemplateRow]'s own up/down buttons. */
+    /** Null (and hidden, like [onRemove]) at the first/last position — mirrors
+     * [net.ericclark.studiare.screens.Dialogs.TemplateRow]'s own up/down buttons. */
     onMoveUp: (() -> Unit)? = null,
     onMoveDown: (() -> Unit)? = null
 ) {
@@ -805,9 +792,6 @@ fun DynamicNoteEditor(
     )
 
     val typeDropdown = @Composable {
-        if (locked) {
-            Text(note.type.toString(), modifier = Modifier.padding(horizontal = dimensions.paddingSmall), color = MaterialTheme.colorScheme.onSurfaceVariant)
-        } else {
         Box {
             TextButton(onClick = { showTypeDropdown = true }, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
                 Text(note.type.toString())
@@ -838,7 +822,6 @@ fun DynamicNoteEditor(
                 }
             }
         }
-        }
     }
 
     // Standardized M3 Expressive Field Colors
@@ -866,10 +849,10 @@ fun DynamicNoteEditor(
         bottomEnd = dimensions.cornerRadiusMedium
     )
 
-    // Reorderable whenever this field isn't template-locked and has a neighbor to swap with in
-    // at least one direction — occupies the same left-edge gutter the plain grouping dot used to
-    // sit in, instead of adding new buttons elsewhere on the card.
-    val reorderable = !locked && (onMoveUp != null || onMoveDown != null)
+    // Reorderable whenever this field has a neighbor to swap with in at least one direction —
+    // occupies the same left-edge gutter the plain grouping dot used to sit in, instead of adding
+    // new buttons elsewhere on the card.
+    val reorderable = onMoveUp != null || onMoveDown != null
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -928,7 +911,6 @@ fun DynamicNoteEditor(
             TextField(
                 value = note.name,
                 onValueChange = { onNoteChange(note.copy(name = it)) },
-                readOnly = locked,
                 placeholder = { Text(stringResource(R.string.field_number_placeholder_format, noteIndex + 1)) },
                 modifier = Modifier.fillMaxWidth(),
                 shape = topShape,
@@ -1054,18 +1036,11 @@ fun DynamicNoteEditor(
             }
         }
 
-        if (!locked) {
-            TooltipIconButton(description = getText(R.string.remove_note),
-                onClick = onRemove,
-                modifier = Modifier.padding(start = dimensions.spacingSmall, top = 8.dp)
-            ) {
-                Icon(Icons.Default.Close, contentDescription = getText(R.string.remove_note), tint = MaterialTheme.colorScheme.error)
-            }
-        } else {
-            // Reserves the same footprint the Remove button occupies on an unlocked field, so a
-            // locked field's content doesn't visibly shift/widen relative to its siblings just
-            // because there's nothing clickable on the right anymore.
-            Spacer(modifier = Modifier.padding(start = dimensions.spacingSmall, top = 8.dp).size(48.dp))
+        TooltipIconButton(description = getText(R.string.remove_note),
+            onClick = onRemove,
+            modifier = Modifier.padding(start = dimensions.spacingSmall, top = 8.dp)
+        ) {
+            Icon(Icons.Default.Close, contentDescription = getText(R.string.remove_note), tint = MaterialTheme.colorScheme.error)
         }
     }
 }

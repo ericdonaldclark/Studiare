@@ -106,9 +106,9 @@ import net.ericclark.studiare.data.DeckSortMode
 import net.ericclark.studiare.data.DeckWithCards
 import net.ericclark.studiare.data.DifficultySetting
 import net.ericclark.studiare.data.NoteField
+import net.ericclark.studiare.data.matchStatus
 import net.ericclark.studiare.data.NormalizationType
 import net.ericclark.studiare.data.TagDefinition
-import net.ericclark.studiare.data.TemplateScope
 import net.ericclark.studiare.data.asString
 import net.ericclark.studiare.data.toCardDataForSave
 import net.ericclark.studiare.data.toEditorState
@@ -190,6 +190,7 @@ fun SimpleEditorScreen(
     var pendingUseTemplateIds by remember { mutableStateOf<Set<String>?>(null) }
     var createCardState by remember { mutableStateOf<CardEditorState?>(null) }
     var showTemplateEditor by remember { mutableStateOf(false) }
+    var showExportDialog by remember { mutableStateOf(false) }
     var showFilterOverlay by remember { mutableStateOf(false) }
     var showDeckInfo by remember { mutableStateOf(false) }
     var showDeckOptions by remember { mutableStateOf(false) }
@@ -237,11 +238,9 @@ fun SimpleEditorScreen(
         }
     }
 
-    // A brand-new card is always "new" for TemplateScope's purposes, so both NEW_CARDS and
-    // ALL_CARDS scope seed it the same way here — only MANUAL mode skips the auto-seed.
     fun blankEditorState(): CardEditorState {
         val deck = deckWithCards?.deck
-        val shouldSeed = deck?.seedNewCardsFromTemplate == true || deck?.enforceTemplate == true
+        val shouldSeed = deck?.seedNewCardsFromTemplate == true
         return CardEditorState(
             id = UUID.randomUUID().toString(),
             front = mutableStateOf(""), frontRichTextInfo = mutableStateOf(null), isFrontRichText = mutableStateOf(false),
@@ -254,8 +253,7 @@ fun SimpleEditorScreen(
             absoluteDueDate = mutableStateOf(null), tags = mutableStateOf(emptyList()),
             isSuspended = mutableStateOf(false), flag = mutableStateOf(CardFlag.NONE),
             isPinned = mutableStateOf(false),
-            createdAt = mutableLongStateOf(System.currentTimeMillis()), updatedAt = mutableStateOf(System.currentTimeMillis()),
-            isDeckTemplateEnforced = mutableStateOf(deck?.enforceTemplate == true)
+            createdAt = mutableLongStateOf(System.currentTimeMillis()), updatedAt = mutableStateOf(System.currentTimeMillis())
         )
     }
 
@@ -279,9 +277,7 @@ fun SimpleEditorScreen(
         flag = state.flag.value,
         isPinned = state.isPinned.value,
         createdAt = state.createdAt.value,
-        updatedAt = System.currentTimeMillis(),
-        enforcedTemplateSetId = state.enforcedTemplateSetId.value,
-        isDeckTemplateEnforced = state.isDeckTemplateEnforced.value
+        updatedAt = System.currentTimeMillis()
     )
 
     fun goToBulkEditor() {
@@ -360,16 +356,6 @@ fun SimpleEditorScreen(
     fun applyTemplateForSelection(ids: Set<String>, templateSet: net.ericclark.studiare.data.TemplateSet) {
         val deck = deckWithCards ?: return
         viewModel.applyTemplateToCards(deck, ids, templateSet)
-    }
-
-    fun enforceTemplateForSelection(ids: Set<String>, templateSet: net.ericclark.studiare.data.TemplateSet) {
-        val deck = deckWithCards ?: return
-        viewModel.enforceTemplateOnCards(deck, ids, templateSet)
-    }
-
-    fun clearTemplateEnforcementForSelection(ids: Set<String>) {
-        val deck = deckWithCards ?: return
-        viewModel.clearTemplateEnforcement(deck, ids)
     }
 
     Scaffold(
@@ -667,14 +653,15 @@ fun SimpleEditorScreen(
             templateSets = savedTemplateSets,
             onDismiss = { showUseTemplateDialogForSelection = null },
             onApply = { templateSet -> applyTemplateForSelection(ids, templateSet) },
-            onEnforce = { templateSet -> enforceTemplateForSelection(ids, templateSet) },
             onOpenTemplateEditor = {
                 pendingUseTemplateIds = ids
                 showUseTemplateDialogForSelection = null
                 showTemplateEditor = true
             },
-            onRemoveEnforcement = { clearTemplateEnforcementForSelection(ids) },
-            activeTemplateSetId = ids.singleOrNull()?.let { singleId -> deckWithCards?.cards?.find { it.id == singleId }?.enforcedTemplateSetId }
+            matchStatusFor = { templateSet ->
+                val single = ids.singleOrNull()?.let { singleId -> deckWithCards?.cards?.find { it.id == singleId } }
+                if (single != null) templateSet.matchStatus(single.frontNotes, single.backNotes) else net.ericclark.studiare.data.TemplateMatchStatus.NOT_MATCHING
+            }
         )
     }
 
@@ -682,12 +669,6 @@ fun SimpleEditorScreen(
         val editState = remember(card.id) { card.toEditorState() }
         val totalCards = deckWithCards?.cards?.size ?: 1
         val cardNumber = ((deckWithCards?.cards?.indexOfFirst { it.id == card.id } ?: 0) + 1).coerceAtLeast(1)
-        val lockedFields = net.ericclark.studiare.data.effectiveLockedFields(
-            enforcedTemplateSetId = card.enforcedTemplateSetId,
-            isDeckTemplateEnforced = card.isDeckTemplateEnforced,
-            templateSets = savedTemplateSets,
-            deck = deckWithCards?.deck
-        )
         CardEditDialog(
             cardState = editState,
             cardNumber = cardNumber,
@@ -716,8 +697,7 @@ fun SimpleEditorScreen(
                 }
             ),
             onCancel = { editingCard = null },
-            normalizationType = deckWithCards?.deck?.normalizationType ?: NormalizationType.NONE,
-            lockedFields = lockedFields
+            normalizationType = deckWithCards?.deck?.normalizationType ?: NormalizationType.NONE
         )
     }
 
@@ -765,8 +745,8 @@ fun SimpleEditorScreen(
                     showDeckOptions = true
                 }
             },
-            onSave = { newFront, newBack, enforceTemplate, templateScope, templateName, applyToAll ->
-                viewModel.saveNoteTemplates(deckWithCards, templateName, newFront, newBack, enforceTemplate, templateScope, applyToAll)
+            onSave = { newFront, newBack, templateId, _, applyToAll ->
+                viewModel.saveNoteTemplates(deckWithCards, templateId, newFront, newBack, applyToAll)
                 showTemplateEditor = false
                 val returnIds = pendingUseTemplateIds
                 if (returnIds != null) {
@@ -776,14 +756,23 @@ fun SimpleEditorScreen(
                     showDeckOptions = true
                 }
             },
-            initialEnforceTemplate = deckWithCards.deck.enforceTemplate,
-            initialTemplateScope = deckWithCards.deck.templateScope,
             initialTemplateName = savedTemplateSets.find { it.id == deckWithCards.deck.activeTemplateSetId }?.name ?: "",
+            initialEditingTemplateId = deckWithCards.deck.activeTemplateSetId,
             savedTemplateSets = savedTemplateSets,
-            onSaveAsTemplate = { name, front, back -> viewModel.saveAsTemplateSet(name, front, back) },
-            onDeleteTemplateSet = { templateSet -> viewModel.deleteTemplateSet(templateSet) }
+            onPersistTemplate = { id, name, front, back -> viewModel.upsertDeckTemplateSet(id, name, front, back) },
+            onDeleteTemplateSet = { templateSet -> viewModel.deleteTemplateSet(templateSet) },
+            decksUsingTemplate = { templateId -> allDecksState.filter { it.deck.activeTemplateSetId == templateId }.map { it.deck.name } },
+            onOpenExportDialog = { showExportDialog = true },
+            onRemoveTemplate = { viewModel.removeDeckTemplate(deckWithCards) },
+            hasExistingCards = deckWithCards.cards.isNotEmpty()
         )
     }
+
+    net.ericclark.studiare.screens.Dialogs.ExportDecksLauncher(
+        show = showExportDialog,
+        onDismiss = { showExportDialog = false },
+        viewModel = viewModel
+    )
 
     FloatingFilterOverlay(
         visible = showFilterOverlay,
@@ -810,7 +799,13 @@ fun SimpleEditorScreen(
                 viewModel.updateDeckOptions(deckWithCards, newName, newNorm, newSort, newPinnedFirst, newPromptSide, newFrontLang, newBackLang)
                 showDeckOptions = false
             },
-            onOpenTemplateEditor = { showTemplateEditor = true },
+            onOpenTemplateEditor = { _, _, _, _, _, _, _ ->
+                // Nothing to carry over here — this dialog always reflects the deck's actually
+                // persisted name/options (it has no separate in-progress "creating a new deck"
+                // draft of its own), so reopening it already shows the right values either way.
+                showDeckOptions = false
+                showTemplateEditor = true
+            },
             onClearReviewData = {
                 viewModel.clearDeckReviewData(deckWithCards.deck.id)
                 showDeckOptions = false

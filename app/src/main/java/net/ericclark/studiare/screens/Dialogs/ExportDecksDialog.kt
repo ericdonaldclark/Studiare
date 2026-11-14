@@ -1,5 +1,8 @@
 package net.ericclark.studiare.screens.Dialogs
 
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.expandVertically
@@ -25,6 +28,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.livedata.observeAsState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -38,11 +42,15 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import net.ericclark.studiare.AnimatedDialog
 import net.ericclark.studiare.R
+import net.ericclark.studiare.FlashcardViewModel
 import net.ericclark.studiare.components.getText
 import net.ericclark.studiare.data.naturalOrderComparator
 import net.ericclark.studiare.screens.UI_Components.TypedChipRow
 import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
 import net.ericclark.studiare.ui.theme.pressSquish
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 
 /**
@@ -332,6 +340,79 @@ fun ExportDecksDialog(
             }
         }
     }
+}
+
+/**
+ * Hosts [ExportDecksDialog] plus the three file-creation launchers (JSON/CSV/Anki) its own
+ * `onExport` routes to, and the bookkeeping those need (`decksToExport`, `exportIncludeMetadata`,
+ * both scoped privately to this composable). Shows the dialog whenever [show] is true; call sites
+ * just need their own `var showExportDialog by remember { mutableStateOf(false) }` plus this one
+ * composable, instead of duplicating this whole bundle per screen (`DecksScreen.kt` originally had
+ * the only copy).
+ */
+@Composable
+fun ExportDecksLauncher(show: Boolean, onDismiss: () -> Unit, viewModel: FlashcardViewModel) {
+    if (!show) return
+    val context = androidx.compose.ui.platform.LocalContext.current
+    var decksToExport by remember { mutableStateOf<List<net.ericclark.studiare.data.DeckWithCards>?>(null) }
+    var exportIncludeMetadata by remember { mutableStateOf(true) }
+
+    val jsonExportLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("application/json"),
+        onResult = { uri: Uri? ->
+            uri?.let {
+                decksToExport?.let { decks ->
+                    val content = viewModel.getDecksAsString(decks, "JSON", exportIncludeMetadata)
+                    context.contentResolver.openOutputStream(it)?.use { stream -> stream.write(content.toByteArray()) }
+                    viewModel.markDecksExported(decks)
+                }
+            }
+            decksToExport = null
+        }
+    )
+    val csvExportLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("text/csv"),
+        onResult = { uri: Uri? ->
+            uri?.let {
+                decksToExport?.let { decks ->
+                    val content = viewModel.getDecksAsString(decks, "CSV", exportIncludeMetadata)
+                    context.contentResolver.openOutputStream(it)?.use { stream -> stream.write(content.toByteArray()) }
+                    viewModel.markDecksExported(decks)
+                }
+            }
+            decksToExport = null
+        }
+    )
+    val ankiExportLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("application/octet-stream"),
+        onResult = { uri: Uri? ->
+            uri?.let {
+                decksToExport?.let { decks ->
+                    viewModel.exportToAnkiPackage(context, decks, it, exportIncludeMetadata)
+                    viewModel.markDecksExported(decks)
+                }
+            }
+            decksToExport = null
+        }
+    )
+
+    val allDecksWithCards by viewModel.allDecks.observeAsState(emptyList())
+    ExportDecksDialog(
+        decks = allDecksWithCards,
+        onDismiss = onDismiss,
+        onExport = { selectedDecks, format, includeMetadata ->
+            onDismiss()
+            decksToExport = selectedDecks
+            exportIncludeMetadata = includeMetadata
+            val dtFormat = SimpleDateFormat("yyMMddHHmmss", Locale.getDefault()).format(Date())
+            when (format) {
+                "CSV" -> csvExportLauncher.launch(context.getString(R.string.output_file_name, dtFormat, "csv"))
+                "ANKI_APKG" -> ankiExportLauncher.launch("Studiare_Export_${dtFormat}.apkg")
+                "ANKI_COLPKG" -> ankiExportLauncher.launch("Studiare_Export_${dtFormat}.colpkg")
+                else -> jsonExportLauncher.launch("flashcard_decks_${dtFormat}.json")
+            }
+        }
+    )
 }
 
 /**

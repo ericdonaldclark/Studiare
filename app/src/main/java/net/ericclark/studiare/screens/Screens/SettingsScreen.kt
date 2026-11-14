@@ -1545,7 +1545,7 @@ private fun AudioVoiceCategoryContent(
                             },
                             supportingContent = {
                                 Column {
-                                    Text(stringResource(size.descriptionResId), style = MaterialTheme.typography.bodySmall)
+                                    Text(stringResource(size.descriptionResId), style = MaterialTheme.typography.bodyMedium)
                                     if (isDownloadingThis) {
                                         Spacer(Modifier.height(dimensions.spacingSmall))
                                         LinearProgressIndicator(
@@ -1985,7 +1985,7 @@ private fun BackupSyncCategoryContent(
                                         }
                                         Text(
                                             text = getText(R.string.sync_automatically_minimized),
-                                            style = MaterialTheme.typography.bodySmall,
+                                            style = MaterialTheme.typography.bodyMedium,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                                             textAlign = TextAlign.Center,
                                             modifier = Modifier.padding(top = 4.dp, bottom = 12.dp)
@@ -2289,7 +2289,7 @@ private fun AutomaticBackupsSection(viewModel: FlashcardViewModel) {
     Column {
         Text(
             getText(R.string.automatic_backups_desc),
-            style = MaterialTheme.typography.bodySmall,
+            style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(vertical = 4.dp)
         )
@@ -2323,12 +2323,12 @@ private fun AutomaticBackupsSection(viewModel: FlashcardViewModel) {
             }
             Text(
                 stringResource(R.string.backup_format_label, formatLabel),
-                style = MaterialTheme.typography.bodySmall,
+                style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Text(
                 if (backupDeckIds == null && backupIncludeMetadata) getText(R.string.backup_content_all) else getText(R.string.backup_content_selected),
-                style = MaterialTheme.typography.bodySmall,
+                style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
@@ -2446,7 +2446,7 @@ private fun AutomaticBackupsSection(viewModel: FlashcardViewModel) {
                                 )
                                 Text(
                                     getText(R.string.drive_disconnect_desc),
-                                    style = MaterialTheme.typography.bodySmall,
+                                    style = MaterialTheme.typography.bodyMedium,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     modifier = Modifier.padding(top = 4.dp, bottom = dimensions.spacingSmall)
                                 )
@@ -2467,7 +2467,7 @@ private fun AutomaticBackupsSection(viewModel: FlashcardViewModel) {
             Spacer(Modifier.height(4.dp))
             Text(
                 getText(R.string.retention_desc),
-                style = MaterialTheme.typography.bodySmall,
+                style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Spacer(Modifier.height(dimensions.spacingSmall))

@@ -96,7 +96,7 @@
     <string name="add_missing_fields_desc">Add missing fields to existing cards</string>
     <string name="save_templates">Save Templates</string>
     <string name="start_from_template">Start from Template</string>
-    <string name="save_as_template">Save as Template</string>
+    <string name="save_as_template">Save as</string>
     <string name="save_as_template_desc">Save this field layout so you can reuse it to start other decks, including this one, later.</string>
     <string name="no_saved_templates">No saved templates</string>
     <string name="default_template_name">Default</string>
@@ -563,16 +563,17 @@
     <string name="template_mode_enforce">Enforce</string>
     <string name="template_scope_new_cards">New cards only</string>
     <string name="template_scope_all_cards">All cards</string>
-    <string name="template_mode_section_title">Enforce Template</string>
-    <string name="template_mode_section_desc">Lock cards to this field shape (name/order/type) — content stays editable</string>
     <string name="apply_to_new">Apply to New</string>
     <string name="apply_to_all">Apply to All</string>
+    <string name="enforce_backup_advisory">Applying changes here can affect your existing cards. Consider backing up your decks first.</string>
     <string name="use_template">Use Template</string>
     <string name="use_template_dialog_title">Use Template</string>
-    <string name="use_template_dialog_subtitle">Apply or enforce a saved template</string>
-    <string name="enforce">Enforce</string>
+    <string name="use_template_dialog_subtitle">Apply a saved template</string>
     <string name="applied">Applied</string>
-    <string name="enforced">Enforced</string>
+    <string name="template_match_matching">Matching</string>
+    <string name="template_match_same_fields">Same Fields</string>
+    <string name="template_match_extra_fields">Extra Fields</string>
+    <string name="template_match_not_matching">Not Matching</string>
     <string name="open_template_editor">Open Template Editor</string>
     <string name="export_decks">All Decks</string>
     <string name="no_decks_yet">No decks yet.</string>
@@ -580,6 +581,9 @@
     <string name="delete_deck_question">Delete Deck?</string>
     <string name="delete_deck_confirm">Are you sure you want to delete \"%1$s\"? This cannot be undone.</string>
     <string name="delete_decks_confirm_format">Are you sure you want to delete these %1$d items? This cannot be undone.</string>
+    <string name="delete_template_question">Delete Template?</string>
+    <string name="delete_template_confirm">Are you sure you want to delete \"%1$s\"? This cannot be undone.</string>
+    <string name="delete_template_not_in_use">This template isn\'t currently used by any deck.</string>
     <string name="delete">Delete</string>
     <string name="edit">Edit</string>
     <string name="manage_sets">Manage Sets</string>
@@ -1223,6 +1227,10 @@
     <plurals name="review_missed_cards_format">
         <item quantity="one">Review %1$d Missed Card</item>
         <item quantity="other">Review %1$d Missed Cards</item>
+    </plurals>
+    <plurals name="delete_template_in_use">
+        <item quantity="one">This template is currently used by %1$d deck: %2$s.</item>
+        <item quantity="other">This template is currently used by %1$d decks: %2$s.</item>
     </plurals>
     <!--
     <string name=""></string>

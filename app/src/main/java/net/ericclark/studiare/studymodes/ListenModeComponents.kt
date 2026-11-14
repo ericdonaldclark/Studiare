@@ -479,7 +479,7 @@ fun WhisperFirstUsePrompt(viewModel: FlashcardViewModel, onDismiss: () -> Unit) 
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                             Spacer(Modifier.height(2.dp))
-                            Text(stringResource(size.descriptionResId), style = MaterialTheme.typography.bodySmall)
+                            Text(stringResource(size.descriptionResId), style = MaterialTheme.typography.bodyMedium)
                             if (isDownloadingThis) {
                                 Spacer(Modifier.height(dimensions.spacingSmall))
                                 LinearProgressIndicator(
@@ -493,7 +493,7 @@ fun WhisperFirstUsePrompt(viewModel: FlashcardViewModel, onDismiss: () -> Unit) 
                 Spacer(Modifier.height(dimensions.spacingMedium))
                 Text(
                     getText(R.string.speech_settings_note),
-                    style = MaterialTheme.typography.bodySmall,
+                    style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }

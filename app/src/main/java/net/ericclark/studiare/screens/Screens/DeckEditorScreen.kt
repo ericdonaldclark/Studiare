@@ -165,9 +165,8 @@ fun DeckEditorScreen(
     var frontNoteTemplates by remember(deckWithCards?.deck?.id) { mutableStateOf(deckWithCards?.deck?.frontNoteTemplates ?: emptyList()) }
     var backNoteTemplates by remember(deckWithCards?.deck?.id) { mutableStateOf(deckWithCards?.deck?.backNoteTemplates ?: emptyList()) }
     var seedNewCardsFromTemplate by remember(deckWithCards?.deck?.id) { mutableStateOf(deckWithCards?.deck?.seedNewCardsFromTemplate ?: false) }
-    var enforceTemplate by remember(deckWithCards?.deck?.id) { mutableStateOf(deckWithCards?.deck?.enforceTemplate ?: false) }
-    var templateScope by remember(deckWithCards?.deck?.id) { mutableStateOf(deckWithCards?.deck?.templateScope ?: TemplateScope.NEW_CARDS) }
     var activeTemplateSetId by remember(deckWithCards?.deck?.id) { mutableStateOf(deckWithCards?.deck?.activeTemplateSetId) }
+    var showExportDialog by remember { mutableStateOf(false) }
     var showAdvancedEditor by remember { mutableStateOf(false) }
 
     // Linkage State
@@ -241,9 +240,6 @@ fun DeckEditorScreen(
     // Builds a brand-new empty card. The editor always keeps exactly one of these at the end of
     // `cards` (see the trailing-blank-card effect below), so it behaves like an endless growing
     // form instead of needing an explicit "add card" action.
-    // A brand-new card is always "new" for TemplateScope's purposes — scope only decides whether
-    // Enforce retroactively reaches existing cards, so a fresh card seeds/locks off these two
-    // deck-level flags directly, regardless of scope.
     fun blankCardState(): CardEditorState = CardEditorState(
         id = UUID.randomUUID().toString(),
         front = mutableStateOf(""),
@@ -252,8 +248,8 @@ fun DeckEditorScreen(
         back = mutableStateOf(""),
         backRichTextInfo = mutableStateOf(null),
         isBackRichText = mutableStateOf(false),
-        frontNotes = mutableStateOf(if (seedNewCardsFromTemplate || enforceTemplate) frontNoteTemplates else emptyList()),
-        backNotes = mutableStateOf(if (seedNewCardsFromTemplate || enforceTemplate) backNoteTemplates else emptyList()),
+        frontNotes = mutableStateOf(if (seedNewCardsFromTemplate) frontNoteTemplates else emptyList()),
+        backNotes = mutableStateOf(if (seedNewCardsFromTemplate) backNoteTemplates else emptyList()),
         difficulty = mutableStateOf(DifficultySetting.FIVE),
         isKnown = mutableStateOf(false),
         reviewedCount = mutableStateOf(0),
@@ -266,8 +262,7 @@ fun DeckEditorScreen(
         flag = mutableStateOf(CardFlag.NONE),
         isPinned = mutableStateOf(false),
         createdAt = mutableLongStateOf(System.currentTimeMillis()),
-        updatedAt = mutableStateOf(System.currentTimeMillis()),
-        isDeckTemplateEnforced = mutableStateOf(enforceTemplate)
+        updatedAt = mutableStateOf(System.currentTimeMillis())
     )
 
     // State for the list of cards in the editor
@@ -303,9 +298,7 @@ fun DeckEditorScreen(
                 fsrsState = mutableStateOf(it.fsrsState),
                 fsrsLastReview = mutableStateOf(it.fsrsLastReview),
                 fsrsLapses = mutableStateOf(it.fsrsLapses),
-                lastReviewDurationMs = mutableStateOf(it.lastReviewDurationMs),
-                enforcedTemplateSetId = mutableStateOf(it.enforcedTemplateSetId),
-                isDeckTemplateEnforced = mutableStateOf(it.isDeckTemplateEnforced)
+                lastReviewDurationMs = mutableStateOf(it.lastReviewDurationMs)
             )
         } ?: emptyList()
         val sorted = sortCardStates(initialCards, sortType, sortPinnedCardsFirst)
@@ -525,9 +518,7 @@ fun DeckEditorScreen(
         flag = cardState.flag.value,
         isPinned = cardState.isPinned.value,
         createdAt = cardState.createdAt.value,
-        updatedAt = cardState.updatedAt.value,
-        enforcedTemplateSetId = cardState.enforcedTemplateSetId.value,
-        isDeckTemplateEnforced = cardState.isDeckTemplateEnforced.value
+        updatedAt = cardState.updatedAt.value
     )
 
     // Move is an immediate cross-deck DB write (unlike every other action here, which only
@@ -567,43 +558,6 @@ fun DeckEditorScreen(
             if (missingFront.isNotEmpty()) card.frontNotes.value = card.frontNotes.value + missingFront
             if (missingBack.isNotEmpty()) card.backNotes.value = card.backNotes.value + missingBack
         }
-    }
-
-    fun enforceTemplateToCardStates(ids: Set<String>, templateSet: net.ericclark.studiare.data.TemplateSet) {
-        fun List<NoteField>.reshapedTo(templateFields: List<NoteField>): List<NoteField> {
-            val byKey = associateBy { it.name to it.type }
-            return templateFields.map { tf -> byKey[tf.name to tf.type]?.copy(name = tf.name, type = tf.type) ?: tf.copy(content = "") }
-        }
-        cards.filter { it.id in ids }.forEach { card ->
-            card.frontNotes.value = card.frontNotes.value.reshapedTo(templateSet.frontFields)
-            card.backNotes.value = card.backNotes.value.reshapedTo(templateSet.backFields)
-            card.enforcedTemplateSetId.value = templateSet.id
-        }
-    }
-
-    /** See FlashcardViewModel.clearTemplateEnforcement — same full unlock (per-card override and
-     * deck-stamp alike), just on the in-memory card states instead of persisted ones. */
-    fun clearTemplateEnforcementForCardStates(ids: Set<String>) {
-        cards.filter { it.id in ids }.forEach { card ->
-            card.enforcedTemplateSetId.value = null
-            card.isDeckTemplateEnforced.value = false
-        }
-    }
-
-    // Reflects this screen's own live (possibly-unsaved) frontNoteTemplates/backNoteTemplates —
-    // not deckWithCards?.deck's last-saved copy — so a card locked by the deck's own policy
-    // updates its lock live as the Template Editor is edited, same as a persisted deck would.
-    fun lockedFieldsFor(cardState: CardEditorState): net.ericclark.studiare.data.LockedTemplateFields? {
-        val liveDeck = (deckWithCards?.deck ?: net.ericclark.studiare.data.Deck()).copy(
-            frontNoteTemplates = frontNoteTemplates,
-            backNoteTemplates = backNoteTemplates
-        )
-        return net.ericclark.studiare.data.effectiveLockedFields(
-            enforcedTemplateSetId = cardState.enforcedTemplateSetId.value,
-            isDeckTemplateEnforced = cardState.isDeckTemplateEnforced.value,
-            templateSets = savedTemplateSets,
-            deck = liveDeck
-        )
     }
 
     fun setKnownForSelection(ids: Set<String>, known: Boolean) {
@@ -681,9 +635,7 @@ fun DeckEditorScreen(
                 flag = it.flag.value,
                 isPinned = it.isPinned.value,
                 createdAt = it.createdAt.value,
-                updatedAt = it.updatedAt.value,
-                enforcedTemplateSetId = it.enforcedTemplateSetId.value,
-                isDeckTemplateEnforced = it.isDeckTemplateEnforced.value
+                updatedAt = it.updatedAt.value
             )
         }.filter { it.front.isNotBlank() && it.back.isNotBlank() }
 
@@ -705,9 +657,10 @@ fun DeckEditorScreen(
             defaultPromptSide,
             sortPinnedCardsFirst,
             seedNewCardsFromTemplate,
-            enforceTemplate,
-            templateScope,
-            activeTemplateSetId
+            activeTemplateSetId,
+            // This screen always knows the deck's definitive current template link (even when
+            // null, meaning Remove was pressed) — never "unspecified, preserve whatever's saved."
+            clearActiveTemplateSetId = true
         )
 
         if (viewModel.editorDuplicateResult.value == null) {
@@ -751,7 +704,17 @@ fun DeckEditorScreen(
                 isInitialNewDeckDialog = false
                 showSettingsDialog = false
             },
-            onOpenTemplateEditor = { showAdvancedEditor = true },
+            onOpenTemplateEditor = { newName, newNorm, newSort, newPinnedFirst, newPromptSide, newFrontLang, newBackLang ->
+                deckName = newName
+                normalizationType = newNorm
+                sortType = newSort
+                sortPinnedCardsFirst = newPinnedFirst
+                defaultPromptSide = newPromptSide
+                frontLanguage = newFrontLang
+                backLanguage = newBackLang
+                showSettingsDialog = false
+                showAdvancedEditor = true
+            },
             canOpenTemplateEditor = !(isChildSet && linkageSettings.linkFieldConfig),
             onClearReviewData = {
                 // 1. Call ViewModel to reset persistent data (if deck exists)
@@ -815,19 +778,16 @@ fun DeckEditorScreen(
                     showSettingsDialog = true
                 }
             },
-            onSave = { newFront, newBack, newEnforceTemplate, newTemplateScope, newTemplateName, applyToAll ->
+            onSave = { newFront, newBack, resolvedTemplateSetId, _, applyToAll ->
                 frontNoteTemplates = newFront
                 backNoteTemplates = newBack
                 seedNewCardsFromTemplate = true
-                enforceTemplate = newEnforceTemplate
-                templateScope = newTemplateScope
-                // Upserted immediately (like "Save as Template" already does), even though the
-                // deck's own seedNewCardsFromTemplate/enforceTemplate/templateScope/
-                // activeTemplateSetId fields stay deferred to this screen's own main Save button
-                // below, same as frontNoteTemplates/backNoteTemplates always have been.
-                val resolvedTemplateSetId = activeTemplateSetId ?: java.util.UUID.randomUUID().toString()
+                // The template itself was already persisted by the dialog before calling onSave
+                // — this screen only needs to adopt the resolved id; the deck's own
+                // seedNewCardsFromTemplate/activeTemplateSetId fields stay deferred to this
+                // screen's own main Save button below, same as frontNoteTemplates/backNoteTemplates
+                // always have been.
                 activeTemplateSetId = resolvedTemplateSetId
-                viewModel.upsertDeckTemplateSet(resolvedTemplateSetId, newTemplateName, newFront, newBack)
 
                 if (applyToAll) {
                     cards.forEach { card ->
@@ -850,27 +810,14 @@ fun DeckEditorScreen(
                         }
                     }
                 }
-                // Symmetric with the lock-on branch above — see FlashcardViewModel.
-                // saveNoteTemplates' own doc comment for why this ignores the *current* scope and
-                // a per-card enforcedTemplateSetId override is left untouched either way.
-                cards.forEach { card ->
-                    if (newEnforceTemplate && newTemplateScope == TemplateScope.ALL_CARDS) {
-                        card.isDeckTemplateEnforced.value = true
-                    } else if (!newEnforceTemplate && card.isDeckTemplateEnforced.value) {
-                        card.isDeckTemplateEnforced.value = false
-                    }
-                }
                 // The still-unfilled trailing placeholder represents "the next new card," not an
-                // existing one — re-seed/stamp it immediately to match the new policy regardless
-                // of scope, same as any card created after this point would get via
-                // blankCardState(). Without this, Apply had no visible effect until you first
-                // typed something (which spawns a *different* fresh blank card under the new
-                // policy) and came back to this one.
+                // existing one — re-seed it immediately to match the new template. Without this,
+                // Apply had no visible effect until you first typed something (which spawns a
+                // *different* fresh blank card under the new policy) and came back to this one.
                 cards.lastOrNull()?.let { trailing ->
                     if (trailing.front.value.isBlank() && trailing.back.value.isBlank()) {
                         trailing.frontNotes.value = newFront
                         trailing.backNotes.value = newBack
-                        trailing.isDeckTemplateEnforced.value = newEnforceTemplate
                     }
                 }
 
@@ -883,14 +830,41 @@ fun DeckEditorScreen(
                     showSettingsDialog = true
                 }
             },
-            initialEnforceTemplate = enforceTemplate,
-            initialTemplateScope = templateScope,
             initialTemplateName = savedTemplateSets.find { it.id == activeTemplateSetId }?.name ?: "",
+            initialEditingTemplateId = activeTemplateSetId,
             savedTemplateSets = savedTemplateSets,
-            onSaveAsTemplate = { name, front, back -> viewModel.saveAsTemplateSet(name, front, back) },
-            onDeleteTemplateSet = { templateSet -> viewModel.deleteTemplateSet(templateSet) }
+            onPersistTemplate = { id, name, front, back -> viewModel.upsertDeckTemplateSet(id, name, front, back) },
+            onDeleteTemplateSet = { templateSet -> viewModel.deleteTemplateSet(templateSet) },
+            decksUsingTemplate = { templateId -> allDecksState.filter { it.deck.activeTemplateSetId == templateId }.map { it.deck.name } },
+            onOpenExportDialog = { showExportDialog = true },
+            // Deferred to this screen's own main Save button below, same as every other field
+            // here — the Template Editor dialog stays open afterward, resetting its own fields to
+            // blank, so this only needs to clear the screen's own state in step with that.
+            onRemoveTemplate = {
+                frontNoteTemplates = emptyList()
+                backNoteTemplates = emptyList()
+                seedNewCardsFromTemplate = false
+                activeTemplateSetId = null
+                // Mirrors the trailing-placeholder re-seed in onSave above — without this, the
+                // still-unfilled last row keeps whatever fields it was seeded with by the template
+                // this deck no longer uses, even after Cancel (since it was already stamped onto
+                // that in-memory CardEditorState before Remove was ever pressed).
+                cards.lastOrNull()?.let { trailing ->
+                    if (trailing.front.value.isBlank() && trailing.back.value.isBlank()) {
+                        trailing.frontNotes.value = emptyList()
+                        trailing.backNotes.value = emptyList()
+                    }
+                }
+            },
+            hasExistingCards = cards.any { it.front.value.isNotBlank() || it.back.value.isNotBlank() }
         )
     }
+
+    net.ericclark.studiare.screens.Dialogs.ExportDecksLauncher(
+        show = showExportDialog,
+        onDismiss = { showExportDialog = false },
+        viewModel = viewModel
+    )
 
     // Linkage Dialog Trigger
     if (showLinkageDialog) {
@@ -1037,14 +1011,15 @@ fun DeckEditorScreen(
             templateSets = savedTemplateSets,
             onDismiss = { showUseTemplateDialogForSelection = null },
             onApply = { templateSet -> applyTemplateToCardStates(ids, templateSet) },
-            onEnforce = { templateSet -> enforceTemplateToCardStates(ids, templateSet) },
             onOpenTemplateEditor = {
                 pendingUseTemplateIds = ids
                 showUseTemplateDialogForSelection = null
                 showAdvancedEditor = true
             },
-            onRemoveEnforcement = { clearTemplateEnforcementForCardStates(ids) },
-            activeTemplateSetId = ids.singleOrNull()?.let { singleId -> cards.find { it.id == singleId }?.enforcedTemplateSetId?.value }
+            matchStatusFor = { templateSet ->
+                val single = ids.singleOrNull()?.let { singleId -> cards.find { it.id == singleId } }
+                if (single != null) templateSet.matchStatus(single.frontNotes.value, single.backNotes.value) else TemplateMatchStatus.NOT_MATCHING
+            }
         )
     }
 
@@ -1445,7 +1420,6 @@ fun DeckEditorScreen(
                                             onCloneClick = { cloneCardStates(setOf(cardState.id)) },
                                             onMoveClick = if (deckWithCards != null) { { showMoveDialogForSelection = setOf(cardState.id) } } else null,
                                             onUseTemplateClick = { showUseTemplateDialogForSelection = setOf(cardState.id) },
-                                            lockedFields = lockedFieldsFor(cardState),
                                             allTags = allTags,
                                             currentDeckTags = currentDeckTags,
                                             onUpdateTags = { newTags ->
@@ -1527,7 +1501,6 @@ fun DeckEditorScreen(
                                         onCloneClick = { cloneCardStates(setOf(cardState.id)) },
                                         onMoveClick = if (deckWithCards != null) { { showMoveDialogForSelection = setOf(cardState.id) } } else null,
                                         onUseTemplateClick = { showUseTemplateDialogForSelection = setOf(cardState.id) },
-                                        lockedFields = lockedFieldsFor(cardState),
                                         allTags = allTags,
                                         currentDeckTags = currentDeckTags,
                                         onUpdateTags = { newTags -> cardState.tags.value = newTags.toList() },

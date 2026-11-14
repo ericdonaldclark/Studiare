@@ -109,7 +109,7 @@ fun CategoryPickerContent(
             Spacer(Modifier.height(8.dp))
             Text(
                 text = getText(R.string.category_learn_desc),
-                style = MaterialTheme.typography.bodySmall,
+                style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center
             )
@@ -138,7 +138,7 @@ fun CategoryPickerContent(
             Spacer(Modifier.height(8.dp))
             Text(
                 text = getText(R.string.category_practice_desc),
-                style = MaterialTheme.typography.bodySmall,
+                style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center
             )
@@ -167,7 +167,7 @@ fun CategoryPickerContent(
             Spacer(Modifier.height(8.dp))
             Text(
                 text = getText(R.string.category_quiz_desc),
-                style = MaterialTheme.typography.bodySmall,
+                style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center
             )
@@ -196,7 +196,7 @@ fun CategoryPickerContent(
             Spacer(Modifier.height(8.dp))
             Text(
                 text = getText(R.string.category_game_desc),
-                style = MaterialTheme.typography.bodySmall,
+                style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center
             )
@@ -225,7 +225,7 @@ fun CategoryPickerContent(
             Spacer(Modifier.height(8.dp))
             Text(
                 text = getText(R.string.category_smart_desc),
-                style = MaterialTheme.typography.bodySmall,
+                style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center
             )
@@ -350,7 +350,7 @@ fun HdLanguageSelectionDialog(
                 Spacer(Modifier.height(dimensions.spacingMedium))
                 Text(
                     getText(R.string.voice_settings_note),
-                    style = MaterialTheme.typography.bodySmall,
+                    style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }

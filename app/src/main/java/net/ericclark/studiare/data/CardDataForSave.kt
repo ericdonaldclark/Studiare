@@ -35,13 +35,7 @@ data class CardDataForSave(
     val fsrsScheduledDays: Double? = null,
     val fsrsState: FsrsState? = null,
     val fsrsLastReview: Long? = null,
-    val fsrsLapses: Int = 0,
-
-    // --- TEMPLATE LOCKING --- (read-only passthrough from whatever the card already has; see
-    // FlashcardViewModel.saveDeckWithCards' ex?.field ?: cd.field fallback, same as the FSRS
-    // fields above — only the dedicated template actions below ever actually change these)
-    val enforcedTemplateSetId: String? = null,
-    val isDeckTemplateEnforced: Boolean = false
+    val fsrsLapses: Int = 0
 )
 
 fun Card.toCardDataForSave(): CardDataForSave = CardDataForSave(
@@ -64,9 +58,7 @@ fun Card.toCardDataForSave(): CardDataForSave = CardDataForSave(
     flag = flag,
     isPinned = isPinned,
     createdAt = createdAt,
-    updatedAt = updatedAt,
-    enforcedTemplateSetId = enforcedTemplateSetId,
-    isDeckTemplateEnforced = isDeckTemplateEnforced
+    updatedAt = updatedAt
 )
 
 /**
@@ -95,9 +87,7 @@ fun CardDataForSave.asClone(): CardDataForSave = copy(
     fsrsLapses = 0,
     createdAt = System.currentTimeMillis(),
     updatedAt = System.currentTimeMillis(),
-    reviewedAt = null,
-    enforcedTemplateSetId = null,
-    isDeckTemplateEnforced = false
+    reviewedAt = null
 )
 
 /**
@@ -106,10 +96,7 @@ fun CardDataForSave.asClone(): CardDataForSave = copy(
  * full row (when the card was already persisted) and overlays just this editor's latest
  * content/tags/metadata fields, the same ex-fallback pattern FlashcardViewModel's own
  * saveDeckWithCards mapping uses. Falls back to a fresh [Card] when [existing] is null (the card
- * was never saved before the move, e.g. a still-unsaved Bulk Editor row). `isDeckTemplateEnforced`
- * is always cleared — it refers to the *owning deck's* template, which no longer applies once the
- * card belongs to a different deck; `enforcedTemplateSetId` (a library template, deck-independent)
- * carries over unchanged.
+ * was never saved before the move, e.g. a still-unsaved Bulk Editor row).
  */
 fun CardDataForSave.toMovedCard(ownerDeckId: String, existing: Card?): Card = (existing ?: Card(id = id)).copy(
     ownerDeckId = ownerDeckId,

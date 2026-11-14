@@ -79,7 +79,7 @@ internal fun ModeDefaultsSettingsContent(viewModel: FlashcardViewModel, snackbar
     Column {
         Text(
             getText(R.string.mode_defaults_desc),
-            style = MaterialTheme.typography.bodySmall,
+            style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(bottom = dimensions.spacingMedium)
         )

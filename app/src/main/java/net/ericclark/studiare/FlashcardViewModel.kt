@@ -1756,10 +1756,9 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
 
     fun cloneSingleCard(deck: DeckWithCards, cardId: String) = cloneCardsForSelection(deck, setOf(cardId))
 
-    /** Per-card "Use Template → Apply": adds any of [templateSet]'s fields a card doesn't already
-     * have (matched by name+type) onto its existing frontNotes/backNotes — never removes or
-     * reorders what's already there, and never touches `enforcedTemplateSetId` (a one-time seed,
-     * not an ongoing lock, same semantics as the deck-level Apply mode). */
+    /** Per-card "Use Template": adds any of [templateSet]'s fields a card doesn't already have
+     * (matched by name+type) onto its existing frontNotes/backNotes — never removes or reorders
+     * what's already there. */
     fun applyTemplateToCards(deck: DeckWithCards, cardIds: Set<String>, templateSet: TemplateSet) {
         if (cardIds.isEmpty()) return
         val cardsToSave = deck.cards.map { card ->
@@ -1770,50 +1769,6 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
             val missingFront = templateSet.frontFields.filter { (it.name to it.type) !in currentFront }.map { it.copy(content = "") }
             val missingBack = templateSet.backFields.filter { (it.name to it.type) !in currentBack }.map { it.copy(content = "") }
             data.copy(frontNotes = data.frontNotes + missingFront, backNotes = data.backNotes + missingBack)
-        }
-        checkForDuplicatesInEditor(
-            deck.deck.id, deck.deck.name, cardsToSave, deck.deck.normalizationType, deck.deck.deckSortMode,
-            deck.deck.parentDeckId, deck.deck.frontLanguage, deck.deck.backLanguage, deck.deck.description,
-            deck.deck.dailyNewCardLimit, deck.deck.dailyReviewLimit, deck.deck.frontNoteTemplates, deck.deck.backNoteTemplates
-        )
-    }
-
-    /** Per-card "Use Template → Enforce": replaces a card's frontNotes/backNotes wholesale with
-     * [templateSet]'s exact field list (no extra fields beyond the template's own), preserving
-     * content for any field whose name+type already matches one the card has, and sets
-     * `enforcedTemplateSetId` so the editor locks that card's shape to this template going
-     * forward (looked up live — see [CardDataForSave.enforcedTemplateSetId]). */
-    fun enforceTemplateOnCards(deck: DeckWithCards, cardIds: Set<String>, templateSet: TemplateSet) {
-        if (cardIds.isEmpty()) return
-        fun List<NoteField>.reshapedTo(templateFields: List<NoteField>): List<NoteField> {
-            val byKey = associateBy { it.name to it.type }
-            return templateFields.map { tf -> byKey[tf.name to tf.type]?.copy(name = tf.name, type = tf.type) ?: tf.copy(content = "") }
-        }
-        val cardsToSave = deck.cards.map { card ->
-            val data = card.toCardDataForSave()
-            if (card.id !in cardIds) return@map data
-            data.copy(
-                frontNotes = data.frontNotes.reshapedTo(templateSet.frontFields),
-                backNotes = data.backNotes.reshapedTo(templateSet.backFields),
-                enforcedTemplateSetId = templateSet.id
-            )
-        }
-        checkForDuplicatesInEditor(
-            deck.deck.id, deck.deck.name, cardsToSave, deck.deck.normalizationType, deck.deck.deckSortMode,
-            deck.deck.parentDeckId, deck.deck.frontLanguage, deck.deck.backLanguage, deck.deck.description,
-            deck.deck.dailyNewCardLimit, deck.deck.dailyReviewLimit, deck.deck.frontNoteTemplates, deck.deck.backNoteTemplates
-        )
-    }
-
-    /** Per-card "Use Template → Remove Enforcement" — clears whatever is currently locking a
-     * card's field shape, regardless of source: a per-card override (`enforcedTemplateSetId`) and
-     * the deck's own policy stamp (`isDeckTemplateEnforced`) alike. Content/fields are left
-     * exactly as they are; only the lock itself is lifted. */
-    fun clearTemplateEnforcement(deck: DeckWithCards, cardIds: Set<String>) {
-        if (cardIds.isEmpty()) return
-        val cardsToSave = deck.cards.map { card ->
-            val data = card.toCardDataForSave()
-            if (card.id !in cardIds) data else data.copy(enforcedTemplateSetId = null, isDeckTemplateEnforced = false)
         }
         checkForDuplicatesInEditor(
             deck.deck.id, deck.deck.name, cardsToSave, deck.deck.normalizationType, deck.deck.deckSortMode,
@@ -1927,29 +1882,19 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
     }
 
     /**
-     * Saves the deck's own default template fields plus its enforce/scope policy. `applyToAll`
-     * (true only for the Template Editor's "Apply to All" button, false for "Apply to New")
-     * reuses the existing merge (add any of the new template's fields a card doesn't already
-     * have, by name, leaving content alone) against every card in the deck right now — "Apply to
-     * New" touches no existing card at all, only `seedNewCardsFromTemplate` going forward (see
-     * blankCardState()/blankEditorState() in the Bulk/Simple Editor screens). Enforce additionally
-     * stamps `isDeckTemplateEnforced = true` on every card when scope is All Cards (not just ones
-     * with missing fields, since the flag needs setting regardless of whether a merge happened).
-     *
-     * Symmetric with the lock-on side: whenever Enforce is off, every card the deck's own policy
-     * had previously locked (`isDeckTemplateEnforced`) is unlocked here too, regardless of the
-     * *current* scope setting — otherwise there was no way to undo a deck-level Enforce pass once
-     * cards had already been stamped, short of unlocking them one at a time via the per-card "Use
-     * Template" action. A card's own separate per-card override (`enforcedTemplateSetId`) is
-     * untouched either way — that's a deliberate choice made elsewhere (Use Template's own
-     * "Remove Enforcement"), not something switching the *deck's* policy should reach into.
+     * Saves the deck's own default template fields, linking the deck to the already-persisted
+     * shared [TemplateSet] named by [templateSetId] (resolved and saved by
+     * `AdvancedDeckEditorDialog` itself before calling this — see its `commitTemplateEdit`).
+     * [applyToAll] (true only for the Template Editor's "Apply to All" button, false for "Apply
+     * to New") reuses the existing merge (add any of the new template's fields a card doesn't
+     * already have, by name, leaving content alone) against every card in the deck right now —
+     * "Apply to New" touches no existing card at all, only `seedNewCardsFromTemplate` going
+     * forward (see blankCardState()/blankEditorState() in the Bulk/Simple Editor screens).
      */
     fun saveNoteTemplates(
-        deck: DeckWithCards, templateName: String, newFront: List<NoteField>, newBack: List<NoteField>,
-        enforceTemplate: Boolean, templateScope: TemplateScope, applyToAll: Boolean
+        deck: DeckWithCards, templateSetId: String, newFront: List<NoteField>, newBack: List<NoteField>,
+        applyToAll: Boolean
     ) {
-        val templateSetId = deck.deck.activeTemplateSetId ?: UUID.randomUUID().toString()
-        upsertDeckTemplateSet(templateSetId, templateName, newFront, newBack)
         val cardsToSave = deck.cards.map { card ->
             var data = card.toCardDataForSave()
             if (applyToAll) {
@@ -1961,19 +1906,13 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
                     data = data.copy(frontNotes = data.frontNotes + missingFront, backNotes = data.backNotes + missingBack)
                 }
             }
-            data = if (enforceTemplate && templateScope == TemplateScope.ALL_CARDS) {
-                data.copy(isDeckTemplateEnforced = true)
-            } else if (!enforceTemplate && data.isDeckTemplateEnforced) {
-                data.copy(isDeckTemplateEnforced = false)
-            } else data
             data
         }
         checkForDuplicatesInEditor(
             deck.deck.id, deck.deck.name, cardsToSave, deck.deck.normalizationType, deck.deck.deckSortMode,
             deck.deck.parentDeckId, deck.deck.frontLanguage, deck.deck.backLanguage, deck.deck.description,
             deck.deck.dailyNewCardLimit, deck.deck.dailyReviewLimit, newFront, newBack,
-            seedNewCardsFromTemplate = true, enforceTemplate = enforceTemplate, templateScope = templateScope,
-            activeTemplateSetId = templateSetId
+            seedNewCardsFromTemplate = true, activeTemplateSetId = templateSetId
         )
     }
 
@@ -1994,9 +1933,10 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         defaultPromptSide: CardSide? = null,
         sortPinnedCardsFirst: Boolean? = null,
         seedNewCardsFromTemplate: Boolean? = null,
-        enforceTemplate: Boolean? = null,
-        templateScope: TemplateScope? = null,
-        activeTemplateSetId: String? = null
+        activeTemplateSetId: String? = null,
+        // See DuplicateCheckResult.clearActiveTemplateSetId — pass true when `activeTemplateSetId`
+        // above is this save's definitive value (even null), not "unspecified, keep existing."
+        clearActiveTemplateSetId: Boolean = false
     ) {
         val duplicates = cards.groupBy { it.front.normalizeForDuplicateCheck() to it.back.normalizeForDuplicateCheck() }
             .filter { it.value.size > 1 }
@@ -2009,14 +1949,14 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
                 duplicates, deckId, deckName, cards, normalizationType, sortType, parentDeckId,
                 frontLanguage, backLanguage, description, dailyNewCardLimit, dailyReviewLimit,
                 frontNoteTemplates, backNoteTemplates, defaultPromptSide, sortPinnedCardsFirst,
-                seedNewCardsFromTemplate, enforceTemplate, templateScope, activeTemplateSetId
+                seedNewCardsFromTemplate, activeTemplateSetId, clearActiveTemplateSetId
             )
         } else {
             saveDeckWithCards(
                 deckId, deckName, cards, normalizationType, sortType, parentDeckId, null,
                 frontLanguage, backLanguage, description, dailyNewCardLimit, dailyReviewLimit,
                 frontNoteTemplates, backNoteTemplates, defaultPromptSide, sortPinnedCardsFirst,
-                seedNewCardsFromTemplate, enforceTemplate, templateScope, activeTemplateSetId
+                seedNewCardsFromTemplate, activeTemplateSetId, clearActiveTemplateSetId
             )
         }
     }
@@ -2073,13 +2013,15 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         { it.front.normalizeForDuplicateCheck() to it.back.normalizeForDuplicateCheck() },
             result.normalizationType, result.sortType, result.parentDeckId, null, result.frontLanguage, result.backLanguage,
             result.description, result.dailyNewCardLimit, result.dailyReviewLimit, result.frontNoteTemplates, result.backNoteTemplates,
-            result.defaultPromptSide, result.sortPinnedCardsFirst, result.seedNewCardsFromTemplate, result.enforceTemplate, result.templateScope, result.activeTemplateSetId) }; dismissEditorDuplicateWarning() }
+            result.defaultPromptSide, result.sortPinnedCardsFirst, result.seedNewCardsFromTemplate, result.activeTemplateSetId,
+            result.clearActiveTemplateSetId) }; dismissEditorDuplicateWarning() }
     fun saveEditorIgnoringDuplicates() { _editorDuplicateResult.value?.let { result ->
         saveDeckWithCards(result.deckId, result.deckName, result.cardsToSave,
             result.normalizationType, result.sortType, result.parentDeckId,
             null, result.frontLanguage, result.backLanguage,
             result.description, result.dailyNewCardLimit, result.dailyReviewLimit, result.frontNoteTemplates, result.backNoteTemplates,
-            result.defaultPromptSide, result.sortPinnedCardsFirst, result.seedNewCardsFromTemplate, result.enforceTemplate, result.templateScope, result.activeTemplateSetId) }; dismissEditorDuplicateWarning() }
+            result.defaultPromptSide, result.sortPinnedCardsFirst, result.seedNewCardsFromTemplate, result.activeTemplateSetId,
+            result.clearActiveTemplateSetId) }; dismissEditorDuplicateWarning() }
 
     private fun saveDeckWithCards(
         deckId: String?,
@@ -2099,9 +2041,8 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         defaultPromptSide: CardSide? = null,
         sortPinnedCardsFirst: Boolean? = null,
         seedNewCardsFromTemplate: Boolean? = null,
-        enforceTemplate: Boolean? = null,
-        templateScope: TemplateScope? = null,
-        activeTemplateSetId: String? = null
+        activeTemplateSetId: String? = null,
+        clearActiveTemplateSetId: Boolean = false
     ) {
         viewModelScope.launch(Dispatchers.IO) {
             val id = deckId ?: UUID.randomUUID().toString()
@@ -2148,9 +2089,7 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
                 dailyNewCardLimit = dailyNewCardLimit,
                 dailyReviewLimit = dailyReviewLimit,
                 seedNewCardsFromTemplate = seedNewCardsFromTemplate ?: existingDeck?.seedNewCardsFromTemplate ?: false,
-                enforceTemplate = enforceTemplate ?: existingDeck?.enforceTemplate ?: false,
-                templateScope = templateScope ?: existingDeck?.templateScope ?: TemplateScope.NEW_CARDS,
-                activeTemplateSetId = activeTemplateSetId ?: existingDeck?.activeTemplateSetId,
+                activeTemplateSetId = if (clearActiveTemplateSetId) activeTemplateSetId else (activeTemplateSetId ?: existingDeck?.activeTemplateSetId),
                 isPendingSync = true
             )
 
@@ -2187,8 +2126,8 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
                     fsrsState = ex?.fsrsState ?: cd.fsrsState,
                     fsrsLastReview = ex?.fsrsLastReview ?: cd.fsrsLastReview,
                     fsrsLapses = ex?.fsrsLapses ?: cd.fsrsLapses,
-                    enforcedTemplateSetId = ex?.enforcedTemplateSetId ?: cd.enforcedTemplateSetId,
-                    isDeckTemplateEnforced = ex?.isDeckTemplateEnforced ?: cd.isDeckTemplateEnforced,
+                    enforcedTemplateSetId = ex?.enforcedTemplateSetId,
+                    isDeckTemplateEnforced = ex?.isDeckTemplateEnforced ?: false,
                     isPendingSync = true
                 )
             }
@@ -2685,25 +2624,60 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
     }
 
     // --- Template Set Operations (Delegated to Room) ---
-    fun saveAsTemplateSet(name: String, frontFields: List<NoteField>, backFields: List<NoteField>) {
-        viewModelScope.launch(Dispatchers.IO) {
-            templateSetDao.insertOrUpdate(TemplateSet(name = name.trim(), frontFields = frontFields, backFields = backFields))
-        }
-    }
-
-    /** Upserts (by [id]) the named [TemplateSet] backing a deck's own Template Editor fields —
-     * every Apply in that dialog requires a name and goes through this, instead of leaving the
-     * deck's template as an anonymous, un-shareable field list. The caller supplies [id] (either
-     * the deck's existing `activeTemplateSetId`, or a freshly generated one) so it already knows
-     * the id to persist onto the deck itself in the same action. */
+    /** Upserts (by [id]) a shared, global [TemplateSet] — one row, editable from any deck, rather
+     * than a deck-private copy. Used for both "Save" (same id as whatever's already being edited)
+     * and "Save As"/first-time creation (a freshly generated id) by `AdvancedDeckEditorDialog`. */
     fun upsertDeckTemplateSet(id: String, name: String, frontFields: List<NoteField>, backFields: List<NoteField>) {
         viewModelScope.launch(Dispatchers.IO) {
             templateSetDao.insertOrUpdate(TemplateSet(id = id, name = name.trim(), frontFields = frontFields, backFields = backFields))
         }
     }
 
+
+    /** Soft-deletes the template, then sweeps every deck still linked to it (by
+     * `activeTemplateSetId`) and clears that link the same way [removeDeckTemplate] does for one
+     * deck at a time. Without this, any OTHER deck using this template (not just the one open in
+     * the editor that triggered the delete, which the dialog already handles locally via its own
+     * "Remove" callback) would keep pointing at a now-nonexistent template id and its now-stale
+     * seed fields forever — showing the deleted template's name as blank (not found in the active
+     * list) but still seeding/displaying its fields. */
     fun deleteTemplateSet(templateSet: TemplateSet) {
-        viewModelScope.launch(Dispatchers.IO) { templateSetDao.softDelete(templateSet.id) }
+        viewModelScope.launch(Dispatchers.IO) {
+            templateSetDao.softDelete(templateSet.id)
+            val affectedDecks = localDecks.filter { it.activeTemplateSetId == templateSet.id }
+            if (affectedDecks.isNotEmpty()) {
+                val now = System.currentTimeMillis()
+                deckDao.insertOrUpdateAll(affectedDecks.map {
+                    it.copy(
+                        activeTemplateSetId = null,
+                        seedNewCardsFromTemplate = false,
+                        frontNoteTemplates = emptyList(),
+                        backNoteTemplates = emptyList(),
+                        updatedAt = now,
+                        isPendingSync = true
+                    )
+                })
+            }
+        }
+    }
+
+    /** Clears this deck's link to whatever shared [TemplateSet] it's currently using, and its own
+     * default seed fields — the Template Editor's "Remove" action. Never touches any card's
+     * existing fields; the template itself (shared, possibly still used elsewhere) is untouched
+     * too, only this one deck's reference to it. */
+    fun removeDeckTemplate(deck: DeckWithCards) {
+        viewModelScope.launch(Dispatchers.IO) {
+            deckDao.insertOrUpdate(
+                deck.deck.copy(
+                    activeTemplateSetId = null,
+                    seedNewCardsFromTemplate = false,
+                    frontNoteTemplates = emptyList(),
+                    backNoteTemplates = emptyList(),
+                    updatedAt = System.currentTimeMillis(),
+                    isPendingSync = true
+                )
+            )
+        }
     }
 
     fun renameTag(tag: TagDefinition, oldName: String) {
