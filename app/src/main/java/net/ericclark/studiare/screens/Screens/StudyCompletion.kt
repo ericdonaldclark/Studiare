@@ -1046,7 +1046,14 @@ fun EditCardDialog(
                     onUpdateTags = { newTags -> tags = newTags.toList() },
                     onCreateTag = { name, color ->
                         viewModel.saveTagDefinition(TagDefinition(name = name, color = color))
-                    }
+                    },
+                    onRenameTag = { tag, oldName ->
+                        viewModel.renameTag(tag, oldName)
+                        if (tag.name != oldName && oldName in tags) {
+                            tags = tags.map { if (it == oldName) tag.name else it }
+                        }
+                    },
+                    onDeleteTag = { tag -> viewModel.deleteTagDefinition(tag) }
                 )
 
                 Spacer(Modifier.height(dimensions.spacingSmall))

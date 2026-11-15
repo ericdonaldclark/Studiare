@@ -276,10 +276,10 @@
     <!-- Normalization Type -->
     <string name="normalization_uppercase_first_letter">Uppercase first letter</string>
     <string name="normalization_uppercase_all_letters">UPPERCASE ALL LETTERS</string>
-    <string name="normalization_uppercase_each_word">Uppercase First Letter\nOf Each Word</string>
+    <string name="normalization_uppercase_each_word">Uppercase First Letter Of Each Word</string>
     <string name="normalization_lowercase_first_letter">lowercase First Letter</string>
     <string name="normalization_lowercase_all_letters">lowercase all letters</string>
-    <string name="normalization_lowercase_each_word">lowercase first letter\nof each word</string>
+    <string name="normalization_lowercase_each_word">lowercase first letter of each word</string>
 
     <!-- Card Data Type -->
     <string name="type_text">Text</string>
@@ -365,6 +365,8 @@
     <string name="tag_error_hex">Invalid Hex Color (e.g. #FF0000)</string>
     <string name="tag_error_exists">Tag already exists</string>
     <string name="tag_error_name">Name already taken</string>
+    <string name="tag_select_to_edit">Select a tag above to edit it.</string>
+    <string name="tag_deleted">Tag deleted</string>
     <string name="cards_manage">Manage Cards %1$s</string>
     <string name="tag_remove_from_cards">Select cards to remove this tag from</string>
     <string name="tag_no_cards">No cards have this tag</string>

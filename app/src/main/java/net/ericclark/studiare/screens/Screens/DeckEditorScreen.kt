@@ -1482,6 +1482,17 @@ fun DeckEditorScreen(
                                                     )
                                                 )
                                             },
+                                            onRenameTag = { tag, oldName ->
+                                                viewModel.renameTag(tag, oldName)
+                                                if (tag.name != oldName) {
+                                                    cards.forEach { cs ->
+                                                        if (oldName in cs.tags.value) {
+                                                            cs.tags.value = cs.tags.value.map { if (it == oldName) tag.name else it }
+                                                        }
+                                                    }
+                                                }
+                                            },
+                                            onDeleteTag = { tag -> viewModel.deleteTagDefinition(tag) },
                                             onOpenRichTextEditor = { target, initialHtml, title ->
                                                 richTextCardIndex = index
                                                 richTextEditorTarget = target
@@ -1560,6 +1571,17 @@ fun DeckEditorScreen(
                                                 color = color
                                             )
                                         ) },
+                                        onRenameTag = { tag, oldName ->
+                                            viewModel.renameTag(tag, oldName)
+                                            if (tag.name != oldName) {
+                                                cards.forEach { cs ->
+                                                    if (oldName in cs.tags.value) {
+                                                        cs.tags.value = cs.tags.value.map { if (it == oldName) tag.name else it }
+                                                    }
+                                                }
+                                            }
+                                        },
+                                        onDeleteTag = { tag -> viewModel.deleteTagDefinition(tag) },
                                         onOpenRichTextEditor = { target, initialHtml, title ->
                                             richTextCardIndex = index
                                             richTextEditorTarget = target

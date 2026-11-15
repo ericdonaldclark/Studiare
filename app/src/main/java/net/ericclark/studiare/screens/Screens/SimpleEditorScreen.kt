@@ -708,6 +708,13 @@ fun SimpleEditorScreen(
             currentDeckTags = currentDeckTags,
             onUpdateTags = { newTags -> editState.tags.value = newTags.toList() },
             onCreateTag = { name, color -> viewModel.saveTagDefinition(TagDefinition(name = name, color = color)) },
+            onRenameTag = { tag, oldName ->
+                viewModel.renameTag(tag, oldName)
+                if (tag.name != oldName && oldName in editState.tags.value) {
+                    editState.tags.value = editState.tags.value.map { if (it == oldName) tag.name else it }
+                }
+            },
+            onDeleteTag = { tag -> viewModel.deleteTagDefinition(tag) },
             mode = CardEditDialogMode.Edit(
                 onSave = {
                     deckWithCards?.let { viewModel.saveSingleCard(it, cardDataFrom(editState)) }
@@ -745,6 +752,13 @@ fun SimpleEditorScreen(
             currentDeckTags = currentDeckTags,
             onUpdateTags = { newTags -> state.tags.value = newTags.toList() },
             onCreateTag = { name, color -> viewModel.saveTagDefinition(TagDefinition(name = name, color = color)) },
+            onRenameTag = { tag, oldName ->
+                viewModel.renameTag(tag, oldName)
+                if (tag.name != oldName && oldName in state.tags.value) {
+                    state.tags.value = state.tags.value.map { if (it == oldName) tag.name else it }
+                }
+            },
+            onDeleteTag = { tag -> viewModel.deleteTagDefinition(tag) },
             mode = CardEditDialogMode.Create(
                 onAdd = {
                     deckWithCards?.let { viewModel.saveSingleCard(it, cardDataFrom(state)) }

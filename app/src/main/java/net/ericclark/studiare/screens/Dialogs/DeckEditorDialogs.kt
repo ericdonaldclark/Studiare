@@ -87,6 +87,8 @@ fun CardEditDialog(
     currentDeckTags: Set<String>,
     onUpdateTags: (Set<String>) -> Unit,
     onCreateTag: (String, String) -> Unit,
+    onRenameTag: (TagDefinition, String) -> Unit,
+    onDeleteTag: (TagDefinition) -> Unit,
     mode: CardEditDialogMode,
     onCancel: () -> Unit,
     normalizationType: NormalizationType = NormalizationType.NONE
@@ -169,6 +171,8 @@ fun CardEditDialog(
                             currentDeckTags = currentDeckTags,
                             onUpdateTags = onUpdateTags,
                             onCreateTag = onCreateTag,
+                            onRenameTag = onRenameTag,
+                            onDeleteTag = onDeleteTag,
                             onOpenRichTextEditor = { target, initialHtml, title ->
                                 richTextTarget = target
                                 richTextInitialHtml = initialHtml

@@ -234,6 +234,8 @@ fun CardEditor(
     currentDeckTags: Set<String>,
     onUpdateTags: (Set<String>) -> Unit,
     onCreateTag: (String, String) -> Unit,
+    onRenameTag: (TagDefinition, String) -> Unit,
+    onDeleteTag: (TagDefinition) -> Unit,
     onOpenRichTextEditor: (target: String, initialHtml: String, title: String) -> Unit,
     snackbarHostState: androidx.compose.material3.SnackbarHostState,
     coroutineScope: kotlinx.coroutines.CoroutineScope,
@@ -528,7 +530,9 @@ fun CardEditor(
                         allTags = allTags,
                         currentDeckTags = currentDeckTags,
                         onUpdateTags = onUpdateTags,
-                        onCreateTag = onCreateTag
+                        onCreateTag = onCreateTag,
+                        onRenameTag = onRenameTag,
+                        onDeleteTag = onDeleteTag
                     )
         
                     Spacer(Modifier.height(dimensions.spacingSmall))

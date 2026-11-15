@@ -29,6 +29,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlin.math.roundToInt
@@ -1232,6 +1233,17 @@ fun SaveAsDefaultButtons(
     val undoLabel = getText(R.string.undo)
     val modeCategoryTargets = remember(category, mode) { otherCategoriesWithMode(category, mode) }
 
+    // Keeps the two buttons' labels visually balanced: when the narrower "Category" button's
+    // text wraps to two lines, "Mode" (one word shorter, so it'd otherwise fit on one line) gets
+    // its own forced break before "Default" too, instead of sitting shorter and off-center.
+    var categoryLabelWrapped by remember { mutableStateOf(false) }
+    val modeDefaultText = getText(R.string.save_as_mode_default)
+    val modeDefaultDisplayText = if (categoryLabelWrapped) {
+        modeDefaultText.substringBeforeLast(" ") + "\n" + modeDefaultText.substringAfterLast(" ")
+    } else {
+        modeDefaultText
+    }
+
     Row(modifier = modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)) {
         FilledTonalButton(
             onClick = {
@@ -1240,7 +1252,14 @@ fun SaveAsDefaultButtons(
             },
             modifier = Modifier.weight(1f),
             shape = RoundedCornerShape(dimensions.cornerRadiusButton)
-        ) { Text(getText(R.string.save_as_category_default)) }
+        ) {
+            Text(
+                text = getText(R.string.save_as_category_default),
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth(),
+                onTextLayout = { categoryLabelWrapped = it.lineCount > 1 }
+            )
+        }
 
         FilledTonalButton(
             onClick = {
@@ -1250,7 +1269,13 @@ fun SaveAsDefaultButtons(
             },
             modifier = Modifier.weight(1f),
             shape = RoundedCornerShape(dimensions.cornerRadiusButton)
-        ) { Text(getText(R.string.save_as_mode_default)) }
+        ) {
+            Text(
+                text = modeDefaultDisplayText,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
     }
 }
 
