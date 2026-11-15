@@ -99,6 +99,7 @@ class PreferenceManager(context: Context) {
         val HAS_SEEN_TUTORIAL = booleanPreferencesKey("has_seen_tutorial")
         val LAST_STUDY_CATEGORY = stringPreferencesKey("last_study_category")
         val SORT_TAGS_BY_DATE_CREATED = booleanPreferencesKey("sort_tags_by_date_created")
+        val SORT_TEMPLATES_BY_DATE_CREATED = booleanPreferencesKey("sort_templates_by_date_created")
         val SHORTCUTS_CURRENT_SCREEN_ONLY = booleanPreferencesKey("shortcuts_current_screen_only")
         val SHOW_SHORTCUTS_BUTTON = booleanPreferencesKey("show_shortcuts_button")
         val SHOW_SIZE_OVERLAY = booleanPreferencesKey("show_size_overlay")
@@ -212,6 +213,7 @@ class PreferenceManager(context: Context) {
     val hasSeenTutorialFlow: Flow<Boolean> = dataStore.data.map { it[HAS_SEEN_TUTORIAL] ?: false }.distinctUntilChanged()
     val lastStudyCategoryFlow: Flow<String?> = dataStore.data.map { it[LAST_STUDY_CATEGORY] }.distinctUntilChanged()
     val sortTagsByDateCreatedFlow: Flow<Boolean> = dataStore.data.map { it[SORT_TAGS_BY_DATE_CREATED] ?: false }.distinctUntilChanged()
+    val sortTemplatesByDateCreatedFlow: Flow<Boolean> = dataStore.data.map { it[SORT_TEMPLATES_BY_DATE_CREATED] ?: false }.distinctUntilChanged()
     val shortcutsCurrentScreenOnlyFlow: Flow<Boolean> = dataStore.data.map { it[SHORTCUTS_CURRENT_SCREEN_ONLY] ?: true }.distinctUntilChanged()
     val showShortcutsButtonFlow: Flow<Boolean> = dataStore.data.map { it[SHOW_SHORTCUTS_BUTTON] ?: true }.distinctUntilChanged()
     val showSizeOverlayFlow: Flow<Boolean> = dataStore.data.map { it[SHOW_SIZE_OVERLAY] ?: false }.distinctUntilChanged()
@@ -541,6 +543,7 @@ class PreferenceManager(context: Context) {
     suspend fun setHasSeenTutorial(seen: Boolean) { dataStore.edit { it[HAS_SEEN_TUTORIAL] = seen } }
     suspend fun setLastStudyCategory(name: String) { dataStore.edit { it[LAST_STUDY_CATEGORY] = name } }
     suspend fun setSortTagsByDateCreated(enabled: Boolean) { dataStore.edit { it[SORT_TAGS_BY_DATE_CREATED] = enabled } }
+    suspend fun setSortTemplatesByDateCreated(enabled: Boolean) { dataStore.edit { it[SORT_TEMPLATES_BY_DATE_CREATED] = enabled } }
     suspend fun setShortcutsCurrentScreenOnly(enabled: Boolean) { dataStore.edit { it[SHORTCUTS_CURRENT_SCREEN_ONLY] = enabled } }
     suspend fun setShowShortcutsButton(enabled: Boolean) { dataStore.edit { it[SHOW_SHORTCUTS_BUTTON] = enabled } }
     suspend fun setShowSizeOverlay(enabled: Boolean) { dataStore.edit { it[SHOW_SIZE_OVERLAY] = enabled } }
@@ -641,6 +644,7 @@ class PreferenceManager(context: Context) {
         PINNED_SCREEN_SECTION_ORDER.name to PinnedSectionType.toStoredString(PinnedSectionType.DEFAULT_ORDER),
         HAS_SEEN_TUTORIAL.name to "false",
         SORT_TAGS_BY_DATE_CREATED.name to "false",
+        SORT_TEMPLATES_BY_DATE_CREATED.name to "false",
         SHORTCUTS_CURRENT_SCREEN_ONLY.name to "true",
         SHOW_SHORTCUTS_BUTTON.name to "true",
         SHOW_SIZE_OVERLAY.name to "false",

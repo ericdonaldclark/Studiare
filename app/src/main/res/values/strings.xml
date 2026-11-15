@@ -372,6 +372,10 @@
     <string name="tags_manage">Manage Tags</string>
     <string name="sort_tags_by_date_created">Sort tags by date created</string>
     <string name="sort_tags_by_date_created_desc">Show the newest tags first instead of alphabetical order.</string>
+    <string name="tags_section_title">Tags</string>
+    <string name="sort_templates_by_date_created">Sort templates by date created</string>
+    <string name="sort_templates_by_date_created_desc">Show the newest templates first instead of alphabetical order.</string>
+    <string name="template_create_new">Create New Template</string>
     <string name="tags_in_this_deck">In This Deck</string>
     <string name="tags_from_other_decks">From Other Decks</string>
     <string name="tags_none_found">No tags found.</string>
@@ -589,6 +593,15 @@
     <string name="delete_template_question">Delete Template?</string>
     <string name="delete_template_confirm">Are you sure you want to delete \"%1$s\"? This cannot be undone.</string>
     <string name="delete_template_not_in_use">This template isn\'t currently used by any deck.</string>
+    <string name="tags_and_templates">Tags &amp; Templates</string>
+    <string name="templates_section_title">Templates</string>
+    <string name="no_templates_created">No templates created yet.</string>
+    <string name="template_not_used_by_any_deck">Not used by any deck</string>
+    <string name="select_decks">Select Decks</string>
+    <string name="apply_template_to_decks_title">Apply \"%1$s\" to Decks</string>
+    <string name="no_decks_to_apply_template">There are no decks to apply this template to.</string>
+    <string name="bulk_edit_tag_title_prefix">Add/Remove Tag</string>
+    <string name="bulk_edit_template_title_prefix">Add/Remove Template</string>
     <string name="delete">Delete</string>
     <string name="edit">Edit</string>
     <string name="manage_sets">Manage Sets</string>
@@ -764,7 +777,15 @@
     <string name="download_size_format">%1$s\n\nDownload size: %2$s.</string>
     <string name="deleted_whisper_model_format">Deleted the %1$s speech recognition model</string>
     <string name="download_failed">Download failed — check your connection and try again</string>
-    <string name="tags_defined_count">%1$d tags defined</string>
+    <plurals name="tags_count_label">
+        <item quantity="one">%1$d tag</item>
+        <item quantity="other">%1$d tags</item>
+    </plurals>
+    <plurals name="templates_count_label">
+        <item quantity="one">%1$d template</item>
+        <item quantity="other">%1$d templates</item>
+    </plurals>
+    <string name="tags_and_templates_defined_format">%1$s and %2$s defined</string>
     <string name="no_tags_created">No tags created yet.</string>
     <string name="tag_remove_from_cards_icon">Remove from cards</string>
     <string name="customization">Customization</string>
@@ -1234,8 +1255,8 @@
         <item quantity="other">Review %1$d Missed Cards</item>
     </plurals>
     <plurals name="delete_template_in_use">
-        <item quantity="one">This template is currently used by %1$d deck: %2$s.</item>
-        <item quantity="other">This template is currently used by %1$d decks: %2$s.</item>
+        <item quantity="one">Used by %1$d deck: %2$s.</item>
+        <item quantity="other">Used by %1$d decks: %2$s.</item>
     </plurals>
     <!--
     <string name=""></string>

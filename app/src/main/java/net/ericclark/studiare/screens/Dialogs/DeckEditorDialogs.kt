@@ -4,6 +4,7 @@ import net.ericclark.studiare.TooltipFilledTonalIconButton
 import net.ericclark.studiare.AnimatedDialog
 import net.ericclark.studiare.TooltipIconButton
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -319,7 +320,14 @@ fun AdvancedDeckEditorDialog(
      * empty) — there's nothing an "Apply to All" could sweep that "Apply to New" wouldn't already
      * cover, so the footer collapses to a single "Apply" button instead of offering a choice
      * that's really the same outcome either way. */
-    hasExistingCards: Boolean = true
+    hasExistingCards: Boolean = true,
+    /** False for Settings' global Templates list, which opens this same dialog to edit a shared
+     * template in place with no particular deck in context — Apply/Apply to New/Apply to All (and
+     * the name field's "Remove" button, which detaches *a deck's* link) don't mean anything
+     * without one, so the footer collapses to a plain Cancel/Save instead, and Save closes the
+     * dialog once it persists (every other path here leaves it open, since Apply/Save there are
+     * just one step in a still-open deck editor). */
+    footerShowsApplyButtons: Boolean = true
 ) {
     val dimensions = LocalStudiareDimensions.current
     // Keyed on the incoming templates so each fresh open of this dialog starts from whatever was
@@ -384,7 +392,23 @@ fun AdvancedDeckEditorDialog(
         commitTemplateEdit(forceFork = forceFork) { resolvedId ->
             if (applyAll != null) {
                 onSave(localFront, localBack, resolvedId, templateName, applyAll)
+            } else if (!footerShowsApplyButtons) {
+                // A bare Save (no Apply involved) in the footerless-Apply mode — see saveTemplate.
+                onDismiss()
             }
+        }
+    }
+
+    // Bottom Save button for the no-Apply-buttons footer (and the overflow menu's own "Save"
+    // item, in every mode) — commits under the existing name, or asks for one first via the same
+    // naming dialog Apply uses. Closes the dialog afterward only in the no-Apply-buttons mode (see
+    // footerShowsApplyButtons's doc comment); resolveNaming above mirrors that for the
+    // naming-dialog path.
+    fun saveTemplate() {
+        if (templateName.isNotBlank()) {
+            commitTemplateEdit { if (!footerShowsApplyButtons) onDismiss() }
+        } else {
+            requestNaming(applyAll = null)
         }
     }
 
@@ -465,10 +489,7 @@ fun AdvancedDeckEditorDialog(
                                 leadingIcon = { Icon(Icons.Default.Save, contentDescription = null) },
                                 onClick = {
                                     showOverflowMenu = false
-                                    // Already named (editing an existing template, or typed one in
-                                    // already via this same dialog earlier this session) — no need
-                                    // to ask again; otherwise, same naming dialog Apply uses below.
-                                    if (templateName.isNotBlank()) commitTemplateEdit {} else requestNaming(applyAll = null)
+                                    saveTemplate()
                                 }
                             )
                             // Only meaningful for an existing template whose name hasn't already
@@ -567,8 +588,10 @@ fun AdvancedDeckEditorDialog(
                             // Only once there's an actual shared template this deck is linked to —
                             // more discoverable here than buried in the overflow menu, since
                             // "stop using a template" is otherwise easy to miss entirely (blanking
-                            // the editor and pressing Apply silently does nothing).
-                            if (editingTemplateId != null) {
+                            // the editor and pressing Apply silently does nothing). Meaningless
+                            // without a deck in context, so hidden in footerShowsApplyButtons's
+                            // false (global-library-edit) mode too.
+                            if (editingTemplateId != null && footerShowsApplyButtons) {
                                 Spacer(Modifier.width(dimensions.spacingSmall))
                                 Button(
                                     onClick = {
@@ -669,11 +692,20 @@ fun AdvancedDeckEditorDialog(
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     TextButton(onClick = onDismiss, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(getText(R.string.cancel), style = MaterialTheme.typography.labelLarge) }
                     Row(horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)) {
-                        // Never disabled on name alone — pressing either one either applies
-                        // directly (nothing changed since opening this template) or asks for/
-                        // confirms a name first via the naming dialog, rather than silently
-                        // refusing to do anything until the user notices why.
-                        if (hasExistingCards) {
+                        if (!footerShowsApplyButtons) {
+                            // Settings' global-library-edit mode: no deck in context for Apply to
+                            // mean anything against, so just a plain Save — closes once it
+                            // persists (see saveTemplate's doc comment).
+                            Button(
+                                onClick = { saveTemplate() },
+                                enabled = hasChanges,
+                                shape = RoundedCornerShape(dimensions.cornerRadiusButton)
+                            ) { Text(getText(R.string.save), style = MaterialTheme.typography.labelLarge) }
+                        } else if (hasExistingCards) {
+                            // Never disabled on name alone — pressing either one either applies
+                            // directly (nothing changed since opening this template) or asks for/
+                            // confirms a name first via the naming dialog, rather than silently
+                            // refusing to do anything until the user notices why.
                             OutlinedButton(
                                 onClick = { applyTemplate(applyAll = false) },
                                 shape = RoundedCornerShape(dimensions.cornerRadiusButton)
@@ -811,6 +843,81 @@ fun AdvancedDeckEditorDialog(
                             shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                         ) { Text(getText(R.string.delete)) }
                     }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Settings' Templates section's "Apply" picker — checklist of every deck, linking+seeding
+ * whichever ones get checked to [templateName]'s template (via [onConfirm]'s deck-id set). Same
+ * "Apply to New" semantics as the per-deck Template Editor's own Apply button, just across however
+ * many decks are chosen here instead of the one deck that dialog is always scoped to; existing
+ * cards are never touched. "Apply to All" (this template's split button's dropdown, not this
+ * dialog) skips the picker entirely rather than offering a "select all" shortcut here.
+ */
+@Composable
+fun ApplyTemplateToDecksDialog(
+    templateName: String,
+    decks: List<DeckWithCards>,
+    onDismiss: () -> Unit,
+    onConfirm: (Set<String>) -> Unit
+) {
+    val dimensions = LocalStudiareDimensions.current
+    val selected = remember { mutableStateOf<Set<String>>(emptySet()) }
+    AnimatedDialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        Surface(
+            shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+            tonalElevation = 6.dp,
+            modifier = Modifier.widthIn(min = 280.dp, max = 560.dp).fillMaxHeight(0.8f)
+        ) {
+            Column(modifier = Modifier.padding(dimensions.paddingLarge)) {
+                Text(
+                    stringResource(R.string.apply_template_to_decks_title, templateName),
+                    style = MaterialTheme.typography.headlineSmall,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(Modifier.height(dimensions.spacingMedium))
+                if (decks.isEmpty()) {
+                    Text(
+                        getText(R.string.no_decks_to_apply_template),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.fillMaxWidth().padding(vertical = dimensions.paddingMedium),
+                        textAlign = TextAlign.Center
+                    )
+                } else {
+                    LazyColumn(modifier = Modifier.weight(1f, fill = false)) {
+                        itemsIndexed(decks, key = { _, deck -> deck.deck.id }) { _, deckWithCards ->
+                            val deckId = deckWithCards.deck.id
+                            val isChecked = deckId in selected.value
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { selected.value = if (isChecked) selected.value - deckId else selected.value + deckId }
+                                    .padding(vertical = 4.dp)
+                            ) {
+                                androidx.compose.material3.Checkbox(checked = isChecked, onCheckedChange = {
+                                    selected.value = if (isChecked) selected.value - deckId else selected.value + deckId
+                                })
+                                Text(deckWithCards.deck.name, style = MaterialTheme.typography.bodyLarge)
+                            }
+                        }
+                    }
+                }
+                Spacer(Modifier.height(dimensions.spacingMedium))
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                    TextButton(onClick = onDismiss, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(getText(R.string.cancel)) }
+                    Spacer(Modifier.width(dimensions.spacingSmall))
+                    Button(
+                        onClick = { onConfirm(selected.value) },
+                        enabled = selected.value.isNotEmpty(),
+                        shape = RoundedCornerShape(dimensions.cornerRadiusButton)
+                    ) { Text(getText(R.string.apply)) }
                 }
             }
         }

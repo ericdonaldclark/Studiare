@@ -627,6 +627,8 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         .stateIn(viewModelScope, SharingStarted.Eagerly, StudyCategory.LEARN)
     val sortTagsByDateCreated: StateFlow<Boolean> = preferenceManager.sortTagsByDateCreatedFlow
         .stateIn(viewModelScope, SharingStarted.Eagerly, false)
+    val sortTemplatesByDateCreated: StateFlow<Boolean> = preferenceManager.sortTemplatesByDateCreatedFlow
+        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
     val shortcutsCurrentScreenOnly: StateFlow<Boolean> = preferenceManager.shortcutsCurrentScreenOnlyFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
     val showSizeOverlay: StateFlow<Boolean> = preferenceManager.showSizeOverlayFlow
@@ -1705,6 +1707,7 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
     private fun markTutorialSeen() { viewModelScope.launch { preferenceManager.setHasSeenTutorial(true) } }
     fun setLastStudyCategory(category: StudyCategory) { viewModelScope.launch { preferenceManager.setLastStudyCategory(category.name) } }
     fun setSortTagsByDateCreated(enabled: Boolean) { viewModelScope.launch { preferenceManager.setSortTagsByDateCreated(enabled) } }
+    fun setSortTemplatesByDateCreated(enabled: Boolean) { viewModelScope.launch { preferenceManager.setSortTemplatesByDateCreated(enabled) } }
     /** A one-shot routing decision at click-time, not reactive UI — reads `.value` directly rather than via `collectAsState()`. */
     fun deckEditRoute(deckId: String): String = if (alwaysOpenBulkEditor.value) "deckEditor?deckId=$deckId" else "simpleEditor?deckId=$deckId"
     fun setShortcutsCurrentScreenOnly(enabled: Boolean) { viewModelScope.launch { preferenceManager.setShortcutsCurrentScreenOnly(enabled) } }
@@ -2687,6 +2690,71 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
+    /** Links+seeds the given decks to this shared [TemplateSet] — same "Apply to New" semantics
+     * `AdvancedDeckEditorDialog`'s own split button uses for whichever one deck it's open on, just
+     * across however many decks were picked here (Settings' global Templates list has no single
+     * "current deck" to default to). Never touches any card's existing fields — only each deck's
+     * own link/seed-shape, exactly like [removeDeckTemplate] only ever touches one deck's link. */
+    fun applyTemplateToDecks(templateSet: TemplateSet, deckIds: Set<String>) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val targets = localDecks.filter { it.id in deckIds }
+            if (targets.isEmpty()) return@launch
+            val now = System.currentTimeMillis()
+            deckDao.insertOrUpdateAll(targets.map {
+                it.copy(
+                    activeTemplateSetId = templateSet.id,
+                    frontNoteTemplates = templateSet.frontFields,
+                    backNoteTemplates = templateSet.backFields,
+                    seedNewCardsFromTemplate = true,
+                    updatedAt = now,
+                    isPendingSync = true
+                )
+            })
+        }
+    }
+
+    /** Card-level counterpart to [applyTemplateToDecks] — backs Settings' power-user bulk
+     * picker's "add" side for templates. A field counts as already present if a card already has
+     * one of the same name+type (matching [TemplateMatchStatus]'s own notion of "same field"), in
+     * which case it's left untouched rather than duplicated; this mirrors the per-card merge
+     * `DeckEditorScreen`'s own "Apply to All" sweep does to a deck's cards, just written straight
+     * to the DB for cards picked from a dialog with no open editor behind it. */
+    fun addTemplateFieldsToCards(templateSet: TemplateSet, cardIds: Collection<String>) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val cardsToUpdate = localCards.filter { it.id in cardIds }.mapNotNull { card ->
+                val currentFrontKeys = card.frontNotes.map { it.name to it.type }
+                val currentBackKeys = card.backNotes.map { it.name to it.type }
+                val missingFront = templateSet.frontFields.filter { (it.name to it.type) !in currentFrontKeys }.map { it.copy(content = "") }
+                val missingBack = templateSet.backFields.filter { (it.name to it.type) !in currentBackKeys }.map { it.copy(content = "") }
+                if (missingFront.isEmpty() && missingBack.isEmpty()) null
+                else card.copy(
+                    frontNotes = card.frontNotes + missingFront,
+                    backNotes = card.backNotes + missingBack,
+                    updatedAt = System.currentTimeMillis(),
+                    isPendingSync = true
+                )
+            }
+            if (cardsToUpdate.isNotEmpty()) cardDao.insertOrUpdateAll(cardsToUpdate)
+        }
+    }
+
+    /** [addTemplateFieldsToCards]'s inverse — strips exactly the fields (matched by name+type)
+     * [templateSet] defines from each card. Never touches a field the card has that the template
+     * doesn't define, even if its name happens to collide after the card was edited independently. */
+    fun removeTemplateFieldsFromCards(templateSet: TemplateSet, cardIds: Collection<String>) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val templateFrontKeys = templateSet.frontFields.map { it.name to it.type }.toSet()
+            val templateBackKeys = templateSet.backFields.map { it.name to it.type }.toSet()
+            val cardsToUpdate = localCards.filter { it.id in cardIds }.mapNotNull { card ->
+                val newFront = card.frontNotes.filterNot { (it.name to it.type) in templateFrontKeys }
+                val newBack = card.backNotes.filterNot { (it.name to it.type) in templateBackKeys }
+                if (newFront.size == card.frontNotes.size && newBack.size == card.backNotes.size) null
+                else card.copy(frontNotes = newFront, backNotes = newBack, updatedAt = System.currentTimeMillis(), isPendingSync = true)
+            }
+            if (cardsToUpdate.isNotEmpty()) cardDao.insertOrUpdateAll(cardsToUpdate)
+        }
+    }
+
     fun renameTag(tag: TagDefinition, oldName: String) {
         if (tag.name.trim() == oldName) {
             saveTagDefinition(tag)
@@ -2715,6 +2783,17 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         viewModelScope.launch(Dispatchers.IO) {
             val cardsToUpdate = localCards.filter { it.id in cardIds }.map { card ->
                 card.copy(tags = card.tags - tagName, updatedAt = System.currentTimeMillis(), isPendingSync = true)
+            }
+            if (cardsToUpdate.isNotEmpty()) cardDao.insertOrUpdateAll(cardsToUpdate)
+        }
+    }
+
+    /** [removeTagFromCards]'s counterpart — backs Settings' power-user bulk picker's "add"
+     * side. Skips any card that already has the tag rather than writing a no-op update. */
+    fun addTagToCards(tagName: String, cardIds: Collection<String>) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val cardsToUpdate = localCards.filter { it.id in cardIds && tagName !in it.tags }.map { card ->
+                card.copy(tags = card.tags + tagName, updatedAt = System.currentTimeMillis(), isPendingSync = true)
             }
             if (cardsToUpdate.isNotEmpty()) cardDao.insertOrUpdateAll(cardsToUpdate)
         }

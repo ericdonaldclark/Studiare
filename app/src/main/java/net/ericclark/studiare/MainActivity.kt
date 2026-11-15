@@ -413,6 +413,16 @@ fun AppNavigation(
     // means the deckList route AND only the root pane showing.
     val paneStack by viewModel.paneStack.collectAsState()
     val isAtHome = (currentRoute == "deckList" || currentRoute == null) && paneStack.size <= 1
+    // Home's icon stays filled for the whole deckList route, root or drilled into a pane — only
+    // the pill (selected = isAtHome) turns off once a pane is pushed. Driving both the root and
+    // in-path cases off this single animated value (rather than switching between a hardcoded 1f
+    // at the root and a separately-animated value once in a pane) keeps the fill continuous across
+    // that transition instead of snapping back to outline for a frame before re-animating up.
+    val isInHomeSection = currentRoute == "deckList" || currentRoute == null
+    val homeIconFill by androidx.compose.animation.core.animateFloatAsState(
+        targetValue = if (isInHomeSection) 1f else 0f,
+        label = "homeIconFill"
+    )
     val goHome = {
         if (currentRoute in dockRoutes) {
             // First press returns to the screen the dock was opened from; the next press (from there) goes home
@@ -501,7 +511,13 @@ fun AppNavigation(
                     NavigationRailItem(
                         selected = isAtHome,
                         onClick = { goHome() },
-                        icon = { Icon(Icons.Default.Home, contentDescription = getText(R.string.home)) },
+                        icon = {
+                            net.ericclark.studiare.components.MaterialSymbol(
+                                codepoint = net.ericclark.studiare.components.MaterialSymbols.HOME,
+                                contentDescription = getText(R.string.home),
+                                fill = homeIconFill
+                            )
+                        },
                         label = { Text(getText(R.string.home)) }
                     )
                     NavigationRailItem(
@@ -599,7 +615,13 @@ fun AppNavigation(
                         NavigationBarItem(
                             selected = isAtHome,
                             onClick = { goHome() },
-                            icon = { Icon(Icons.Default.Home, contentDescription = getText(R.string.home)) },
+                            icon = {
+                                net.ericclark.studiare.components.MaterialSymbol(
+                                    codepoint = net.ericclark.studiare.components.MaterialSymbols.HOME,
+                                    contentDescription = getText(R.string.home),
+                                    fill = homeIconFill
+                                )
+                            },
                             label = { Text(getText(R.string.home)) }
                         )
                         NavigationBarItem(
