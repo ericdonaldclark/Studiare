@@ -569,7 +569,7 @@ fun SettingsScreen(
     // Hoisted (rather than local to AppToolsAndInfoCategoryContent) so the top app bar below can
     // show the open sub-category's own title/back behavior, the same way it does for a
     // top-level category.
-    var openAppToolsSubCategoryId by rememberSaveable { mutableStateOf<String?>(null) }
+    val openAppToolsSubCategoryId by viewModel.settingsOpenAppToolsSubCategoryId.collectAsState()
     val appToolsSubCategories = listOfNotNull(
         if (!isDebug) null else AppToolsSubCategory(
             id = "debug", title = getText(R.string.debug), subtitle = getText(R.string.developer_tools)
@@ -662,7 +662,7 @@ fun SettingsScreen(
                     navController = navController,
                     subCategories = appToolsSubCategories,
                     openSubCategoryId = openAppToolsSubCategoryId,
-                    onOpenSubCategory = { openAppToolsSubCategoryId = it },
+                    onOpenSubCategory = { viewModel.setSettingsOpenAppToolsSubCategoryId(it) },
                     showFieldMapperState = showFieldMapperState,
                     tagCount = tags.size,
                     totalDecks = totalDecks,
@@ -685,16 +685,16 @@ fun SettingsScreen(
     // Wide: the nav rail always has one category selected, shown alone in the content pane —
     // composing only that one category instead of every category at once (and never a scrolling
     // list of them) is what keeps the wide layout's first paint cheap.
-    var openCategoryId by rememberSaveable { mutableStateOf<String?>(null) }
-    var selectedWideCategoryIndex by rememberSaveable { mutableStateOf(0) }
+    val openCategoryId by viewModel.settingsOpenCategoryId.collectAsState()
+    val selectedWideCategoryIndex by viewModel.settingsSelectedWideCategoryIndex.collectAsState()
     val isWideLayout = windowWidthSizeClass >= WindowWidthSizeClass.Expanded
     val openCategory = if (isWideLayout) null else categories.firstOrNull { it.id == openCategoryId }
     val currentCategoryId = if (isWideLayout) categories.getOrNull(selectedWideCategoryIndex)?.id else openCategory?.id
     val openAppToolsSubCategory = if (currentCategoryId == "app_tools_info") {
         appToolsSubCategories.firstOrNull { it.id == openAppToolsSubCategoryId }
     } else null
-    BackHandler(enabled = openAppToolsSubCategory != null) { openAppToolsSubCategoryId = null }
-    BackHandler(enabled = openAppToolsSubCategory == null && !isWideLayout && openCategory != null) { openCategoryId = null }
+    BackHandler(enabled = openAppToolsSubCategory != null) { viewModel.setSettingsOpenAppToolsSubCategoryId(null) }
+    BackHandler(enabled = openAppToolsSubCategory == null && !isWideLayout && openCategory != null) { viewModel.setSettingsOpenCategoryId(null) }
 
     // --- Main UI Scaffold ---
     Scaffold(
@@ -713,8 +713,8 @@ fun SettingsScreen(
                         description = getText(R.string.back),
                         onClick = {
                             when {
-                                openAppToolsSubCategory != null -> openAppToolsSubCategoryId = null
-                                !isWideLayout && openCategory != null -> openCategoryId = null
+                                openAppToolsSubCategory != null -> viewModel.setSettingsOpenAppToolsSubCategoryId(null)
+                                !isWideLayout && openCategory != null -> viewModel.setSettingsOpenCategoryId(null)
                                 else -> navController.popBackStack()
                             }
                         }
@@ -745,9 +745,9 @@ fun SettingsScreen(
                 val wasExpanded = previousWindowWidthSizeClass >= WindowWidthSizeClass.Expanded
                 val isExpanded = windowWidthSizeClass >= WindowWidthSizeClass.Expanded
                 if (!wasExpanded && isExpanded) {
-                    selectedWideCategoryIndex = categories.indexOfFirst { it.id == openCategoryId }.takeIf { it >= 0 } ?: 0
+                    viewModel.setSettingsSelectedWideCategoryIndex(categories.indexOfFirst { it.id == openCategoryId }.takeIf { it >= 0 } ?: 0)
                 } else if (wasExpanded && !isExpanded) {
-                    openCategoryId = categories.getOrNull(selectedWideCategoryIndex)?.id
+                    viewModel.setSettingsOpenCategoryId(categories.getOrNull(selectedWideCategoryIndex)?.id)
                 }
                 previousWindowWidthSizeClass = windowWidthSizeClass
             }
@@ -819,7 +819,7 @@ fun SettingsScreen(
                     ) {
                         categories.forEachIndexed { index, category ->
                             val isSelected = selectedWideCategoryIndex == index
-                            val selectCategory = { selectedWideCategoryIndex = index }
+                            val selectCategory = { viewModel.setSettingsSelectedWideCategoryIndex(index) }
 
                             // M3 Expressive Side Menu Item
                             Surface(
@@ -911,7 +911,7 @@ fun SettingsScreen(
                                     title = c.title,
                                     subtitle = c.subtitle,
                                     dimensions = dimensions,
-                                    onClick = { openCategoryId = c.id }
+                                    onClick = { viewModel.setSettingsOpenCategoryId(c.id) }
                                 )
                             }
                         }

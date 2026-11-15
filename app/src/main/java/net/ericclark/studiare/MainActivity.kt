@@ -88,7 +88,6 @@ import androidx.compose.material3.NavigationRail
 import androidx.compose.material3.NavigationRailItem
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.AutoAwesomeMotion
 import androidx.compose.material3.DropdownMenu
@@ -99,13 +98,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.material3.Text
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.material.icons.filled.AcUnit
-import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.PushPin
 import net.ericclark.studiare.screens.Dialogs.TutorialDialog
 import net.ericclark.studiare.screens.Screens.CollectionManagerScreen
 import net.ericclark.studiare.screens.Screens.DeckEditorScreen
@@ -423,6 +419,43 @@ fun AppNavigation(
         targetValue = if (isInHomeSection) 1f else 0f,
         label = "homeIconFill"
     )
+
+    // Pinned and Recents have no internal drill-down state of their own (unlike Home/Settings),
+    // so their icon just animates between outline and filled in step with their selected state.
+    val pinnedIconFill by androidx.compose.animation.core.animateFloatAsState(
+        targetValue = if (currentRoute == "pinned") 1f else 0f,
+        label = "pinnedIconFill"
+    )
+    val recentsIconFill by androidx.compose.animation.core.animateFloatAsState(
+        targetValue = if (currentRoute == "recents") 1f else 0f,
+        label = "recentsIconFill"
+    )
+
+    // Settings mirrors Home: its own open-category/subcategory state lives on the ViewModel
+    // (not rememberSaveable inside SettingsScreen) so it survives leaving via another dock tab
+    // and coming back, instead of resetting to the category list every time. "Root" is the
+    // category list on narrow screens, or no app-tools subcategory drilled into on wide screens
+    // (which never shows a bare "nothing open" state at the top level the way narrow's list does).
+    val isWideSettingsLayout = LocalWindowWidthSizeClass.current >= WindowWidthSizeClass.Expanded
+    val settingsOpenCategoryId by viewModel.settingsOpenCategoryId.collectAsState()
+    val settingsOpenAppToolsSubCategoryId by viewModel.settingsOpenAppToolsSubCategoryId.collectAsState()
+    val isSettingsAtRoot = settingsOpenAppToolsSubCategoryId == null &&
+        (isWideSettingsLayout || settingsOpenCategoryId == null)
+    val isAtSettingsRoot = currentRoute == "settings" && isSettingsAtRoot
+    val isInSettingsSection = currentRoute == "settings"
+    val settingsIconFill by androidx.compose.animation.core.animateFloatAsState(
+        targetValue = if (isInSettingsSection) 1f else 0f,
+        label = "settingsIconFill"
+    )
+    // Pressing Settings again while already there and drilled in collapses back to its root,
+    // the same way Home's own button returns you to the deckList pane root.
+    val openSettings = {
+        if (currentRoute == "settings") {
+            if (!isSettingsAtRoot) viewModel.resetSettingsToRoot()
+        } else {
+            openDockRoute("settings")
+        }
+    }
     val goHome = {
         if (currentRoute in dockRoutes) {
             // First press returns to the screen the dock was opened from; the next press (from there) goes home
@@ -458,7 +491,7 @@ fun AppNavigation(
                     if (isModifierPressed) {
                         when (event.key) {
                             goHomeKey -> { goHome(); return@onPreviewKeyEvent true }
-                            Key.Comma, Key.S -> { openDockRoute("settings"); return@onPreviewKeyEvent true }
+                            Key.Comma, Key.S -> { openSettings(); return@onPreviewKeyEvent true }
                         }
                     }
                 } else if (event.type == KeyEventType.KeyUp) {
@@ -523,19 +556,37 @@ fun AppNavigation(
                     NavigationRailItem(
                         selected = currentRoute == "pinned",
                         onClick = { openDockRoute("pinned") },
-                        icon = { Icon(Icons.Default.PushPin, contentDescription = getText(R.string.pinned)) },
+                        icon = {
+                            net.ericclark.studiare.components.MaterialSymbol(
+                                codepoint = net.ericclark.studiare.components.MaterialSymbols.PUSH_PIN,
+                                contentDescription = getText(R.string.pinned),
+                                fill = pinnedIconFill
+                            )
+                        },
                         label = { Text(getText(R.string.pinned)) }
                     )
                     NavigationRailItem(
                         selected = currentRoute == "recents",
                         onClick = { openDockRoute("recents") },
-                        icon = { Icon(Icons.Default.History, contentDescription = getText(R.string.recents)) },
+                        icon = {
+                            net.ericclark.studiare.components.MaterialSymbol(
+                                codepoint = net.ericclark.studiare.components.MaterialSymbols.SCHEDULE,
+                                contentDescription = getText(R.string.recents),
+                                fill = recentsIconFill
+                            )
+                        },
                         label = { Text(getText(R.string.recents)) }
                     )
                     NavigationRailItem(
-                        selected = currentRoute == "settings",
-                        onClick = { openDockRoute("settings") },
-                        icon = { Icon(Icons.Default.Settings, contentDescription = getText(R.string.settings)) },
+                        selected = isAtSettingsRoot,
+                        onClick = { openSettings() },
+                        icon = {
+                            net.ericclark.studiare.components.MaterialSymbol(
+                                codepoint = net.ericclark.studiare.components.MaterialSymbols.SETTINGS,
+                                contentDescription = getText(R.string.settings),
+                                fill = settingsIconFill
+                            )
+                        },
                         label = { Text(getText(R.string.settings)) }
                     )
                 }
@@ -627,19 +678,37 @@ fun AppNavigation(
                         NavigationBarItem(
                             selected = currentRoute == "pinned",
                             onClick = { openDockRoute("pinned") },
-                            icon = { Icon(Icons.Default.PushPin, contentDescription = getText(R.string.pinned)) },
+                            icon = {
+                                net.ericclark.studiare.components.MaterialSymbol(
+                                    codepoint = net.ericclark.studiare.components.MaterialSymbols.PUSH_PIN,
+                                    contentDescription = getText(R.string.pinned),
+                                    fill = pinnedIconFill
+                                )
+                            },
                             label = { Text(getText(R.string.pinned)) }
                         )
                         NavigationBarItem(
                             selected = currentRoute == "recents",
                             onClick = { openDockRoute("recents") },
-                            icon = { Icon(Icons.Default.History, contentDescription = getText(R.string.recents)) },
+                            icon = {
+                                net.ericclark.studiare.components.MaterialSymbol(
+                                    codepoint = net.ericclark.studiare.components.MaterialSymbols.SCHEDULE,
+                                    contentDescription = getText(R.string.recents),
+                                    fill = recentsIconFill
+                                )
+                            },
                             label = { Text(getText(R.string.recents)) }
                         )
                         NavigationBarItem(
-                            selected = currentRoute == "settings",
-                            onClick = { openDockRoute("settings") },
-                            icon = { Icon(Icons.Default.Settings, contentDescription = getText(R.string.settings)) },
+                            selected = isAtSettingsRoot,
+                            onClick = { openSettings() },
+                            icon = {
+                                net.ericclark.studiare.components.MaterialSymbol(
+                                    codepoint = net.ericclark.studiare.components.MaterialSymbols.SETTINGS,
+                                    contentDescription = getText(R.string.settings),
+                                    fill = settingsIconFill
+                                )
+                            },
                             label = { Text(getText(R.string.settings)) }
                         )
                     }

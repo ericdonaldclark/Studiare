@@ -523,6 +523,34 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
+    // ── Settings screen navigation ────────────────────────────────────────────
+    // Held here (not as rememberSaveable inside SettingsScreen) so it survives the Settings
+    // NavBackStackEntry being destroyed and recreated when you leave via another dock tab and
+    // come back — the dock's Settings icon also reads isAtSettingsRoot/isInSettingsSection off
+    // this same state to drive its selected/filled-in-path behavior, mirroring Home's paneStack.
+    private val _settingsOpenCategoryId = MutableStateFlow<String?>(null)
+    val settingsOpenCategoryId: StateFlow<String?> = _settingsOpenCategoryId
+    fun setSettingsOpenCategoryId(id: String?) { _settingsOpenCategoryId.value = id }
+
+    private val _settingsSelectedWideCategoryIndex = MutableStateFlow(0)
+    val settingsSelectedWideCategoryIndex: StateFlow<Int> = _settingsSelectedWideCategoryIndex
+    fun setSettingsSelectedWideCategoryIndex(index: Int) { _settingsSelectedWideCategoryIndex.value = index }
+
+    private val _settingsOpenAppToolsSubCategoryId = MutableStateFlow<String?>(null)
+    val settingsOpenAppToolsSubCategoryId: StateFlow<String?> = _settingsOpenAppToolsSubCategoryId
+    fun setSettingsOpenAppToolsSubCategoryId(id: String?) { _settingsOpenAppToolsSubCategoryId.value = id }
+
+    // Root = category list showing (narrow) or no app-tools subcategory drilled into (either
+    // layout) — wide layout always has some category selected in its detail pane, so it has no
+    // "nothing open" state at the top level the way narrow's category list does.
+    fun isSettingsAtRoot(isWideLayout: Boolean): Boolean =
+        _settingsOpenAppToolsSubCategoryId.value == null && (isWideLayout || _settingsOpenCategoryId.value == null)
+
+    fun resetSettingsToRoot() {
+        _settingsOpenCategoryId.value = null
+        _settingsOpenAppToolsSubCategoryId.value = null
+    }
+
     // ── Back-compat shims ─────────────────────────────────────────────────────
     // Old call sites (DecksScreen, SetsScreen, StudyScreens, NavigationDrawer)
     // call setCurrentDeckId/setCurrentSetId directly — keep those signatures
