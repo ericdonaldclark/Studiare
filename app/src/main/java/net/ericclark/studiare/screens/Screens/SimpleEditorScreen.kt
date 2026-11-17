@@ -20,6 +20,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
@@ -428,12 +429,21 @@ fun SimpleEditorScreen(
                                 id = "unknown",
                                 icon = Icons.Default.Close,
                                 label = getText(context, R.string.mark_as_not_known),
+                                iconContent = {
+                                    net.ericclark.studiare.components.MaterialSymbol(
+                                        codepoint = net.ericclark.studiare.components.MaterialSymbols.PRELIMINARY,
+                                        contentDescription = null,
+                                        fill = 0f,
+                                        size = 30.dp
+                                    )
+                                },
                                 onClick = { setKnownForSelection(selection.selected, false) }
                             ),
                             SelectionAction(
                                 id = "known",
                                 icon = Icons.Default.Check,
                                 label = getText(context, R.string.mark_as_known),
+                                iconContent = { Icon(Icons.Filled.CheckCircle, contentDescription = null) },
                                 onClick = { setKnownForSelection(selection.selected, true) }
                             ),
                             SelectionAction(
@@ -941,7 +951,7 @@ internal fun CardTile(
                     if (card.isKnown) {
                         androidx.compose.foundation.layout.Spacer(Modifier.width(dimensions.spacingSmall))
                         Icon(
-                            imageVector = Icons.Filled.Check,
+                            imageVector = Icons.Filled.CheckCircle,
                             contentDescription = getText(R.string.mark_as_not_known),
                             tint = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(20.dp)

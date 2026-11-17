@@ -548,6 +548,13 @@
         <item quantity="one">This will reset review, known status, and FSRS scheduling for this card. This cannot be undone.</item>
         <item quantity="other">This will reset review, known status, and FSRS scheduling for these %1$d cards. This cannot be undone.</item>
     </plurals>
+    <string name="clear_filter_text">Clear filter text</string>
+    <string name="filter_by_difficulty_message">Only show cards with this difficulty.</string>
+    <string name="set_difficulty">Set Difficulty</string>
+    <plurals name="set_difficulty_message">
+        <item quantity="one">Set the difficulty for this card.</item>
+        <item quantity="other">Set the difficulty for these %1$d cards.</item>
+    </plurals>
 
     <!-- Decks screen -->
     <string name="output_file_name">studiare_data_%1$s.%2$s</string>

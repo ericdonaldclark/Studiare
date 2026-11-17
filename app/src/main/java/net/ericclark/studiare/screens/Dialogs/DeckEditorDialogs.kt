@@ -283,6 +283,58 @@ fun ClearCardDataConfirmDialog(cardCount: Int, onDismiss: () -> Unit, onConfirm:
     }
 }
 
+/** Sets a [DifficultySetting] via a [net.ericclark.studiare.DifficultySlider] — shared by the
+ * multi-select "Difficulty" bulk action (mirrors [ClearCardDataConfirmDialog]'s small-
+ * confirmation-dialog shape, [message] is the pluralized "Set the difficulty for N cards" text,
+ * no [onClear]) and the filter overlay's difficulty quick-filter (a plain explanatory [message],
+ * [onClear] clears the filter back to "any difficulty" instead of applying one). */
+@Composable
+fun SetDifficultyDialog(
+    message: String,
+    onDismiss: () -> Unit,
+    onConfirm: (net.ericclark.studiare.data.DifficultySetting) -> Unit,
+    initialDifficulty: net.ericclark.studiare.data.DifficultySetting = net.ericclark.studiare.data.DifficultySetting.ONE,
+    onClear: (() -> Unit)? = null
+) {
+    val dimensions = LocalStudiareDimensions.current
+    var difficulty by remember { mutableStateOf(initialDifficulty) }
+    AnimatedDialog(onDismissRequest = onDismiss) {
+        Surface(
+            shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+            color = MaterialTheme.colorScheme.surfaceContainer,
+            tonalElevation = 6.dp
+        ) {
+            Column(modifier = Modifier.padding(dimensions.paddingLarge).widthIn(min = 280.dp, max = 560.dp)) {
+                Text(getText(R.string.set_difficulty), style = MaterialTheme.typography.headlineSmall, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+                Spacer(Modifier.height(dimensions.spacingSmall))
+                Text(message)
+                Spacer(Modifier.height(dimensions.spacingSmall))
+                net.ericclark.studiare.DifficultySlider(
+                    label = getText(R.string.difficulty),
+                    difficulty = difficulty,
+                    onDifficultyChange = { difficulty = it }
+                )
+                Spacer(Modifier.height(dimensions.spacingLarge))
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    if (onClear != null) {
+                        TextButton(onClick = onClear, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(getText(R.string.clear_filter_text)) }
+                    } else {
+                        Spacer(Modifier.width(1.dp))
+                    }
+                    Row {
+                        TextButton(onClick = onDismiss, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(getText(R.string.cancel)) }
+                        Spacer(Modifier.width(dimensions.spacingSmall))
+                        Button(
+                            onClick = { onConfirm(difficulty) },
+                            shape = RoundedCornerShape(dimensions.cornerRadiusButton)
+                        ) { Text(getText(R.string.save)) }
+                    }
+                }
+            }
+        }
+    }
+}
+
 /** Snapshot of what actually gets persisted (name + fields) — compared against the live editing
  * state to tell whether anything has changed since the dialog opened, was last Opened/Reset, or
  * was last committed, so Reset/Save can disable themselves with nothing to act on. */

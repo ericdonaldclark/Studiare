@@ -32,6 +32,8 @@ object MaterialSymbols {
     const val PUSH_PIN = ''
     const val SCHEDULE = ''
     const val SETTINGS = ''
+    const val CHECK_CIRCLE = ''
+    const val PRELIMINARY = ''
 }
 
 /**

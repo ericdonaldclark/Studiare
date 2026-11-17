@@ -107,6 +107,10 @@ data class SelectionAction(
     val icon: ImageVector,
     val label: String,
     val isDestructive: Boolean = false,
+    /** Overrides [icon]'s rendering for an action whose icon isn't a plain [ImageVector] — e.g.
+     * a [net.ericclark.studiare.components.MaterialSymbol] glyph. [icon] is still required (it's
+     * otherwise unused) since most actions need no override. */
+    val iconContent: (@Composable () -> Unit)? = null,
     val onClick: () -> Unit
 )
 
@@ -149,7 +153,7 @@ fun SelectionActionBar(
         LazyRow(
             state = listState,
             modifier = Modifier.fillMaxWidth(),
-            contentPadding = PaddingValues(horizontal = 4.dp),
+            contentPadding = PaddingValues(start = 24.dp, end = 4.dp),
             // End-anchored, not centered: a short list (e.g. just "Select All" with nothing
             // selected) should still sit flush against this bar's right-hand anchor (Select
             // All/Close), not drift to the middle of the screen — any leftover space goes before
@@ -174,7 +178,7 @@ fun SelectionActionBar(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp)
                     ) {
-                        Icon(action.icon, contentDescription = null)
+                        if (action.iconContent != null) action.iconContent.invoke() else Icon(action.icon, contentDescription = null)
                         Text(action.label, style = MaterialTheme.typography.labelSmall, maxLines = 1)
                     }
                 }

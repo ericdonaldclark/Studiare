@@ -226,10 +226,24 @@ fun MarkKnownButton(
             checked = isKnown
         )
     ) {
-        Icon(
-            imageVector = if (isKnown) Icons.Filled.Check else Icons.Default.Check,
-            contentDescription = if (isKnown) getText(R.string.mark_as_not_known) else getText(R.string.mark_as_known)
-        )
+        if (isKnown) {
+            // The "check_circle" Material Symbol isn't in this app's subsetted
+            // material_symbols_outlined.ttf (only PRELIMINARY's codepoint was added to it) — the
+            // classic bundled vector icon stands in for it rather than requiring a font rebuild.
+            Icon(
+                imageVector = Icons.Filled.CheckCircle,
+                contentDescription = getText(R.string.mark_as_not_known)
+            )
+        } else {
+            net.ericclark.studiare.components.MaterialSymbol(
+                codepoint = net.ericclark.studiare.components.MaterialSymbols.PRELIMINARY,
+                contentDescription = getText(R.string.mark_as_known),
+                fill = 0f,
+                // Sized up slightly from CheckCircle's 24dp — same measured height, but its thinner
+                // outline strokes read as visually smaller next to CheckCircle's solid fill.
+                size = 30.dp
+            )
+        }
     }
 }
 
