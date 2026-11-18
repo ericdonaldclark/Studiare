@@ -348,9 +348,10 @@ fun DeckSettingsDialog(
     initialDefaultPromptSide: CardSide,
     initialFrontLanguage: String,
     initialBackLanguage: String,
+    initialTextCorrections: TextCorrectionSettings = TextCorrectionSettings(),
     isCreatingNewDeck: Boolean = false,
     onDismiss: () -> Unit,
-    onSave: (String, NormalizationType, DeckSortMode, Boolean, CardSide, String, String) -> Unit,
+    onSave: (String, NormalizationType, DeckSortMode, Boolean, CardSide, String, String, TextCorrectionSettings) -> Unit,
     onClearReviewData: () -> Unit,
     /** Carries this dialog's current (possibly-unsaved) draft values out before it's torn down to
      * open the Template Editor — otherwise, for a deck that hasn't been saved/created yet, nothing
@@ -364,8 +365,9 @@ fun DeckSettingsDialog(
         sortPinnedCardsFirst: Boolean,
         defaultPromptSide: CardSide,
         frontLanguage: String,
-        backLanguage: String
-    ) -> Unit = { _, _, _, _, _, _, _ -> },
+        backLanguage: String,
+        textCorrections: TextCorrectionSettings
+    ) -> Unit = { _, _, _, _, _, _, _, _ -> },
     canOpenTemplateEditor: Boolean = true,
     // Global (not per-deck) default-editor preference — same StateFlow/setter FlashcardViewModel
     // exposes to Settings' Customization > Editor section, shown here too as a shortcut so it
@@ -385,7 +387,9 @@ fun DeckSettingsDialog(
     var defaultPromptSide by remember { mutableStateOf(initialDefaultPromptSide) }
     var frontLanguage by remember { mutableStateOf(initialFrontLanguage) }
     var backLanguage by remember { mutableStateOf(initialBackLanguage) }
+    var textCorrections by remember { mutableStateOf(initialTextCorrections) }
     var showClearConfirm by remember { mutableStateOf(false) }
+    var showTextNormalizationDialog by remember { mutableStateOf(false) }
 
     // Scrolls the main content area so a tapped section lands at the very top of the visible
     // area (not just "somewhere visible") — a plain BringIntoViewRequester only nudges a target
@@ -638,13 +642,43 @@ fun DeckSettingsDialog(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Spacer(Modifier.height(dimensions.spacingSmall))
-                    ExpressiveDropdownMenuField(
-                        options = NormalizationType.entries,
-                        selectedOption = normalizationType,
-                        optionLabel = { it.asString() },
-                        onSelect = { normalizationType = it }
+                    Text(
+                        normalizationType.asString(),
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.primary
                     )
+                    Spacer(Modifier.height(dimensions.spacingSmall))
+                    FilledTonalButton(
+                        onClick = { showTextNormalizationDialog = true },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(dimensions.cornerRadiusButton)
+                    ) {
+                        // Text centered on the full button width — not just the remaining space
+                        // next to the icon — so the icon sits at the trailing edge without
+                        // pulling the label off-center. Matches the Template Editor button below.
+                        Box(modifier = Modifier.fillMaxWidth()) {
+                            Text(getText(R.string.case_normalization), modifier = Modifier.align(Alignment.Center))
+                            Icon(
+                                Icons.AutoMirrored.Filled.OpenInNew,
+                                contentDescription = null,
+                                modifier = Modifier.align(Alignment.CenterEnd)
+                            )
+                        }
+                    }
                 }
+                }
+
+                if (showTextNormalizationDialog) {
+                    net.ericclark.studiare.screens.Dialogs.TextNormalizationDialog(
+                        initialType = normalizationType,
+                        initialCorrections = textCorrections,
+                        onDismiss = { showTextNormalizationDialog = false },
+                        onConfirm = { newType, newCorrections ->
+                            normalizationType = newType
+                            textCorrections = newCorrections
+                            showTextNormalizationDialog = false
+                        }
+                    )
                 }
 
                 // Template Editor Section
@@ -665,7 +699,7 @@ fun DeckSettingsDialog(
                         onClick = {
                             onOpenTemplateEditor(
                                 deckName.trim(), normalizationType, sortType, sortPinnedCardsFirst,
-                                defaultPromptSide, frontLanguage, backLanguage
+                                defaultPromptSide, frontLanguage, backLanguage, textCorrections
                             )
                         },
                         enabled = canOpenTemplateEditor,
@@ -787,7 +821,7 @@ fun DeckSettingsDialog(
                     Spacer(Modifier.width(dimensions.spacingSmall))
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Button(
-                            onClick = { onSave(deckName.trim(), normalizationType, sortType, sortPinnedCardsFirst, defaultPromptSide, frontLanguage, backLanguage) },
+                            onClick = { onSave(deckName.trim(), normalizationType, sortType, sortPinnedCardsFirst, defaultPromptSide, frontLanguage, backLanguage, textCorrections) },
                             enabled = deckName.isNotBlank(),
                             shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                         ) {

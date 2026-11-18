@@ -92,7 +92,8 @@ fun CardEditDialog(
     onDeleteTag: (TagDefinition) -> Unit,
     mode: CardEditDialogMode,
     onCancel: () -> Unit,
-    normalizationType: NormalizationType = NormalizationType.NONE
+    normalizationType: NormalizationType = NormalizationType.NONE,
+    textCorrections: TextCorrectionSettings = TextCorrectionSettings()
 ) {
     val dimensions = LocalStudiareDimensions.current
     val dialogSnackbarHostState = remember { androidx.compose.material3.SnackbarHostState() }
@@ -182,7 +183,8 @@ fun CardEditDialog(
                             snackbarHostState = dialogSnackbarHostState,
                             coroutineScope = coroutineScope,
                             showInfoButton = false,
-                            normalizationType = normalizationType
+                            normalizationType = normalizationType,
+                            textCorrections = textCorrections
                         )
                     }
 

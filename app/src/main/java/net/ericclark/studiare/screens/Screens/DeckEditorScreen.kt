@@ -155,6 +155,7 @@ fun DeckEditorScreen(
 
     // State for deck settings
     var normalizationType by remember { mutableStateOf(deckWithCards?.deck?.normalizationType ?: NormalizationType.NONE) }
+    var textCorrections by remember { mutableStateOf(deckWithCards?.deck?.textCorrections ?: TextCorrectionSettings()) }
     var sortType by remember { mutableStateOf(deckWithCards?.deck?.deckSortMode ?: DeckSortMode.DATE_ADDED_OLD_TO_NEW) }
     var sortPinnedCardsFirst by remember { mutableStateOf(deckWithCards?.deck?.sortPinnedCardsFirst ?: true) }
     var defaultPromptSide by remember { mutableStateOf(deckWithCards?.deck?.defaultPromptSide ?: CardSide.AUTO_BY_DECK) }
@@ -433,26 +434,16 @@ fun DeckEditorScreen(
     }
 
     // --- Helper Functions for Applying Settings ---
-    fun applyNormalization(type: NormalizationType) {
+    fun applyNormalization(type: NormalizationType, corrections: TextCorrectionSettings = textCorrections) {
+        fun normalizeOne(text: String) = normalizeText(type, applyTextCorrections(corrections, text))
         cards.forEach { card ->
-            val normalize = { text: String ->
-                when (type) {
-                    NormalizationType.UPPERCASE_FIRST_LETTER -> text.replaceFirstChar { it.uppercase() }
-                    NormalizationType.UPPERCASE_ALL_LETTERS -> text.uppercase()
-                    NormalizationType.UPPERCASE_EACH_WORD -> text.split(" ").joinToString(" ") { it.replaceFirstChar { char -> char.uppercase() } }
-                    NormalizationType.LOWERCASE_FIRST_LETTER -> text.replaceFirstChar { it.lowercase() }
-                    NormalizationType.LOWERCASE_ALL_LETTERS -> text.lowercase()
-                    NormalizationType.LOWERCASE_EACH_WORD -> text.split(" ").joinToString(" ") { it.replaceFirstChar { char -> char.lowercase() } }
-                    NormalizationType.NONE -> text
-                }
-            }
-            card.front.value = normalize(card.front.value)
-            card.back.value = normalize(card.back.value)
+            card.front.value = normalizeOne(card.front.value)
+            card.back.value = normalizeOne(card.back.value)
             card.frontNotes.value = card.frontNotes.value.map { note ->
-                if (note.type == MediaType.PLAIN_TEXT) note.copy(content = normalize(note.content)) else note
+                if (note.type == MediaType.PLAIN_TEXT) note.copy(content = normalizeOne(note.content)) else note
             }
             card.backNotes.value = card.backNotes.value.map { note ->
-                if (note.type == MediaType.PLAIN_TEXT) note.copy(content = normalize(note.content)) else note
+                if (note.type == MediaType.PLAIN_TEXT) note.copy(content = normalizeOne(note.content)) else note
             }
         }
     }
@@ -720,7 +711,8 @@ fun DeckEditorScreen(
             activeTemplateSetId,
             // This screen always knows the deck's definitive current template link (even when
             // null, meaning Remove was pressed) — never "unspecified, preserve whatever's saved."
-            clearActiveTemplateSetId = true
+            clearActiveTemplateSetId = true,
+            textCorrections = textCorrections
         )
 
         if (viewModel.editorDuplicateResult.value == null) {
@@ -743,6 +735,7 @@ fun DeckEditorScreen(
             initialDefaultPromptSide = defaultPromptSide,
             initialFrontLanguage = frontLanguage, // NEW: Pass initial languages
             initialBackLanguage = backLanguage,
+            initialTextCorrections = textCorrections,
             isCreatingNewDeck = deckWithCards == null,
             onDismiss = {
                 if (isInitialNewDeckDialog) {
@@ -751,7 +744,7 @@ fun DeckEditorScreen(
                     showSettingsDialog = false
                 }
             },
-            onSave = { newName, newNorm, newSort, newPinnedFirst, newPromptSide, newFrontLang, newBackLang -> // NEW: Receive updated languages
+            onSave = { newName, newNorm, newSort, newPinnedFirst, newPromptSide, newFrontLang, newBackLang, newCorrections -> // NEW: Receive updated languages
                 deckName = newName
                 normalizationType = newNorm
                 sortType = newSort
@@ -759,12 +752,13 @@ fun DeckEditorScreen(
                 defaultPromptSide = newPromptSide
                 frontLanguage = newFrontLang
                 backLanguage = newBackLang
-                applyNormalization(newNorm)
+                textCorrections = newCorrections
+                applyNormalization(newNorm, newCorrections)
                 applySorting(newSort, newPinnedFirst)
                 isInitialNewDeckDialog = false
                 showSettingsDialog = false
             },
-            onOpenTemplateEditor = { newName, newNorm, newSort, newPinnedFirst, newPromptSide, newFrontLang, newBackLang ->
+            onOpenTemplateEditor = { newName, newNorm, newSort, newPinnedFirst, newPromptSide, newFrontLang, newBackLang, newCorrections ->
                 deckName = newName
                 normalizationType = newNorm
                 sortType = newSort
@@ -772,6 +766,7 @@ fun DeckEditorScreen(
                 defaultPromptSide = newPromptSide
                 frontLanguage = newFrontLang
                 backLanguage = newBackLang
+                textCorrections = newCorrections
                 showSettingsDialog = false
                 showAdvancedEditor = true
             },
@@ -1605,6 +1600,7 @@ fun DeckEditorScreen(
                                                 placementSpec = motionScheme.defaultSpatialSpec()
                                             ) else Modifier,
                                             normalizationType = normalizationType,
+                                            textCorrections = textCorrections,
                                             nextCardFocusRequester = filteredCards.getOrNull(index + 1)?.frontFocusRequester,
                                             previousCardFocusRequester = filteredCards.getOrNull(index - 1)?.backFocusRequester,
                                             playNoteEntranceAnimations = cardAnimationsEnabled
@@ -1694,6 +1690,7 @@ fun DeckEditorScreen(
                                             placementSpec = motionScheme.defaultSpatialSpec()
                                         ) else Modifier,
                                         normalizationType = normalizationType,
+                                        textCorrections = textCorrections,
                                         nextCardFocusRequester = filteredCards.getOrNull(index + 1)?.frontFocusRequester,
                                         previousCardFocusRequester = filteredCards.getOrNull(index - 1)?.backFocusRequester,
                                         playNoteEntranceAnimations = cardAnimationsEnabled

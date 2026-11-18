@@ -104,7 +104,8 @@
     <string name="sort_card_order_explainer">The order cards appear in when studying or browsing this deck.</string>
     <string name="default_prompt_side_explainer">Which side of the card is shown first by default.</string>
     <string name="language_set_explainer">Used for language-aware features like text-to-speech and case normalization.</string>
-    <string name="case_normalization_explainer">Automatically adjusts letter casing when cards are saved.</string>
+    <string name="case_normalization_explainer">Automatically cleans up spacing and punctuation, then adjusts letter casing, when cards are saved.</string>
+    <string name="text_normalization_dialog_subtitle">Choose how card text is cleaned up and capitalized when saved.</string>
     <string name="field_name">Field Name</string>
     <string name="remove_template">Remove Template</string>
     <string name="move_field_up">Move Field Up</string>
@@ -273,12 +274,24 @@
     <string name="preset_position_last">Last</string>
 
     <!-- Normalization Type -->
-    <string name="normalization_uppercase_first_letter">Uppercase first letter</string>
-    <string name="normalization_uppercase_all_letters">UPPERCASE ALL LETTERS</string>
-    <string name="normalization_uppercase_each_word">Uppercase First Letter Of Each Word</string>
-    <string name="normalization_lowercase_first_letter">lowercase First Letter</string>
-    <string name="normalization_lowercase_all_letters">lowercase all letters</string>
-    <string name="normalization_lowercase_each_word">lowercase first letter of each word</string>
+    <string name="normalization_uppercase_first_letter">Uppercase First Letter</string>
+    <string name="normalization_uppercase_all_letters">Uppercase All Letters</string>
+    <string name="normalization_uppercase_each_word">Uppercase Each Word</string>
+    <string name="normalization_lowercase_first_letter">Lowercase First Letter</string>
+    <string name="normalization_lowercase_all_letters">Lowercase All Letters</string>
+    <string name="normalization_lowercase_each_word">Lowercase Each Word</string>
+    <string name="normalization_sentence_case_smart">Sentence Case (Smart, Preserves Acronyms)</string>
+    <string name="normalization_first_letter_only">First Letter Only (Field-Level Sentence Case)</string>
+    <string name="normalization_title_case_apa">Title Case (APA Style)</string>
+    <string name="normalization_smart_case">Smart Case (Preserves Intentional Mixed Case)</string>
+    <string name="normalization_camel_case">Camel Case</string>
+    <string name="normalization_pascal_case">Pascal Case (Upper Camel Case)</string>
+    <string name="normalization_snake_case">Snake Case (Lower Snake Case)</string>
+    <string name="normalization_screaming_snake_case">Screaming Snake Case (Constant Case, Macro Case)</string>
+    <string name="normalization_camel_snake_case">Camel Snake Case</string>
+    <string name="normalization_flat_case">Flat Case</string>
+    <string name="normalization_upper_flat_case">Upper Flat Case</string>
+    <string name="normalization_alternating_case">Alternating Case (SpongeBob, Mocking Case)</string>
 
     <!-- Card Data Type -->
     <string name="type_text">Text</string>
@@ -308,7 +321,7 @@
 
     <!-- Deck options dialog -->
     <string name="deck_options">Deck Options</string>
-    <string name="case_normalization">Case Normalization</string>
+    <string name="case_normalization">Text Normalization</string>
     <string name="card_order">Card Order</string>
     <string name="alphabetical_a_to_z">Alphabetical (A-Z)</string>
     <string name="alphabetical_z_to_a">Alphabetical (Z-A)</string>

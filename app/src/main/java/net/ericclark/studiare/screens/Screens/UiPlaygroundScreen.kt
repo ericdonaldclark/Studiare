@@ -7,7 +7,6 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -24,6 +23,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import net.ericclark.studiare.components.getText
 import net.ericclark.studiare.data.*
+import net.ericclark.studiare.screens.Dialogs.TextNormalizationDialog
 import net.ericclark.studiare.screens.UI_Components.*
 import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
 import kotlin.math.roundToInt
@@ -39,7 +39,8 @@ import kotlin.math.roundToInt
 private enum class PlaygroundExperiment(val label: String) {
     SESSION_TILE("Session Tile"),
     SESSION_PRESET_CARD("Preset Card"),
-    COMPLETION_SCREEN("Completion Screen")
+    COMPLETION_SCREEN("Completion Screen"),
+    TEXT_NORMALIZATION("Text Normalization")
 }
 
 @Composable
@@ -77,6 +78,7 @@ fun UiPlaygroundScreen(navController: NavController, viewModel: FlashcardViewMod
                 PlaygroundExperiment.SESSION_TILE -> SessionTilePlayground()
                 PlaygroundExperiment.SESSION_PRESET_CARD -> SessionPresetCardPlayground()
                 PlaygroundExperiment.COMPLETION_SCREEN -> StudyCompletionPlayground()
+                PlaygroundExperiment.TEXT_NORMALIZATION -> TextNormalizationPlayground()
             }
         }
     }
@@ -553,6 +555,50 @@ private fun StudyCompletionPlayground() {
             }
             PlaygroundRevealSheetFab(sheetState, coroutineScope)
         }
+    }
+}
+
+/**
+ * Demos the real [TextNormalizationDialog] (the shared dialog now also wired into Deck Options)
+ * against a scratch [NormalizationType] that nothing persists — just somewhere to see it opened
+ * and confirmed/cancelled without a real deck in context.
+ */
+@Composable
+private fun TextNormalizationPlayground() {
+    val dimensions = LocalStudiareDimensions.current
+    var showDialog by remember { mutableStateOf(false) }
+    var currentType by remember { mutableStateOf(NormalizationType.NONE) }
+    var currentCorrections by remember { mutableStateOf(TextCorrectionSettings()) }
+
+    Column(
+        modifier = Modifier.fillMaxSize().padding(dimensions.paddingLarge),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        PlaygroundSectionLabel("Text Normalization dialog")
+        Text(
+            "The same dialog now wired into Deck Options, replacing its old dropdown.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(Modifier.height(dimensions.spacingSmall))
+        Text(
+            "Currently selected: ${currentType.asString()}",
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.primary
+        )
+        Spacer(Modifier.height(dimensions.spacingMedium))
+        Button(onClick = { showDialog = true }) {
+            Text("Open Text Normalization Dialog")
+        }
+    }
+
+    if (showDialog) {
+        TextNormalizationDialog(
+            initialType = currentType,
+            initialCorrections = currentCorrections,
+            onDismiss = { showDialog = false },
+            onConfirm = { newType, newCorrections -> currentType = newType; currentCorrections = newCorrections; showDialog = false }
+        )
     }
 }
 

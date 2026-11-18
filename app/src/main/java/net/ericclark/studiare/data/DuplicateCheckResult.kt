@@ -22,5 +22,6 @@ data class DuplicateCheckResult(
     val activeTemplateSetId: String? = null,
     // True when `activeTemplateSetId` above is the deck's definitive new value (even if null,
     // meaning "no template") rather than merely "not specified, keep whatever's already saved."
-    val clearActiveTemplateSetId: Boolean = false
+    val clearActiveTemplateSetId: Boolean = false,
+    val textCorrections: TextCorrectionSettings = TextCorrectionSettings()
 )

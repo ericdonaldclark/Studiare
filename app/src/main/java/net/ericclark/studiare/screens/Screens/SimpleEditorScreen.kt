@@ -111,6 +111,7 @@ import net.ericclark.studiare.data.NoteField
 import net.ericclark.studiare.data.matchStatus
 import net.ericclark.studiare.data.NormalizationType
 import net.ericclark.studiare.data.TagDefinition
+import net.ericclark.studiare.data.TextCorrectionSettings
 import net.ericclark.studiare.data.asString
 import net.ericclark.studiare.data.toCardDataForSave
 import net.ericclark.studiare.data.toEditorState
@@ -748,7 +749,8 @@ fun SimpleEditorScreen(
                 }
             ),
             onCancel = { editingCard = null },
-            normalizationType = deckWithCards?.deck?.normalizationType ?: NormalizationType.NONE
+            normalizationType = deckWithCards?.deck?.normalizationType ?: NormalizationType.NONE,
+            textCorrections = deckWithCards?.deck?.textCorrections ?: TextCorrectionSettings()
         )
     }
 
@@ -780,7 +782,8 @@ fun SimpleEditorScreen(
                 }
             ),
             onCancel = { createCardState = null },
-            normalizationType = deckWithCards?.deck?.normalizationType ?: NormalizationType.NONE
+            normalizationType = deckWithCards?.deck?.normalizationType ?: NormalizationType.NONE,
+            textCorrections = deckWithCards?.deck?.textCorrections ?: TextCorrectionSettings()
         )
     }
 
@@ -852,12 +855,13 @@ fun SimpleEditorScreen(
             initialDefaultPromptSide = deckWithCards.deck.defaultPromptSide,
             initialFrontLanguage = deckWithCards.deck.frontLanguage,
             initialBackLanguage = deckWithCards.deck.backLanguage,
+            initialTextCorrections = deckWithCards.deck.textCorrections,
             onDismiss = { showDeckOptions = false },
-            onSave = { newName, newNorm, newSort, newPinnedFirst, newPromptSide, newFrontLang, newBackLang ->
-                viewModel.updateDeckOptions(deckWithCards, newName, newNorm, newSort, newPinnedFirst, newPromptSide, newFrontLang, newBackLang)
+            onSave = { newName, newNorm, newSort, newPinnedFirst, newPromptSide, newFrontLang, newBackLang, newCorrections ->
+                viewModel.updateDeckOptions(deckWithCards, newName, newNorm, newSort, newPinnedFirst, newPromptSide, newFrontLang, newBackLang, newCorrections)
                 showDeckOptions = false
             },
-            onOpenTemplateEditor = { _, _, _, _, _, _, _ ->
+            onOpenTemplateEditor = { _, _, _, _, _, _, _, _ ->
                 // Nothing to carry over here — this dialog always reflects the deck's actually
                 // persisted name/options (it has no separate in-progress "creating a new deck"
                 // draft of its own), so reopening it already shows the right values either way.

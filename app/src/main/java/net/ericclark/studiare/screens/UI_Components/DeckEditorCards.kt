@@ -244,6 +244,7 @@ fun CardEditor(
     canDelete: Boolean = true,
     modifier: Modifier = Modifier,
     normalizationType: NormalizationType = NormalizationType.NONE,
+    textCorrections: TextCorrectionSettings = TextCorrectionSettings(),
     /** Where Tab moves focus from this card's last field (Back). Bulk Editor passes the next
      * card's front field so tabbing flows card-to-card; left null (the default) in the Simple
      * Editor's single-card dialog, where there is no next card to jump to. */
@@ -378,6 +379,7 @@ fun CardEditor(
                             }
                         },
                         normalizationType = normalizationType,
+                        textCorrections = textCorrections,
                         focusRequester = cardState.frontFocusRequester,
                         nextFocusRequester = cardState.backFocusRequester,
                         previousFocusRequester = previousCardFocusRequester
@@ -421,6 +423,7 @@ fun CardEditor(
                                     }
                                 },
                                 normalizationType = normalizationType,
+                                textCorrections = textCorrections,
                                 onMoveUp = if (index > 0) {
                                     { cardState.frontNotes.value = cardState.frontNotes.value.toMutableList().apply { add(index - 1, removeAt(index)) } }
                                 } else null,
@@ -463,6 +466,7 @@ fun CardEditor(
                             }
                         },
                         normalizationType = normalizationType,
+                        textCorrections = textCorrections,
                         focusRequester = cardState.backFocusRequester,
                         nextFocusRequester = nextCardFocusRequester,
                         previousFocusRequester = cardState.frontFocusRequester
@@ -508,6 +512,7 @@ fun CardEditor(
                                     }
                                 },
                                 normalizationType = normalizationType,
+                                textCorrections = textCorrections,
                                 onMoveUp = if (index > 0) {
                                     { cardState.backNotes.value = cardState.backNotes.value.toMutableList().apply { add(index - 1, removeAt(index)) } }
                                 } else {
@@ -695,6 +700,7 @@ fun CardSideEditor(
     modifier: Modifier = Modifier,
     actionIcon: @Composable (() -> Unit)? = null,
     normalizationType: NormalizationType = NormalizationType.NONE,
+    textCorrections: TextCorrectionSettings = TextCorrectionSettings(),
     focusRequester: FocusRequester? = null,
     /** Where Tab moves focus from this field; null leaves the key event unconsumed. */
     nextFocusRequester: FocusRequester? = null,
@@ -737,7 +743,7 @@ fun CardSideEditor(
                         value = plainText,
                         onValueChange = onPlainTextChange,
                         modifier = Modifier.fillMaxWidth()
-                            .normalizeCaseOnFocusLost(normalizationType, plainText, onPlainTextChange)
+                            .normalizeCaseOnFocusLost(normalizationType, plainText, textCorrections, onPlainTextChange)
                             .let { if (focusRequester != null) it.focusRequester(focusRequester) else it }
                             .onPreviewKeyEvent { event ->
                                 if (event.type != KeyEventType.KeyDown || event.key != Key.Tab) return@onPreviewKeyEvent false
@@ -774,6 +780,7 @@ fun DynamicNoteEditor(
     onEditRichTextClick: () -> Unit,
     onRemove: () -> Unit,
     normalizationType: NormalizationType = NormalizationType.NONE,
+    textCorrections: TextCorrectionSettings = TextCorrectionSettings(),
     /** Null (and hidden, like [onRemove]) at the first/last position — mirrors
      * [net.ericclark.studiare.screens.Dialogs.TemplateRow]'s own up/down buttons. */
     onMoveUp: (() -> Unit)? = null,
@@ -980,7 +987,7 @@ fun DynamicNoteEditor(
                             // Only PLAIN_TEXT is normalized on save (see saveDeckWithCards) — WEB_LINK
                             // and HTML share this same field but must stay untouched.
                             if (note.type == MediaType.PLAIN_TEXT) {
-                                it.normalizeCaseOnFocusLost(normalizationType, note.content) { normalized ->
+                                it.normalizeCaseOnFocusLost(normalizationType, note.content, textCorrections) { normalized ->
                                     onNoteChange(note.copy(content = normalized))
                                 }
                             } else it

@@ -671,7 +671,8 @@ fun PinnedScreen(navController: NavController, viewModel: FlashcardViewModel) {
                 }
             ),
             onCancel = { editingCard = null },
-            normalizationType = deck?.deck?.normalizationType ?: NormalizationType.NONE
+            normalizationType = deck?.deck?.normalizationType ?: NormalizationType.NONE,
+            textCorrections = deck?.deck?.textCorrections ?: TextCorrectionSettings()
         )
     }
 

@@ -1067,12 +1067,32 @@ enum class NormalizationType(val value: Int, override val labelResId: Int) : Str
     UPPERCASE_EACH_WORD(3, R.string.normalization_uppercase_each_word),
     LOWERCASE_FIRST_LETTER(4, R.string.normalization_lowercase_first_letter),
     LOWERCASE_ALL_LETTERS(5, R.string.normalization_lowercase_all_letters),
-    LOWERCASE_EACH_WORD(6, R.string.normalization_lowercase_each_word);
+    LOWERCASE_EACH_WORD(6, R.string.normalization_lowercase_each_word),
+    // Added from the "Text Capitalization Normalization Options" reference sheet — every row it
+    // marks "Use in Studiare" that wasn't already covered by one of the seven entries above.
+    SENTENCE_CASE_SMART(7, R.string.normalization_sentence_case_smart),
+    FIRST_LETTER_ONLY(8, R.string.normalization_first_letter_only),
+    TITLE_CASE_APA(9, R.string.normalization_title_case_apa),
+    SMART_CASE(10, R.string.normalization_smart_case),
+    CAMEL_CASE(11, R.string.normalization_camel_case),
+    PASCAL_CASE(12, R.string.normalization_pascal_case),
+    SNAKE_CASE(13, R.string.normalization_snake_case),
+    SCREAMING_SNAKE_CASE(14, R.string.normalization_screaming_snake_case),
+    CAMEL_SNAKE_CASE(15, R.string.normalization_camel_snake_case),
+    FLAT_CASE(16, R.string.normalization_flat_case),
+    UPPER_FLAT_CASE(17, R.string.normalization_upper_flat_case),
+    ALTERNATING_CASE(18, R.string.normalization_alternating_case);
 
     companion object {
         fun fromInt(value: Int?): NormalizationType {
             return NormalizationType.entries.find { it.value == value } ?: NONE
         }
+
+        /** The three groups the Text Normalization dialog shows as collapsible sections —
+         * [NONE] is deliberately left out, since it's shown on its own above all of them. */
+        val basicCases = listOf(UPPERCASE_FIRST_LETTER, UPPERCASE_ALL_LETTERS, UPPERCASE_EACH_WORD, LOWERCASE_FIRST_LETTER, LOWERCASE_ALL_LETTERS, LOWERCASE_EACH_WORD)
+        val editorialAndSmartCases = listOf(SENTENCE_CASE_SMART, FIRST_LETTER_ONLY, TITLE_CASE_APA, SMART_CASE)
+        val programmaticAndNoveltyCases = listOf(CAMEL_CASE, PASCAL_CASE, SNAKE_CASE, SCREAMING_SNAKE_CASE, CAMEL_SNAKE_CASE, FLAT_CASE, UPPER_FLAT_CASE, ALTERNATING_CASE)
     }
 }
 
@@ -1100,6 +1120,108 @@ enum class TemplateScope(val value: Int, override val labelResId: Int) : StringR
     }
 }
 
+private val normalizationApaMinorWords = setOf(
+    "a", "an", "and", "as", "at", "but", "by", "for", "if", "in", "nor",
+    "of", "off", "on", "or", "per", "so", "the", "to", "up", "via", "yet"
+)
+
+private fun normalizationCapitalizeWord(word: String): String =
+    if (word.isEmpty()) word else word[0].uppercase() + word.substring(1).lowercase()
+
+/** Capitalizes the first letter of each sentence and lowercases the rest, but leaves any
+ * already-all-caps word (an acronym like NASA) untouched. */
+private fun normalizeSentenceCaseSmart(text: String): String {
+    val sb = StringBuilder(text)
+    var atSentenceStart = true
+    var i = 0
+    while (i < sb.length) {
+        val c = sb[i]
+        if (c.isLetter()) {
+            var j = i
+            while (j < sb.length && (sb[j].isLetter() || sb[j] == '\'')) j++
+            val word = sb.substring(i, j)
+            val isAcronym = word.length > 1 && word.all { it.isUpperCase() }
+            if (!isAcronym) {
+                val replacement = if (atSentenceStart) word.lowercase().replaceFirstChar { it.uppercase() } else word.lowercase()
+                sb.replace(i, j, replacement)
+                j = i + replacement.length
+            }
+            atSentenceStart = false
+            i = j
+        } else {
+            if (c == '.' || c == '!' || c == '?' || c == '\n') atSentenceStart = true
+            i++
+        }
+    }
+    return sb.toString()
+}
+
+/** Capitalizes just the field's very first alphabetical character and lowercases everything
+ * else, ignoring internal sentence breaks. */
+private fun normalizeFirstLetterOnly(text: String): String {
+    val lower = text.lowercase()
+    val idx = lower.indexOfFirst { it.isLetter() }
+    return if (idx == -1) lower else lower.substring(0, idx) + lower[idx].uppercase() + lower.substring(idx + 1)
+}
+
+/** Capitalizes major words and anything 4+ letters; short minor words (a, the, of, ...) stay
+ * lowercase unless they open or close the string. Hyphenated compounds apply the same rule to
+ * each half. */
+private fun normalizeTitleCaseApa(text: String): String {
+    val words = text.split(" ")
+    val lastIndex = words.lastIndex
+    fun rule(word: String, isEdge: Boolean): String {
+        if (word.isEmpty()) return word
+        val bare = word.trim { !it.isLetter() }
+        val shouldCapitalize = isEdge || bare.length >= 4 || bare.lowercase() !in normalizationApaMinorWords
+        return if (shouldCapitalize) normalizationCapitalizeWord(word) else word.lowercase()
+    }
+    return words.mapIndexed { index, word ->
+        val isEdge = index == 0 || index == lastIndex
+        if (word.contains('-')) word.split('-').joinToString("-") { rule(it, isEdge) } else rule(word, isEdge)
+    }.joinToString(" ")
+}
+
+/** Only touches strings that are uniformly ALL CAPS or all lowercase; anything already
+ * mixed-case is left completely alone. */
+private fun normalizeSmartCase(text: String): String {
+    val letters = text.filter { it.isLetter() }
+    val isUniformlyWrong = letters.isNotEmpty() && (letters.all { it.isUpperCase() } || letters.all { it.isLowerCase() })
+    return if (isUniformlyWrong) text.split(" ").joinToString(" ") { normalizationCapitalizeWord(it) } else text
+}
+
+private fun normalizationWords(text: String): List<String> = text.split(Regex("[^A-Za-z0-9]+")).filter { it.isNotEmpty() }
+
+private fun normalizeCamelCase(text: String): String {
+    val words = normalizationWords(text)
+    return if (words.isEmpty()) text else words.first().lowercase() + words.drop(1).joinToString("") { normalizationCapitalizeWord(it) }
+}
+
+private fun normalizePascalCase(text: String): String = normalizationWords(text).joinToString("") { normalizationCapitalizeWord(it) }
+
+private fun normalizeSnakeCase(text: String): String = text.trim().replace(Regex("[\\s-]+"), "_").lowercase()
+
+private fun normalizeScreamingSnakeCase(text: String): String = text.trim().replace(Regex("[\\s-]+"), "_").uppercase()
+
+private fun normalizeCamelSnakeCase(text: String): String = normalizationWords(text).joinToString("_") { normalizationCapitalizeWord(it) }
+
+private fun normalizeFlatCase(text: String): String = text.replace(Regex("[\\s_-]+"), "").lowercase()
+
+private fun normalizeUpperFlatCase(text: String): String = text.replace(Regex("[\\s_-]+"), "").uppercase()
+
+/** Alternates lower/upper strictly by letter count (spaces and punctuation pass through without
+ * breaking the alternation). */
+private fun normalizeAlternatingCase(text: String): String {
+    var letterIndex = 0
+    return text.map { ch ->
+        if (ch.isLetter()) {
+            val result = if (letterIndex % 2 == 0) ch.lowercaseChar() else ch.uppercaseChar()
+            letterIndex++
+            result
+        } else ch
+    }.joinToString("")
+}
+
 fun normalizeText(type: NormalizationType, text: String): String = when (type) {
     NormalizationType.UPPERCASE_FIRST_LETTER -> text.replaceFirstChar { it.uppercase() }
     NormalizationType.UPPERCASE_ALL_LETTERS -> text.uppercase()
@@ -1108,6 +1230,18 @@ fun normalizeText(type: NormalizationType, text: String): String = when (type) {
     NormalizationType.LOWERCASE_ALL_LETTERS -> text.lowercase()
     NormalizationType.LOWERCASE_EACH_WORD -> text.split(" ").joinToString(" ") { it.replaceFirstChar { char -> char.lowercase() } }
     NormalizationType.NONE -> text
+    NormalizationType.SENTENCE_CASE_SMART -> normalizeSentenceCaseSmart(text)
+    NormalizationType.FIRST_LETTER_ONLY -> normalizeFirstLetterOnly(text)
+    NormalizationType.TITLE_CASE_APA -> normalizeTitleCaseApa(text)
+    NormalizationType.SMART_CASE -> normalizeSmartCase(text)
+    NormalizationType.CAMEL_CASE -> normalizeCamelCase(text)
+    NormalizationType.PASCAL_CASE -> normalizePascalCase(text)
+    NormalizationType.SNAKE_CASE -> normalizeSnakeCase(text)
+    NormalizationType.SCREAMING_SNAKE_CASE -> normalizeScreamingSnakeCase(text)
+    NormalizationType.CAMEL_SNAKE_CASE -> normalizeCamelSnakeCase(text)
+    NormalizationType.FLAT_CASE -> normalizeFlatCase(text)
+    NormalizationType.UPPER_FLAT_CASE -> normalizeUpperFlatCase(text)
+    NormalizationType.ALTERNATING_CASE -> normalizeAlternatingCase(text)
 }
 
 /**
@@ -1121,12 +1255,13 @@ fun normalizeText(type: NormalizationType, text: String): String = when (type) {
 fun Modifier.normalizeCaseOnFocusLost(
     normalizationType: NormalizationType,
     text: String,
+    textCorrections: TextCorrectionSettings = TextCorrectionSettings(),
     onNormalized: (String) -> Unit
 ): Modifier {
     var wasFocused by remember { mutableStateOf(false) }
     return this.onFocusChanged { focusState ->
         if (wasFocused && !focusState.isFocused) {
-            val normalized = normalizeText(normalizationType, text)
+            val normalized = normalizeText(normalizationType, applyTextCorrections(textCorrections, text))
             if (normalized != text) onNormalized(normalized)
         }
         wasFocused = focusState.isFocused

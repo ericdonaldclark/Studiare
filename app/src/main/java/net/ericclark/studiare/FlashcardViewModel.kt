@@ -1306,7 +1306,8 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
             saveDeckWithCards(
                 result.deckId, result.deckName, distinctCards, result.normalizationType, result.sortType,
                 result.parentDeckId, null, result.frontLanguage, result.backLanguage,
-                result.description, result.dailyNewCardLimit, result.dailyReviewLimit
+                result.description, result.dailyNewCardLimit, result.dailyReviewLimit,
+                textCorrections = result.textCorrections
             )
         }
         processNextInImportQueue()
@@ -1317,7 +1318,8 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
             saveDeckWithCards(
                 result.deckId, result.deckName, result.cardsToSave, result.normalizationType, result.sortType,
                 result.parentDeckId, null, result.frontLanguage, result.backLanguage,
-                result.description, result.dailyNewCardLimit, result.dailyReviewLimit
+                result.description, result.dailyNewCardLimit, result.dailyReviewLimit,
+                textCorrections = result.textCorrections
             )
         }
         processNextInImportQueue()
@@ -1761,7 +1763,8 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         checkForDuplicatesInEditor(
             deck.deck.id, deck.deck.name, cardsToSave, deck.deck.normalizationType, deck.deck.deckSortMode,
             deck.deck.parentDeckId, deck.deck.frontLanguage, deck.deck.backLanguage, deck.deck.description,
-            deck.deck.dailyNewCardLimit, deck.deck.dailyReviewLimit, deck.deck.frontNoteTemplates, deck.deck.backNoteTemplates
+            deck.deck.dailyNewCardLimit, deck.deck.dailyReviewLimit, deck.deck.frontNoteTemplates, deck.deck.backNoteTemplates,
+            textCorrections = deck.deck.textCorrections
         )
     }
 
@@ -1781,7 +1784,8 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         checkForDuplicatesInEditor(
             deck.deck.id, deck.deck.name, cardsToSave, deck.deck.normalizationType, deck.deck.deckSortMode,
             deck.deck.parentDeckId, deck.deck.frontLanguage, deck.deck.backLanguage, deck.deck.description,
-            deck.deck.dailyNewCardLimit, deck.deck.dailyReviewLimit, deck.deck.frontNoteTemplates, deck.deck.backNoteTemplates
+            deck.deck.dailyNewCardLimit, deck.deck.dailyReviewLimit, deck.deck.frontNoteTemplates, deck.deck.backNoteTemplates,
+            textCorrections = deck.deck.textCorrections
         )
     }
 
@@ -1804,7 +1808,8 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         checkForDuplicatesInEditor(
             deck.deck.id, deck.deck.name, cardsToSave, deck.deck.normalizationType, deck.deck.deckSortMode,
             deck.deck.parentDeckId, deck.deck.frontLanguage, deck.deck.backLanguage, deck.deck.description,
-            deck.deck.dailyNewCardLimit, deck.deck.dailyReviewLimit, deck.deck.frontNoteTemplates, deck.deck.backNoteTemplates
+            deck.deck.dailyNewCardLimit, deck.deck.dailyReviewLimit, deck.deck.frontNoteTemplates, deck.deck.backNoteTemplates,
+            textCorrections = deck.deck.textCorrections
         )
     }
 
@@ -1858,6 +1863,7 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
                 normalizationType = fromDeck?.normalizationType ?: NormalizationType.NONE,
                 frontLanguage = fromDeck?.frontLanguage ?: java.util.Locale.getDefault().language,
                 backLanguage = fromDeck?.backLanguage ?: java.util.Locale.getDefault().language,
+                textCorrections = fromDeck?.textCorrections ?: TextCorrectionSettings(),
                 isPendingSync = true
             )
             database.withTransaction {
@@ -1877,7 +1883,8 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         checkForDuplicatesInEditor(
             deck.deck.id, deck.deck.name, cardsToSave, deck.deck.normalizationType, deck.deck.deckSortMode,
             deck.deck.parentDeckId, deck.deck.frontLanguage, deck.deck.backLanguage, deck.deck.description,
-            deck.deck.dailyNewCardLimit, deck.deck.dailyReviewLimit, deck.deck.frontNoteTemplates, deck.deck.backNoteTemplates
+            deck.deck.dailyNewCardLimit, deck.deck.dailyReviewLimit, deck.deck.frontNoteTemplates, deck.deck.backNoteTemplates,
+            textCorrections = deck.deck.textCorrections
         )
     }
 
@@ -1886,7 +1893,8 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         checkForDuplicatesInEditor(
             deck.deck.id, deck.deck.name, cardsToSave, deck.deck.normalizationType, mode,
             deck.deck.parentDeckId, deck.deck.frontLanguage, deck.deck.backLanguage, deck.deck.description,
-            deck.deck.dailyNewCardLimit, deck.deck.dailyReviewLimit, deck.deck.frontNoteTemplates, deck.deck.backNoteTemplates
+            deck.deck.dailyNewCardLimit, deck.deck.dailyReviewLimit, deck.deck.frontNoteTemplates, deck.deck.backNoteTemplates,
+            textCorrections = deck.deck.textCorrections
         )
     }
 
@@ -1901,14 +1909,15 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         sortPinnedCardsFirst: Boolean,
         defaultPromptSide: CardSide,
         frontLanguage: String,
-        backLanguage: String
+        backLanguage: String,
+        textCorrections: TextCorrectionSettings = deck.deck.textCorrections
     ) {
         val cardsToSave = deck.cards.map { it.toCardDataForSave() }
         checkForDuplicatesInEditor(
             deck.deck.id, newName, cardsToSave, normalizationType, sortMode,
             deck.deck.parentDeckId, frontLanguage, backLanguage, deck.deck.description,
             deck.deck.dailyNewCardLimit, deck.deck.dailyReviewLimit, deck.deck.frontNoteTemplates, deck.deck.backNoteTemplates,
-            defaultPromptSide, sortPinnedCardsFirst
+            defaultPromptSide, sortPinnedCardsFirst, textCorrections = textCorrections
         )
     }
 
@@ -1943,7 +1952,7 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
             deck.deck.id, deck.deck.name, cardsToSave, deck.deck.normalizationType, deck.deck.deckSortMode,
             deck.deck.parentDeckId, deck.deck.frontLanguage, deck.deck.backLanguage, deck.deck.description,
             deck.deck.dailyNewCardLimit, deck.deck.dailyReviewLimit, newFront, newBack,
-            seedNewCardsFromTemplate = true, activeTemplateSetId = templateSetId
+            seedNewCardsFromTemplate = true, activeTemplateSetId = templateSetId, textCorrections = deck.deck.textCorrections
         )
     }
 
@@ -1967,7 +1976,8 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         activeTemplateSetId: String? = null,
         // See DuplicateCheckResult.clearActiveTemplateSetId — pass true when `activeTemplateSetId`
         // above is this save's definitive value (even null), not "unspecified, keep existing."
-        clearActiveTemplateSetId: Boolean = false
+        clearActiveTemplateSetId: Boolean = false,
+        textCorrections: TextCorrectionSettings = TextCorrectionSettings()
     ) {
         val duplicates = cards.groupBy { it.front.normalizeForDuplicateCheck() to it.back.normalizeForDuplicateCheck() }
             .filter { it.value.size > 1 }
@@ -1980,14 +1990,15 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
                 duplicates, deckId, deckName, cards, normalizationType, sortType, parentDeckId,
                 frontLanguage, backLanguage, description, dailyNewCardLimit, dailyReviewLimit,
                 frontNoteTemplates, backNoteTemplates, defaultPromptSide, sortPinnedCardsFirst,
-                seedNewCardsFromTemplate, activeTemplateSetId, clearActiveTemplateSetId
+                seedNewCardsFromTemplate, activeTemplateSetId, clearActiveTemplateSetId, textCorrections
             )
         } else {
             saveDeckWithCards(
                 deckId, deckName, cards, normalizationType, sortType, parentDeckId, null,
                 frontLanguage, backLanguage, description, dailyNewCardLimit, dailyReviewLimit,
                 frontNoteTemplates, backNoteTemplates, defaultPromptSide, sortPinnedCardsFirst,
-                seedNewCardsFromTemplate, activeTemplateSetId, clearActiveTemplateSetId
+                seedNewCardsFromTemplate, activeTemplateSetId, clearActiveTemplateSetId,
+                textCorrections = textCorrections
             )
         }
     }
@@ -2052,14 +2063,14 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
             result.normalizationType, result.sortType, result.parentDeckId, null, result.frontLanguage, result.backLanguage,
             result.description, result.dailyNewCardLimit, result.dailyReviewLimit, result.frontNoteTemplates, result.backNoteTemplates,
             result.defaultPromptSide, result.sortPinnedCardsFirst, result.seedNewCardsFromTemplate, result.activeTemplateSetId,
-            result.clearActiveTemplateSetId) }; dismissEditorDuplicateWarning() }
+            result.clearActiveTemplateSetId, result.textCorrections) }; dismissEditorDuplicateWarning() }
     fun saveEditorIgnoringDuplicates() { _editorDuplicateResult.value?.let { result ->
         saveDeckWithCards(result.deckId, result.deckName, result.cardsToSave,
             result.normalizationType, result.sortType, result.parentDeckId,
             null, result.frontLanguage, result.backLanguage,
             result.description, result.dailyNewCardLimit, result.dailyReviewLimit, result.frontNoteTemplates, result.backNoteTemplates,
             result.defaultPromptSide, result.sortPinnedCardsFirst, result.seedNewCardsFromTemplate, result.activeTemplateSetId,
-            result.clearActiveTemplateSetId) }; dismissEditorDuplicateWarning() }
+            result.clearActiveTemplateSetId, result.textCorrections) }; dismissEditorDuplicateWarning() }
 
     private fun saveDeckWithCards(
         deckId: String?,
@@ -2080,7 +2091,8 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         sortPinnedCardsFirst: Boolean? = null,
         seedNewCardsFromTemplate: Boolean? = null,
         activeTemplateSetId: String? = null,
-        clearActiveTemplateSetId: Boolean = false
+        clearActiveTemplateSetId: Boolean = false,
+        textCorrections: TextCorrectionSettings = TextCorrectionSettings()
     ) {
         viewModelScope.launch(Dispatchers.IO) {
             val id = deckId ?: UUID.randomUUID().toString()
@@ -2092,14 +2104,15 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
             // is explicitly saved, see updateDeckOptions) is what makes it also cover newly added
             // or edited cards, not just a deck's already-existing ones. normalizeText is
             // idempotent for every NormalizationType, so re-applying it to untouched cards on
-            // every save is harmless.
+            // every save is harmless. Corrections run first (they're idempotent too), then casing.
+            fun normalizeOne(text: String) = normalizeText(normalizationType, applyTextCorrections(textCorrections, text))
             fun normalizeNotes(notes: List<NoteField>) = notes.map {
-                if (it.type == MediaType.PLAIN_TEXT) it.copy(content = normalizeText(normalizationType, it.content)) else it
+                if (it.type == MediaType.PLAIN_TEXT) it.copy(content = normalizeOne(it.content)) else it
             }
             val normalizedCardsToSave = cardsToSave.map {
                 it.copy(
-                    front = normalizeText(normalizationType, it.front),
-                    back = normalizeText(normalizationType, it.back),
+                    front = normalizeOne(it.front),
+                    back = normalizeOne(it.back),
                     frontNotes = normalizeNotes(it.frontNotes),
                     backNotes = normalizeNotes(it.backNotes)
                 )
@@ -2128,6 +2141,7 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
                 dailyReviewLimit = dailyReviewLimit,
                 seedNewCardsFromTemplate = seedNewCardsFromTemplate ?: existingDeck?.seedNewCardsFromTemplate ?: false,
                 activeTemplateSetId = if (clearActiveTemplateSetId) activeTemplateSetId else (activeTemplateSetId ?: existingDeck?.activeTemplateSetId),
+                textCorrections = textCorrections,
                 isPendingSync = true
             )
 

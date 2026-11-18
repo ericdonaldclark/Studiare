@@ -70,6 +70,14 @@ fun buildDecksJson(decksToExport: List<DeckWithCards>): String {
         linkageObject.put("linkScoring", deck.linkageSettings.linkScoring)
         deckObject.put("linkageSettings", linkageObject)
 
+        val textCorrectionsObject = JSONObject()
+        textCorrectionsObject.put("trimWhitespace", deck.textCorrections.trimWhitespace)
+        textCorrectionsObject.put("collapseConsecutiveSpaces", deck.textCorrections.collapseConsecutiveSpaces)
+        textCorrectionsObject.put("addSpaceAfterPunctuation", deck.textCorrections.addSpaceAfterPunctuation)
+        textCorrectionsObject.put("removeSpaceBeforePunctuation", deck.textCorrections.removeSpaceBeforePunctuation)
+        textCorrectionsObject.put("removeDuplicateConsecutiveWords", deck.textCorrections.removeDuplicateConsecutiveWords)
+        deckObject.put("textCorrections", textCorrectionsObject)
+
         val gson = Gson()
         if (deck.frontNoteTemplates.isNotEmpty()) deckObject.put("frontNoteTemplates", JSONArray(gson.toJson(deck.frontNoteTemplates)))
         if (deck.backNoteTemplates.isNotEmpty()) deckObject.put("backNoteTemplates", JSONArray(gson.toJson(deck.backNoteTemplates)))
@@ -345,7 +353,16 @@ class ImportExportManager(
                                 linkMetadata = linkageObj.optBoolean("linkMetadata", true),
                                 linkScoring = linkageObj.optBoolean("linkScoring", true)
                             )
-                        } ?: LinkageSettings()
+                        } ?: LinkageSettings(),
+                        textCorrections = deckObject.optJSONObject("textCorrections")?.let { correctionsObj ->
+                            TextCorrectionSettings(
+                                trimWhitespace = correctionsObj.optBoolean("trimWhitespace", true),
+                                collapseConsecutiveSpaces = correctionsObj.optBoolean("collapseConsecutiveSpaces", true),
+                                addSpaceAfterPunctuation = correctionsObj.optBoolean("addSpaceAfterPunctuation", true),
+                                removeSpaceBeforePunctuation = correctionsObj.optBoolean("removeSpaceBeforePunctuation", true),
+                                removeDuplicateConsecutiveWords = correctionsObj.optBoolean("removeDuplicateConsecutiveWords", true)
+                            )
+                        } ?: TextCorrectionSettings()
                     )
                     parsedDecks.add(
                         ParsedDeck(

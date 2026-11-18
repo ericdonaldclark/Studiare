@@ -66,5 +66,9 @@ data class Deck(
     // Editor requires a name, which upserts this same TemplateSet (by id) rather than leaving the
     // deck's template as an anonymous, un-shareable field list. Null only for a deck whose
     // template has never been saved since this requirement was added.
-    val activeTemplateSetId: String? = null
+    val activeTemplateSetId: String? = null,
+
+    // Whitespace/punctuation cleanup corrections applied alongside normalizationType whenever
+    // this deck's cards are saved — see the Text Normalization dialog's correction toggles.
+    val textCorrections: TextCorrectionSettings = TextCorrectionSettings()
 )
