@@ -562,6 +562,7 @@ private fun CompletionTopContent(
                         OutlinedTextField(
                             value = name,
                             onValueChange = onNameChange,
+                            label = { Text(getText(R.string.name)) },
                             placeholder = { Text(defaultName) },
                             singleLine = true,
                             modifier = Modifier.fillMaxWidth()

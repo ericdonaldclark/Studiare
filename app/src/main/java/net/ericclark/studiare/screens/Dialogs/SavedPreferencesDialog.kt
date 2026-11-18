@@ -244,11 +244,10 @@ private fun PreferenceEditDialog(
             Column(modifier = Modifier.padding(dimensions.paddingLarge).widthIn(min = 280.dp, max = 560.dp)) {
                 Text(entry.name, style = MaterialTheme.typography.headlineSmall, fontFamily = FontFamily.Monospace)
                 Spacer(Modifier.height(dimensions.spacingMedium))
-                Text(entry.type, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Spacer(Modifier.height(8.dp))
                 OutlinedTextField(
                     value = text,
                     onValueChange = { text = it },
+                    label = { Text(entry.type) },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = !entry.type.startsWith("Set"),
                     isError = !valid,

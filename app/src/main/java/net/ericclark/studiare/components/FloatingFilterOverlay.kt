@@ -26,8 +26,8 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextField
-import androidx.compose.material3.TextFieldDefaults
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -209,7 +209,7 @@ fun FloatingFilterOverlay(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)
                 ) {
-                    TextField(
+                    OutlinedTextField(
                         value = filterText,
                         onValueChange = onFilterTextChange,
                         placeholder = { Text(getText(R.string.cards_filter_)) },
@@ -225,7 +225,7 @@ fun FloatingFilterOverlay(
                             }
                         } else null,
                         shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
-                        colors = TextFieldDefaults.colors(
+                        colors = OutlinedTextFieldDefaults.colors(
                             focusedContainerColor = MaterialTheme.colorScheme.secondaryContainer,
                             unfocusedContainerColor = MaterialTheme.colorScheme.secondaryContainer,
                             focusedTextColor = MaterialTheme.colorScheme.onSecondaryContainer,
@@ -233,8 +233,8 @@ fun FloatingFilterOverlay(
                             cursorColor = MaterialTheme.colorScheme.onSecondaryContainer,
                             focusedPlaceholderColor = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.6f),
                             unfocusedPlaceholderColor = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.6f),
-                            focusedIndicatorColor = Color.Transparent,
-                            unfocusedIndicatorColor = Color.Transparent
+                            focusedBorderColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                            unfocusedBorderColor = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.4f)
                         ),
                         singleLine = true
                     )

@@ -41,11 +41,10 @@ import androidx.compose.material3.MenuDefaults
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TextField
-import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -77,7 +76,8 @@ import net.ericclark.studiare.R
 fun LanguageDropdown(
     languages: List<Pair<String, String>>,
     selectedCode: String,
-    onLanguageSelected: (String) -> Unit
+    onLanguageSelected: (String) -> Unit,
+    label: String? = null
 ) {
     val selected = languages.find { it.first == selectedCode }
         ?: (selectedCode to getText(R.string.unknown))
@@ -86,7 +86,8 @@ fun LanguageDropdown(
         selectedOption = selected,
         optionLabel = { it.second },
         onSelect = { onLanguageSelected(it.first) },
-        menuMaxHeight = 300.dp
+        menuMaxHeight = 300.dp,
+        label = label
     )
 }
 
@@ -133,7 +134,10 @@ fun <T> ExpressiveDropdownMenuField(
     optionLabel: @Composable (T) -> String,
     onSelect: (T) -> Unit,
     modifier: Modifier = Modifier,
-    menuMaxHeight: Dp = 400.dp
+    menuMaxHeight: Dp = 400.dp,
+    /** Optional built-in field label, e.g. "Front"/"Back" for a language picker. Every other
+     * caller leaves this null, which keeps their dropdown exactly as it was. */
+    label: String? = null
 ) {
     var expanded by remember { mutableStateOf(false) }
     val swatchColors = expressiveSwatchColors()
@@ -148,6 +152,7 @@ fun <T> ExpressiveDropdownMenuField(
             value = optionLabel(selectedOption),
             onValueChange = {},
             readOnly = true,
+            label = label?.let { labelText -> { Text(labelText) } },
             trailingIcon = {
                 ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded)
             },
@@ -545,18 +550,12 @@ fun DeckSettingsDialog(
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         Spacer(Modifier.height(dimensions.spacingSmall))
-                        TextField(
+                        OutlinedTextField(
                             value = deckName,
                             onValueChange = { deckName = it },
                             singleLine = true,
                             modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
-                            colors = TextFieldDefaults.colors(
-                                focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
-                                unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
-                                focusedIndicatorColor = Color.Transparent,
-                                unfocusedIndicatorColor = Color.Transparent
-                            )
+                            shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
                         )
                     }
                     }
@@ -614,23 +613,17 @@ fun DeckSettingsDialog(
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
-                        Text(
-                            getText(R.string.language_front),
-                            style = MaterialTheme.typography.labelMedium
-                        )
                         LanguageDropdown(
                             languages = availableLanguages,
                             selectedCode = frontLanguage,
-                            onLanguageSelected = { frontLanguage = it }
-                        )
-                        Text(
-                            getText(R.string.language_back),
-                            style = MaterialTheme.typography.labelMedium
+                            onLanguageSelected = { frontLanguage = it },
+                            label = getText(R.string.language_front)
                         )
                         LanguageDropdown(
                             languages = availableLanguages,
                             selectedCode = backLanguage,
-                            onLanguageSelected = { backLanguage = it }
+                            onLanguageSelected = { backLanguage = it },
+                            label = getText(R.string.language_back)
                         )
                     }
                 }

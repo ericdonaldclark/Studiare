@@ -892,6 +892,7 @@ private fun RenameDialog(title: String, currentName: String?, onDismiss: () -> U
                 OutlinedTextField(
                     value = typed,
                     onValueChange = { typed = it },
+                    label = { Text(getText(R.string.name)) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )

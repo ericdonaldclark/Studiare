@@ -68,7 +68,7 @@ import net.ericclark.studiare.components.*
 import net.ericclark.studiare.data.*
 import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
 import net.ericclark.studiare.ui.theme.pressSquish
-import androidx.compose.material3.TextField
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.LaunchedEffect
 import net.ericclark.studiare.R
@@ -622,7 +622,7 @@ fun RichTextEditorDialog(
                                 ) { Icon(Icons.Default.Link, "Link") }
                                 DropdownMenu(expanded = showLinkPopup, onDismissRequest = { showLinkPopup = false }) {
                                     Column(modifier = Modifier.padding(dimensions.paddingMedium).width(240.dp)) {
-                                        TextField(
+                                        OutlinedTextField(
                                             value = linkUrl,
                                             onValueChange = { linkUrl = it },
                                             placeholder = { Text("https://...") },

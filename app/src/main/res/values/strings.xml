@@ -41,7 +41,6 @@
     <string name="shortcut_conflict_message_singular">%1$s already uses this key here. Reassigning it to \"%2$s\" will make it unreachable while both share it.</string>
     <string name="shortcut_conflict_message_plural">%1$s already use this key here. Reassigning it to \"%2$s\" will make them unreachable while both share it.</string>
     <string name="keyboard_shortcuts">Keyboard Shortcuts</string>
-    <string name="edit_collections">Edit Collections</string>
     <string name="selected">Selected</string>
     <string name="current_screen_only">Current screen only</string>
     <string name="open_navigation_menu">Open Navigation Menu</string>
@@ -520,6 +519,7 @@
     <string name="vertical_layout">Use Vertical Layout</string>
 
     <!-- Deck editor -->
+    <string name="name">Name</string>
     <string name="deck_actions">Deck Actions</string>
     <string name="deck_create">Create Deck</string>
     <string name="deck_name">Deck Name</string>
@@ -1060,7 +1060,7 @@
     <string name="remove_note">Remove Note</string>
     <string name="field_removed_format">%1$s field removed</string>
     <string name="add_front_note">Add Front Note</string>
-    <string name="note_hint_plain_text">Type the text for this field</string>
+    <string name="note_hint_plain_text">Field text</string>
     <string name="note_hint_web_link">Paste a web link</string>
     <string name="note_hint_html">Paste or type HTML</string>
     <string name="edit_rich_text">Edit rich text</string>
@@ -1098,6 +1098,7 @@
     <string name="selects_all_cards">Selects from all cards in the deck.</string>
     <string name="from">From</string>
     <string name="to">To</string>
+    <string name="amount">Amount</string>
     <string name="start_card_format">Start Card: %1$d</string>
     <string name="end_card_format">End Card: %1$d</string>
     <string name="selects_not_reviewed_format">Selects cards NOT reviewed in the last %1$d %2$s.</string>

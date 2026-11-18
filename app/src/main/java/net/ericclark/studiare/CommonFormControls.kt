@@ -796,6 +796,7 @@ fun SelectionModeDialogSection(
                             OutlinedTextField(
                                 value = state.timeValue.toString(),
                                 onValueChange = { actions.onTimeValueChange(it.toIntOrNull() ?: 1) },
+                                label = { Text(getText(R.string.amount)) },
                                 modifier = Modifier.width(60.dp),
                                 singleLine = true,
                                 shape = RoundedCornerShape(dimensions.cornerRadiusMedium),

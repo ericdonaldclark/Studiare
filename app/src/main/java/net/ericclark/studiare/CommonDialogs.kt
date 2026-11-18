@@ -125,7 +125,7 @@ fun CollectionPickerDialog(
                         onClick = onEditCollections,
                         shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                     ) {
-                        Text(getText(R.string.edit_collections))
+                        Text(getText(R.string.manage_collections))
                     }
                 }
             }

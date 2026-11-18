@@ -40,7 +40,8 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.FilledTonalButton
-import androidx.compose.material3.TextFieldDefaults
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -57,7 +58,6 @@ import androidx.compose.ui.unit.dp
 import net.ericclark.studiare.components.*
 import net.ericclark.studiare.data.*
 import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
-import androidx.compose.material3.TextField
 import androidx.compose.runtime.LaunchedEffect
 import net.ericclark.studiare.R
 import androidx.compose.ui.window.DialogProperties
@@ -645,7 +645,7 @@ fun AdvancedDeckEditorDialog(
                         // Scrolls with the rest now, rather than permanently pinned — Save/Save As/
                         // Apply still work without ever having scrolled here, via the naming dialog.
                         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                            TextField(
+                            OutlinedTextField(
                                 value = templateName,
                                 onValueChange = { templateName = it },
                                 singleLine = true,
@@ -814,11 +814,10 @@ fun AdvancedDeckEditorDialog(
                         style = MaterialTheme.typography.headlineSmall
                     )
                     Spacer(Modifier.height(dimensions.spacingMedium))
-                    TextField(
+                    OutlinedTextField(
                         value = nameDialogDraft,
                         onValueChange = { nameDialogDraft = it },
                         singleLine = true,
-                        label = { Text(getText(R.string.template_name)) },
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
                     )
@@ -1009,19 +1008,18 @@ fun LockedFieldRow(label: String) {
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier.fillMaxWidth().padding(vertical = dimensions.spacingSmall)
     ) {
-        TextField(
+        OutlinedTextField(
             value = label,
             onValueChange = {},
             readOnly = true,
             enabled = false,
+            label = { Text(getText(R.string.field_name)) },
             modifier = Modifier.weight(1f),
             textStyle = MaterialTheme.typography.bodyLarge,
             singleLine = true,
             shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
-            colors = TextFieldDefaults.colors(
-                disabledContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
-                disabledTextColor = MaterialTheme.colorScheme.onSurface,
-                disabledIndicatorColor = Color.Transparent
+            colors = OutlinedTextFieldDefaults.colors(
+                disabledTextColor = MaterialTheme.colorScheme.onSurface
             ),
             trailingIcon = {
                 Icon(Icons.Default.Lock, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -1069,7 +1067,7 @@ fun TemplateRow(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier.fillMaxWidth().padding(vertical = dimensions.spacingSmall)
     ) {
-        TextField(
+        OutlinedTextField(
             value = template.name,
             onValueChange = { onUpdate(template.copy(name = it)) },
             modifier = Modifier.weight(1f),
@@ -1078,12 +1076,6 @@ fun TemplateRow(
             textStyle = MaterialTheme.typography.bodyLarge,
             singleLine = true,
             shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
-            colors = TextFieldDefaults.colors(
-                focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
-                unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
-                focusedIndicatorColor = Color.Transparent,
-                unfocusedIndicatorColor = Color.Transparent
-            ),
             trailingIcon = typeDropdown // ADDED: Trailing Icon
         )
         Spacer(Modifier.width(4.dp))
