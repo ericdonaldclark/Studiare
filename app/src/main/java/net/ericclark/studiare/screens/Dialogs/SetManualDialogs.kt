@@ -32,7 +32,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import net.ericclark.studiare.*
@@ -83,7 +82,6 @@ fun ManualSetCreatorDialog(
                 Text(
                     text = getText(R.string.pick_and_choose),
                     style = MaterialTheme.typography.headlineSmall,
-                    textAlign = TextAlign.Center,
                     modifier = Modifier.fillMaxWidth()
                 )
                 Spacer(Modifier.height(dimensions.spacingSmall))
@@ -316,7 +314,6 @@ fun ManualSetEditorDialog(
                 Text(
                     text = getText(R.string.set_edit),
                     style = MaterialTheme.typography.headlineSmall,
-                    textAlign = TextAlign.Center,
                     modifier = Modifier.fillMaxWidth()
                 )
                 Spacer(Modifier.height(dimensions.spacingSmall))

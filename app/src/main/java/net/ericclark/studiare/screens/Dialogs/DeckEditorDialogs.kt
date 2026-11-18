@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -189,12 +190,13 @@ fun CardEditDialog(
 
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
+                        horizontalArrangement = Arrangement.End,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         TextButton(onClick = onCancel, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
                             Text(getText(R.string.cancel))
                         }
+                        Spacer(Modifier.width(dimensions.spacingSmall))
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             when (mode) {
                                 is CardEditDialogMode.Edit -> {
@@ -233,10 +235,15 @@ fun UnsavedChangesDialog(onDismiss: () -> Unit, onDiscard: () -> Unit, onSave: (
             color = MaterialTheme.colorScheme.surfaceContainer,
             tonalElevation = 6.dp
         ) {
-            Column(modifier = Modifier.padding(dimensions.paddingLarge).widthIn(min = 280.dp, max = 560.dp)) {
+            Column(
+                modifier = Modifier.padding(dimensions.paddingLarge).widthIn(min = 280.dp, max = 560.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Icon(Icons.Filled.Emergency, contentDescription = null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(32.dp))
+                Spacer(Modifier.height(dimensions.spacingSmall))
                 Text(getText(R.string.unsaved_changes), style = MaterialTheme.typography.headlineSmall, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
                 Spacer(Modifier.height(dimensions.spacingSmall))
-                Text(getText(R.string.unsaved_changes_save))
+                Text(getText(R.string.unsaved_changes_save), textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
                 Spacer(Modifier.height(dimensions.spacingLarge))
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                     TextButton(onClick = onDiscard, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(getText(R.string.discard)) }
@@ -264,10 +271,15 @@ fun ClearCardDataConfirmDialog(cardCount: Int, onDismiss: () -> Unit, onConfirm:
             color = MaterialTheme.colorScheme.surfaceContainer,
             tonalElevation = 6.dp
         ) {
-            Column(modifier = Modifier.padding(dimensions.paddingLarge).widthIn(min = 280.dp, max = 560.dp)) {
+            Column(
+                modifier = Modifier.padding(dimensions.paddingLarge).widthIn(min = 280.dp, max = 560.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Icon(Icons.Filled.Emergency, contentDescription = null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(32.dp))
+                Spacer(Modifier.height(dimensions.spacingSmall))
                 Text(getText(R.string.clear_data_question), style = MaterialTheme.typography.headlineSmall, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
                 Spacer(Modifier.height(dimensions.spacingSmall))
-                Text(pluralStringResource(R.plurals.clear_data_message, cardCount, cardCount))
+                Text(pluralStringResource(R.plurals.clear_data_message, cardCount, cardCount), textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
                 Spacer(Modifier.height(dimensions.spacingLarge))
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                     TextButton(onClick = onDismiss, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(getText(R.string.cancel)) }
@@ -305,7 +317,7 @@ fun SetDifficultyDialog(
             tonalElevation = 6.dp
         ) {
             Column(modifier = Modifier.padding(dimensions.paddingLarge).widthIn(min = 280.dp, max = 560.dp)) {
-                Text(getText(R.string.set_difficulty), style = MaterialTheme.typography.headlineSmall, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+                Text(getText(R.string.set_difficulty), style = MaterialTheme.typography.headlineSmall, modifier = Modifier.fillMaxWidth())
                 Spacer(Modifier.height(dimensions.spacingSmall))
                 Text(message)
                 Spacer(Modifier.height(dimensions.spacingSmall))
@@ -745,8 +757,9 @@ fun AdvancedDeckEditorDialog(
 
                 Spacer(Modifier.height(dimensions.spacingSmall))
 
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                     TextButton(onClick = onDismiss, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(getText(R.string.cancel), style = MaterialTheme.typography.labelLarge) }
+                    Spacer(Modifier.width(dimensions.spacingSmall))
                     Row(horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)) {
                         if (!footerShowsApplyButtons) {
                             // Settings' global-library-edit mode: no deck in context for Apply to
@@ -810,8 +823,9 @@ fun AdvancedDeckEditorDialog(
                         shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
                     )
                     Spacer(Modifier.height(dimensions.spacingLarge))
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                         TextButton(onClick = { showNameDialog = false }, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(getText(R.string.cancel)) }
+                        Spacer(Modifier.width(dimensions.spacingSmall))
                         Row(horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)) {
                             // Save As is the primary action here when it's offered at all — this
                             // dialog only exists because something changed on an existing template,
@@ -848,10 +862,15 @@ fun AdvancedDeckEditorDialog(
                 color = MaterialTheme.colorScheme.surfaceContainer,
                 tonalElevation = 6.dp
             ) {
-                Column(modifier = Modifier.padding(dimensions.paddingLarge).widthIn(min = 280.dp, max = 560.dp)) {
-                    Text(getText(R.string.delete_template_question), style = MaterialTheme.typography.headlineSmall)
+                Column(
+                    modifier = Modifier.padding(dimensions.paddingLarge).widthIn(min = 280.dp, max = 560.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Icon(Icons.Filled.Emergency, contentDescription = null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(32.dp))
+                    Spacer(Modifier.height(dimensions.spacingSmall))
+                    Text(getText(R.string.delete_template_question), style = MaterialTheme.typography.headlineSmall, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
                     Spacer(Modifier.height(dimensions.spacingMedium))
-                    Text(stringResource(R.string.delete_template_confirm, toDelete.name), style = MaterialTheme.typography.bodyMedium)
+                    Text(stringResource(R.string.delete_template_confirm, toDelete.name), style = MaterialTheme.typography.bodyMedium, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
                     Spacer(Modifier.height(dimensions.spacingSmall))
                     val usedByDecks = remember(toDelete.id) { decksUsingTemplate(toDelete.id) }
                     Text(
@@ -866,7 +885,9 @@ fun AdvancedDeckEditorDialog(
                             )
                         },
                         style = MaterialTheme.typography.bodyMedium,
-                        color = if (usedByDecks.isEmpty()) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.error
+                        color = if (usedByDecks.isEmpty()) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.error,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.fillMaxWidth()
                     )
                     Spacer(Modifier.height(dimensions.spacingLarge))
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
@@ -933,7 +954,6 @@ fun ApplyTemplateToDecksDialog(
                 Text(
                     stringResource(R.string.apply_template_to_decks_title, templateName),
                     style = MaterialTheme.typography.headlineSmall,
-                    textAlign = TextAlign.Center,
                     modifier = Modifier.fillMaxWidth()
                 )
                 Spacer(Modifier.height(dimensions.spacingMedium))

@@ -894,11 +894,12 @@ fun TagSelectionDialog(
 
                         Row(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
+                            horizontalArrangement = Arrangement.End,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             val cancelEditInteractionSource = remember { MutableInteractionSource() }
                             TextButton(onClick = { exitEditMode() }, interactionSource = cancelEditInteractionSource, modifier = Modifier.pressSquish(cancelEditInteractionSource, 0.95f), shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(getText(R.string.cancel)) }
+                            Spacer(Modifier.width(dimensions.spacingSmall))
 
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 val deleteInteractionSource = remember { MutableInteractionSource() }
@@ -1051,11 +1052,12 @@ fun TagSelectionDialog(
 
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
+                        horizontalArrangement = Arrangement.End,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         val cancelSelInteractionSource = remember { MutableInteractionSource() }
                         TextButton(onClick = onDismiss, interactionSource = cancelSelInteractionSource, modifier = Modifier.pressSquish(cancelSelInteractionSource, 0.95f), shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(getText(R.string.cancel)) }
+                        Spacer(Modifier.width(dimensions.spacingSmall))
 
                         Row {
                             val createInteractionSource = remember { MutableInteractionSource() }

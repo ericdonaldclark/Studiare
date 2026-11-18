@@ -108,8 +108,7 @@ fun AdvancedSelectionDialog(
                     Text(
                         title ?: getText(R.string.advanced_selection_title),
                         style = MaterialTheme.typography.headlineSmall,
-                        modifier = Modifier.padding(bottom = dimensions.spacingSmall).fillMaxWidth(),
-                        textAlign = TextAlign.Center
+                        modifier = Modifier.padding(bottom = dimensions.spacingSmall).fillMaxWidth()
                     )
                     Text(
                         "${selection.selected.size} / ${decks.size} selected",

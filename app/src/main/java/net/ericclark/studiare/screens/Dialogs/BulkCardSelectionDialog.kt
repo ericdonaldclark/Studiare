@@ -134,8 +134,7 @@ fun BulkCardSelectionDialog(
                     Text(
                         titlePrefix,
                         style = MaterialTheme.typography.headlineSmall,
-                        modifier = Modifier.fillMaxWidth(),
-                        textAlign = TextAlign.Center
+                        modifier = Modifier.fillMaxWidth()
                     )
                     Box(modifier = Modifier.fillMaxWidth().padding(top = 4.dp, bottom = dimensions.spacingSmall), contentAlignment = Alignment.Center) {
                         subtitleContent()
@@ -234,8 +233,9 @@ fun BulkCardSelectionDialog(
                 }
 
                 Spacer(Modifier.height(dimensions.spacingMedium))
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                     TextButton(onClick = onDismiss, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(getText(R.string.cancel)) }
+                    Spacer(Modifier.width(dimensions.spacingSmall))
                     Button(
                         onClick = {
                             val toAdd = checkedCardIds - initiallyMatchingIds

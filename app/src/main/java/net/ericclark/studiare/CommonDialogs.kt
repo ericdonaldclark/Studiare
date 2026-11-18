@@ -275,7 +275,17 @@ fun ConfirmationDialog(
     onDismiss: () -> Unit,
     confirmButtonText: String? = null,
     dismissButtonText: String? = null, // ADD THIS PARAMETER
-    icon: @Composable (() -> Unit)? = null
+    // Hero image: every short confirmation dialog gets one by default (M3 basic-dialog pattern —
+    // an icon above the title is what licenses the title/text centering below). Callers that want
+    // no icon can pass icon = null explicitly.
+    icon: @Composable (() -> Unit)? = {
+        Icon(
+            imageVector = Icons.Filled.Emergency,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.error,
+            modifier = Modifier.size(32.dp)
+        )
+    }
 ) {
     val dimensions = LocalStudiareDimensions.current
     AnimatedDialog(onDismissRequest = onDismiss) {

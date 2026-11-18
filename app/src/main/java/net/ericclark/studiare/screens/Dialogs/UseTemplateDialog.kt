@@ -62,15 +62,13 @@ fun UseTemplateDialog(
                 Text(
                     getText(R.string.use_template_dialog_title),
                     style = MaterialTheme.typography.headlineSmall,
-                    modifier = Modifier.fillMaxWidth(),
-                    textAlign = TextAlign.Center
+                    modifier = Modifier.fillMaxWidth()
                 )
                 Text(
                     getText(R.string.use_template_dialog_subtitle),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(bottom = dimensions.spacingMedium).fillMaxWidth(),
-                    textAlign = TextAlign.Center
+                    modifier = Modifier.padding(bottom = dimensions.spacingMedium).fillMaxWidth()
                 )
 
                 if (templateSets.isEmpty()) {

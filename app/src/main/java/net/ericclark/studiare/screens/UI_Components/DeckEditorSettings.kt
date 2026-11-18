@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.draw.clip
@@ -441,10 +442,15 @@ fun DeckSettingsDialog(
                 color = MaterialTheme.colorScheme.surfaceContainer,
                 tonalElevation = 6.dp
             ) {
-                Column(modifier = Modifier.padding(dimensions.paddingLarge).widthIn(min = 280.dp, max = 560.dp)) {
-                    Text(getText(R.string.review_data_clear_question), style = MaterialTheme.typography.headlineSmall)
+                Column(
+                    modifier = Modifier.padding(dimensions.paddingLarge).widthIn(min = 280.dp, max = 560.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Icon(Icons.Filled.Emergency, contentDescription = null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(32.dp))
                     Spacer(Modifier.height(dimensions.spacingSmall))
-                    Text(getText(R.string.review_data_clear_message))
+                    Text(getText(R.string.review_data_clear_question), style = MaterialTheme.typography.headlineSmall, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+                    Spacer(Modifier.height(dimensions.spacingSmall))
+                    Text(getText(R.string.review_data_clear_message), textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
                     Spacer(Modifier.height(dimensions.spacingLarge))
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                         TextButton(onClick = { showClearConfirm = false }, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(getText(R.string.cancel)) }
@@ -482,7 +488,7 @@ fun DeckSettingsDialog(
                     .fillMaxSize()
                     .padding(dimensions.paddingLarge)
             ) {
-                Text(getText(R.string.deck_options), style = MaterialTheme.typography.headlineSmall, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+                Text(getText(R.string.deck_options), style = MaterialTheme.typography.headlineSmall, modifier = Modifier.fillMaxWidth())
                 Spacer(Modifier.height(dimensions.spacingSmall))
 
                 // Each section-jump button alternates between two theme container roles
@@ -781,10 +787,11 @@ fun DeckSettingsDialog(
                 // Action Buttons
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
+                    horizontalArrangement = Arrangement.End,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     TextButton(onClick = onDismiss, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(getText(R.string.cancel)) }
+                    Spacer(Modifier.width(dimensions.spacingSmall))
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Button(
                             onClick = { onSave(deckName.trim(), normalizationType, sortType, sortPinnedCardsFirst, defaultPromptSide, frontLanguage, backLanguage) },
@@ -823,7 +830,6 @@ fun LinkageSettingsDialog(
                 Text(
                     "Set Linkage Settings",
                     style = MaterialTheme.typography.headlineSmall,
-                    textAlign = TextAlign.Center,
                     modifier = Modifier.fillMaxWidth()
                 )
                 Spacer(Modifier.height(dimensions.spacingMedium))

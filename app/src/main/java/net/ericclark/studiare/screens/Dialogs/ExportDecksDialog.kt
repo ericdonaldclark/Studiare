@@ -167,8 +167,7 @@ fun ExportDecksDialog(
                     style = MaterialTheme.typography.headlineSmall,
                     modifier = Modifier
                         .padding(bottom = dimensions.spacingSmall)
-                        .fillMaxWidth(),
-                    textAlign = TextAlign.Center
+                        .fillMaxWidth()
                 )
 
                 val selectAllInteractionSource = remember { MutableInteractionSource() }
@@ -321,8 +320,9 @@ fun ExportDecksDialog(
                 Spacer(Modifier.height(dimensions.spacingMedium))
               }
 
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                     TextButton(onClick = onDismiss, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(getText(R.string.cancel)) }
+                    Spacer(Modifier.width(dimensions.spacingSmall))
 
                     val exportInteractionSource = remember { MutableInteractionSource() }
                     Button(
