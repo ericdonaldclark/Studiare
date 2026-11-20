@@ -166,6 +166,8 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
             userIdProvider = { authAndSyncManager.userId.value },
             getLocalDecks = { localDecks },
             getLocalCards = { localCards },
+            getLocalTags = { tags.value },
+            getLocalTemplateSets = { templateSets.value },
             onProcessingChanged = { isProcessing = it },
             onOverwriteConfirmationChanged = { _overwriteConfirmation.value = it },
             getOverwriteConfirmation = { _overwriteConfirmation.value },
@@ -173,6 +175,8 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
             // Redirect saves to Room DAOs
             saveDeckToFirestore = { deck -> deckDao.insertOrUpdate(deck.copy(isPendingSync = true)) },
             saveCardToFirestore = { card -> cardDao.insertOrUpdate(card.copy(isPendingSync = true)) },
+            saveTagsLocally = { tagsToSave -> tagDao.insertOrUpdateAll(tagsToSave.map { it.copy(isPendingSync = true) }) },
+            saveTemplateSetsLocally = { templateSetsToSave -> templateSetDao.insertOrUpdateAll(templateSetsToSave.map { it.copy(isPendingSync = true) }) },
             onError = { importError = it }
         )
     }
@@ -198,6 +202,8 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
     val presets: StateFlow<List<SessionPreset>> = sessionPresetDao.getAllActiveSessionPresets()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    val defaultDeckOptions: StateFlow<DefaultDeckOptions?> = preferenceManager.defaultDeckOptionsFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
     // --- Delegated State Flows (Audio) ---
     val audioFeedback: StateFlow<String?> get() = audioServiceManager.audioFeedback
@@ -1921,6 +1927,100 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         )
     }
 
+    /** Settings → Deck Options' "All future decks"/"All current and future decks" choice. */
+    fun setDefaultDeckOptions(options: DefaultDeckOptions?) {
+        viewModelScope.launch { preferenceManager.setDefaultDeckOptions(options) }
+    }
+
+    /** Result of [applyDeckOptionsToDecks] — [deckCount]/[cardCount] drive the confirmation/
+     * snackbar copy, while [snapshotDecks]/[snapshotCards] (the pre-apply rows, held only in
+     * memory) are handed back to [undoDeckOptionsApply] if the user taps Undo. */
+    data class DeckOptionsApplyResult(
+        val deckCount: Int,
+        val cardCount: Int,
+        val snapshotDecks: List<Deck>,
+        val snapshotCards: List<Card>
+    )
+
+    /** Settings → Deck Options' bulk-apply: pushes [options] onto every deck named by [deckIds]
+     * (or every current deck, if null) in one go. Unlike [updateDeckOptions]/[saveDeckWithCards],
+     * this never goes through the single-deck duplicate-check pipeline — it operates directly on
+     * each target deck's already-saved rows, so a Settings-wide sweep across many decks can't
+     * trigger a per-deck duplicate-resolution dialog. Mirrors that same pipeline's normalization
+     * step though: when [options]' normalization/corrections actually differ from a deck's
+     * current ones, that deck's existing cards are re-normalized immediately (not deferred to the
+     * next edit), same as [net.ericclark.studiare.screens.Screens.DeckEditorScreen]'s own
+     * applyNormalization does when you change it there. */
+    fun applyDeckOptionsToDecks(
+        deckIds: Set<String>?,
+        options: DefaultDeckOptions,
+        fields: Set<DeckOptionField> = DeckOptionField.ALL,
+        onProgress: (Boolean) -> Unit,
+        onComplete: (DeckOptionsApplyResult) -> Unit
+    ) {
+        onProgress(true)
+        viewModelScope.launch(Dispatchers.IO) {
+            val targets = if (deckIds == null) localDecks else localDecks.filter { it.id in deckIds }
+            val now = System.currentTimeMillis()
+
+            // Only Normalization actually touches card text — and only for a deck whose merged
+            // (fields-filtered) normalization/corrections end up different from what it already has.
+            val normalizationChangedDecks = if (DeckOptionField.NORMALIZATION !in fields) emptyList() else targets.filter {
+                it.normalizationType != options.normalizationType || it.textCorrections != options.textCorrections
+            }
+            val targetCardIds = normalizationChangedDecks.flatMap { it.cardIds }.toSet()
+            val snapshotCards = localCards.filter { it.id in targetCardIds }
+
+            fun normalizeOne(text: String) = normalizeText(options.normalizationType, applyTextCorrections(options.textCorrections, text))
+            fun normalizeNotes(notes: List<NoteField>) = notes.map {
+                if (it.type == MediaType.PLAIN_TEXT) it.copy(content = normalizeOne(it.content)) else it
+            }
+
+            val updatedDecks = targets.map { deck ->
+                deck.copy(
+                    deckSortMode = if (DeckOptionField.CARD_ORDER in fields) options.deckSortMode else deck.deckSortMode,
+                    defaultPromptSide = if (DeckOptionField.PROMPT_SIDE in fields) options.defaultPromptSide else deck.defaultPromptSide,
+                    frontLanguage = if (DeckOptionField.LANGUAGE in fields) options.frontLanguage else deck.frontLanguage,
+                    backLanguage = if (DeckOptionField.LANGUAGE in fields) options.backLanguage else deck.backLanguage,
+                    normalizationType = if (DeckOptionField.NORMALIZATION in fields) options.normalizationType else deck.normalizationType,
+                    textCorrections = if (DeckOptionField.NORMALIZATION in fields) options.textCorrections else deck.textCorrections,
+                    updatedAt = now,
+                    isPendingSync = true
+                )
+            }
+            val updatedCards = snapshotCards.map { card ->
+                card.copy(
+                    front = normalizeOne(card.front),
+                    back = normalizeOne(card.back),
+                    frontNotes = normalizeNotes(card.frontNotes),
+                    backNotes = normalizeNotes(card.backNotes),
+                    updatedAt = now,
+                    isPendingSync = true
+                )
+            }
+
+            database.withTransaction {
+                deckDao.insertOrUpdateAll(updatedDecks)
+                if (updatedCards.isNotEmpty()) cardDao.insertOrUpdateAll(updatedCards)
+            }
+
+            withContext(Dispatchers.Main) {
+                onProgress(false)
+                onComplete(DeckOptionsApplyResult(updatedDecks.size, updatedCards.size, targets, snapshotCards))
+            }
+        }
+    }
+
+    /** Undoes [applyDeckOptionsToDecks], restoring exactly the rows it snapshotted beforehand. */
+    fun undoDeckOptionsApply(snapshotDecks: List<Deck>, snapshotCards: List<Card>) {
+        viewModelScope.launch(Dispatchers.IO) {
+            database.withTransaction {
+                deckDao.insertOrUpdateAll(snapshotDecks)
+                if (snapshotCards.isNotEmpty()) cardDao.insertOrUpdateAll(snapshotCards)
+            }
+        }
+    }
+
     /**
      * Saves the deck's own default template fields, linking the deck to the already-persisted
      * shared [TemplateSet] named by [templateSetId] (resolved and saved by
@@ -2864,7 +2964,15 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
                     )
                 }
 
-                // 2. Deck-Level Snapshot: Metadata
+                // 2. Deck-Level Snapshot: Normalization
+                if (set.linkageSettings.linkNormalization && !newSettings.linkNormalization) {
+                    updatedSet = updatedSet.copy(
+                        normalizationType = parent.normalizationType,
+                        textCorrections = parent.textCorrections
+                    )
+                }
+
+                // 3. Deck-Level Snapshot: Metadata
                 if (set.linkageSettings.linkMetadata && !newSettings.linkMetadata) {
                     updatedSet = updatedSet.copy(
                         createdAt = parent.createdAt,
@@ -2872,7 +2980,7 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
                     )
                 }
 
-                // 3. Deck-Level Snapshot: Scoring (Missed this previously!)
+                // 4. Deck-Level Snapshot: Scoring (Missed this previously!)
                 if (set.linkageSettings.linkScoring && !newSettings.linkScoring) {
                     updatedSet = updatedSet.copy(
                         fsrsEnabled = parent.fsrsEnabled,

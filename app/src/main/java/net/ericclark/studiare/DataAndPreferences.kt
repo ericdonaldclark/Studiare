@@ -15,6 +15,7 @@ import net.ericclark.studiare.data.CrosswordWord
 import kotlinx.coroutines.flow.distinctUntilChanged
 import net.ericclark.studiare.data.*
 import net.ericclark.studiare.screens.Screens.CreateStudySessionScreen
+import com.google.gson.Gson
 
 private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "settings")
 
@@ -137,6 +138,7 @@ class PreferenceManager(context: Context) {
         val DECK_SORT_MODE = intPreferencesKey("deck_sort_mode")
         val DECK_SET_COUNTS_SNAPSHOT = stringPreferencesKey("deck_set_counts_snapshot")
         val MODE_DEFAULT_SETTINGS = stringPreferencesKey("mode_default_settings")
+        val DEFAULT_DECK_OPTIONS = stringPreferencesKey("default_deck_options")
         val SELECTED_COLLECTION_ID = stringPreferencesKey("selected_collection_id")
         val DECK_VIEW_MODE = intPreferencesKey("deck_view_mode")
 
@@ -505,6 +507,20 @@ class PreferenceManager(context: Context) {
             val leaf = settings.toJson()
             inner.put(mode.name, leaf)
             preferences[MODE_DEFAULT_SETTINGS] = outer.toString()
+        }
+    }
+
+    // Settings → Deck Options' "All future decks"/"All current and future decks" choice — see
+    // DeckOptionsCategoryContent. Null means "no override", so DeckEditorScreen's new-deck state
+    // initializers fall back to their own hardcoded literals, same as before this setting existed.
+    val defaultDeckOptionsFlow: Flow<DefaultDeckOptions?> = dataStore.data.map { preferences ->
+        val jsonString = preferences[DEFAULT_DECK_OPTIONS]
+        if (jsonString.isNullOrEmpty()) null else runCatching { Gson().fromJson(jsonString, DefaultDeckOptions::class.java) }.getOrNull()
+    }.distinctUntilChanged()
+
+    suspend fun setDefaultDeckOptions(options: DefaultDeckOptions?) {
+        dataStore.edit { preferences ->
+            if (options == null) preferences.remove(DEFAULT_DECK_OPTIONS) else preferences[DEFAULT_DECK_OPTIONS] = Gson().toJson(options)
         }
     }
 

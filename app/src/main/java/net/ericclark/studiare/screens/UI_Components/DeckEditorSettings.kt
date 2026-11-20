@@ -890,14 +890,14 @@ fun LinkageSettingsDialog(
                         onToggle = { settings = settings.copy(linkCardData = it) }
                     )
                     LinkageToggleRow(
-                        label = "Link Field Config (Templates)",
+                        label = "Link Field Config (Language & Templates)",
                         isLinked = settings.linkFieldConfig,
                         onToggle = { settings = settings.copy(linkFieldConfig = it) }
                     )
                     LinkageToggleRow(
-                        label = "Link Card Order (Sorting)",
-                        isLinked = settings.linkCardOrder,
-                        onToggle = { settings = settings.copy(linkCardOrder = it) }
+                        label = "Link Normalization (Text Cleanup)",
+                        isLinked = settings.linkNormalization,
+                        onToggle = { settings = settings.copy(linkNormalization = it) }
                     )
                     LinkageToggleRow(
                         label = "Link Scoring (FSRS weights)",

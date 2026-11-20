@@ -153,16 +153,23 @@ fun DeckEditorScreen(
     // State for the deck name
     var deckName by remember { mutableStateOf(deckWithCards?.deck?.name ?: "") }
 
+    // Settings → Deck Options' "All future decks"/"All current and future decks" choice — a
+    // brand-new deck (deckWithCards == null) starts from this instead of the plain literals
+    // below, whenever the user has saved one. Read once at first composition (same timing as
+    // every other `?: literal` fallback here): it's a hot StateFlow that's already loaded its
+    // persisted value well before the user ever reaches "create a new deck".
+    val defaultDeckOptions = viewModel.defaultDeckOptions.value
+
     // State for deck settings
-    var normalizationType by remember { mutableStateOf(deckWithCards?.deck?.normalizationType ?: NormalizationType.NONE) }
-    var textCorrections by remember { mutableStateOf(deckWithCards?.deck?.textCorrections ?: TextCorrectionSettings()) }
-    var sortType by remember { mutableStateOf(deckWithCards?.deck?.deckSortMode ?: DeckSortMode.DATE_ADDED_OLD_TO_NEW) }
+    var normalizationType by remember { mutableStateOf(deckWithCards?.deck?.normalizationType ?: defaultDeckOptions?.normalizationType ?: NormalizationType.NONE) }
+    var textCorrections by remember { mutableStateOf(deckWithCards?.deck?.textCorrections ?: defaultDeckOptions?.textCorrections ?: TextCorrectionSettings()) }
+    var sortType by remember { mutableStateOf(deckWithCards?.deck?.deckSortMode ?: defaultDeckOptions?.deckSortMode ?: DeckSortMode.DATE_ADDED_OLD_TO_NEW) }
     var sortPinnedCardsFirst by remember { mutableStateOf(deckWithCards?.deck?.sortPinnedCardsFirst ?: true) }
-    var defaultPromptSide by remember { mutableStateOf(deckWithCards?.deck?.defaultPromptSide ?: CardSide.AUTO_BY_DECK) }
+    var defaultPromptSide by remember { mutableStateOf(deckWithCards?.deck?.defaultPromptSide ?: defaultDeckOptions?.defaultPromptSide ?: CardSide.AUTO_BY_DECK) }
 
     // State for Languages (Default to system default if new, or load from deck)
-    var frontLanguage by remember { mutableStateOf(deckWithCards?.deck?.frontLanguage ?: Locale.getDefault().language) }
-    var backLanguage by remember { mutableStateOf(deckWithCards?.deck?.backLanguage ?: Locale.getDefault().language) }
+    var frontLanguage by remember { mutableStateOf(deckWithCards?.deck?.frontLanguage ?: defaultDeckOptions?.frontLanguage ?: Locale.getDefault().language) }
+    var backLanguage by remember { mutableStateOf(deckWithCards?.deck?.backLanguage ?: defaultDeckOptions?.backLanguage ?: Locale.getDefault().language) }
 
     // State for Note Templates and Advanced Editor
     // Keyed on the deck's id so that if `deckWithCards` is still null/loading on this screen's

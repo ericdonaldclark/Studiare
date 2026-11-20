@@ -6,7 +6,12 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
 
-@Database(entities = [Deck::class, Card::class, TagDefinition::class, ActiveSession::class, DeckCollection::class, CollectionDeckCrossRef::class, TemplateSet::class, SessionPreset::class], version = 40, exportSchema = false)
+// Top-level (not a companion constant) so it's a valid compile-time constant for the annotation
+// below while still being referenceable elsewhere (e.g. Settings → About) as the single source
+// of truth for the schema version shown to the user.
+const val DATABASE_VERSION = 40
+
+@Database(entities = [Deck::class, Card::class, TagDefinition::class, ActiveSession::class, DeckCollection::class, CollectionDeckCrossRef::class, TemplateSet::class, SessionPreset::class], version = DATABASE_VERSION, exportSchema = false)
 @TypeConverters(Converters::class)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun deckDao(): DeckDao

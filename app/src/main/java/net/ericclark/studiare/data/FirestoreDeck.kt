@@ -90,10 +90,10 @@ data class FirestoreDeck(
                     syncCardAdditions = settings["syncCardAdditions"] ?: true,
                     syncCardDeletions = settings["syncCardDeletions"] ?: false,
                     linkCardData = settings["linkCardData"] ?: true,
-                    linkCardOrder = settings["linkCardOrder"] ?: true,
                     linkFieldConfig = settings["linkFieldConfig"] ?: true,
                     linkMetadata = settings["linkMetadata"] ?: true,
-                    linkScoring = settings["linkScoring"] ?: true
+                    linkScoring = settings["linkScoring"] ?: true,
+                    linkNormalization = settings["linkNormalization"] ?: true
                 )
             } ?: LinkageSettings(),
             textCorrections = this.textCorrections?.let { settings ->
@@ -141,10 +141,10 @@ fun Deck.toFirestoreDeck(): FirestoreDeck {
             "syncCardAdditions" to this.linkageSettings.syncCardAdditions,
             "syncCardDeletions" to this.linkageSettings.syncCardDeletions,
             "linkCardData" to this.linkageSettings.linkCardData,
-            "linkCardOrder" to this.linkageSettings.linkCardOrder,
             "linkFieldConfig" to this.linkageSettings.linkFieldConfig,
             "linkMetadata" to this.linkageSettings.linkMetadata,
-            "linkScoring" to this.linkageSettings.linkScoring
+            "linkScoring" to this.linkageSettings.linkScoring,
+            "linkNormalization" to this.linkageSettings.linkNormalization
         ),
         textCorrections = mapOf(
             "trimWhitespace" to this.textCorrections.trimWhitespace,

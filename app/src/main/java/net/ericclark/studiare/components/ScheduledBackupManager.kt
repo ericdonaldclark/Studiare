@@ -44,6 +44,8 @@ class ScheduledBackupManager(private val context: Context) {
         val database = AppDatabase.getDatabase(context)
         val decks = database.deckDao().getAllActiveDecks().first()
         val cards = database.cardDao().getAllActiveCards().first()
+        val tags = database.tagDao().getAllActiveTags().first()
+        val templateSets = database.templateSetDao().getAllActiveTemplateSets().first()
         var decksWithCards = DeckLinkageResolver.resolveEffectiveDecks(decks, cards)
 
         // null (the default, unless the user has picked specific decks via "Select Format and
@@ -61,7 +63,7 @@ class ScheduledBackupManager(private val context: Context) {
             decksWithCards = stripMetadataForExport(decksWithCards)
         }
 
-        val content = buildBackupContent(prefs.backupFormatFlow.first(), decksWithCards)
+        val content = buildBackupContent(prefs.backupFormatFlow.first(), decksWithCards, tags, templateSets)
         if (content == null) {
             prefs.recordBackupRun(false)
             return@withContext BackupRunSummary(false)
@@ -87,8 +89,13 @@ class ScheduledBackupManager(private val context: Context) {
     }
 
     /** Anki formats write through [buildAnkiPackage]'s own destination-`Uri` writer, so they're staged to a temp cache file first and read back as bytes. */
-    private suspend fun buildBackupContent(format: String, decksToExport: List<DeckWithCards>): BackupContent? = when (format) {
-        "CSV" -> BackupContent(buildDecksCsv(decksToExport).toByteArray(), "text/csv", "csv")
+    private suspend fun buildBackupContent(
+        format: String,
+        decksToExport: List<DeckWithCards>,
+        tags: List<net.ericclark.studiare.data.TagDefinition>,
+        templateSets: List<net.ericclark.studiare.data.TemplateSet>
+    ): BackupContent? = when (format) {
+        "CSV" -> BackupContent(buildDecksCsv(decksToExport, tags, templateSets).toByteArray(), "text/csv", "csv")
         "ANKI_APKG", "ANKI_COLPKG" -> {
             val tempFile = File(context.cacheDir, "scheduled_backup_${System.currentTimeMillis()}.tmp")
             val built = runCatching { buildAnkiPackage(context, decksToExport, Uri.fromFile(tempFile)) }.getOrDefault(false)
@@ -101,7 +108,7 @@ class ScheduledBackupManager(private val context: Context) {
                 null
             }
         }
-        else -> BackupContent(buildDecksJson(decksToExport).toByteArray(), "application/json", "json")
+        else -> BackupContent(buildDecksJson(decksToExport, tags, templateSets).toByteArray(), "application/json", "json")
     }
 
     private suspend fun writeLocalBackup(fileBaseName: String, content: BackupContent, prefs: PreferenceManager): Boolean {

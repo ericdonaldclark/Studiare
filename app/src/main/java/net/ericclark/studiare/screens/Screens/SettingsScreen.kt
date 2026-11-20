@@ -91,6 +91,7 @@ import net.ericclark.studiare.screens.UI_Components.ConnectedButtonGroup
 import net.ericclark.studiare.screens.UI_Components.ExpressiveDropdownMenuField
 import net.ericclark.studiare.screens.UI_Components.KeyboardShortcutSettingsContent
 import net.ericclark.studiare.screens.UI_Components.ModeDefaultsSettingsContent
+import net.ericclark.studiare.screens.UI_Components.DeckOptionsCategoryContent
 import net.ericclark.studiare.screens.UI_Components.NotificationPermissionRow
 import net.ericclark.studiare.screens.UI_Components.SettingSwitchItem
 import net.ericclark.studiare.screens.UI_Components.SettingsCategoryRow
@@ -636,6 +637,12 @@ fun SettingsScreen(
             }
         ),
         SettingCategoryData(
+            id = "deck_options",
+            title = getText(R.string.deck_options_title),
+            subtitle = getText(R.string.deck_options_subtitle),
+            content = { DeckOptionsCategoryContent(viewModel, snackbarHostState) }
+        ),
+        SettingCategoryData(
             id = "tags",
             title = getText(R.string.tags_and_templates),
             subtitle = stringResource(
@@ -1136,7 +1143,8 @@ private fun AboutCategoryContent(
             SettingsInfoRow("Build Type", if (BuildConfig.DEBUG) "Debug" else "Release", isAlternate = false)
             SettingsInfoRow("Version Code", "${BuildConfig.VERSION_CODE}", isAlternate = true)
             SettingsInfoRow("Package", context.packageName, isAlternate = false)
-            SettingsInfoRow("Target / Min SDK", "${context.applicationInfo.targetSdkVersion} / ${context.applicationInfo.minSdkVersion}", isAlternate = true)
+            SettingsInfoRow("Database Version", "${net.ericclark.studiare.data.DATABASE_VERSION}", isAlternate = true)
+            SettingsInfoRow("Target / Min SDK", "${context.applicationInfo.targetSdkVersion} / ${context.applicationInfo.minSdkVersion}", isAlternate = false)
 
         }
 
