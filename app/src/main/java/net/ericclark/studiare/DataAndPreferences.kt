@@ -139,6 +139,7 @@ class PreferenceManager(context: Context) {
         val DECK_SET_COUNTS_SNAPSHOT = stringPreferencesKey("deck_set_counts_snapshot")
         val MODE_DEFAULT_SETTINGS = stringPreferencesKey("mode_default_settings")
         val DEFAULT_DECK_OPTIONS = stringPreferencesKey("default_deck_options")
+        val TAG_NORMALIZATION = stringPreferencesKey("tag_normalization")
         val SELECTED_COLLECTION_ID = stringPreferencesKey("selected_collection_id")
         val DECK_VIEW_MODE = intPreferencesKey("deck_view_mode")
 
@@ -522,6 +523,20 @@ class PreferenceManager(context: Context) {
         dataStore.edit { preferences ->
             if (options == null) preferences.remove(DEFAULT_DECK_OPTIONS) else preferences[DEFAULT_DECK_OPTIONS] = Gson().toJson(options)
         }
+    }
+
+    // Settings → Tags' "Tag Text Normalization" — one global rule set applied to every tag name
+    // on create/rename (tag names are already required to be globally unique, so there's no
+    // per-deck scope to split this across). Unlike defaultDeckOptionsFlow, there's no "unset"
+    // state to fall back from — this always has a value, defaulting to NormalizationType.NONE.
+    val tagNormalizationFlow: Flow<TagNormalizationSettings> = dataStore.data.map { preferences ->
+        val jsonString = preferences[TAG_NORMALIZATION]
+        if (jsonString.isNullOrEmpty()) TagNormalizationSettings()
+        else runCatching { Gson().fromJson(jsonString, TagNormalizationSettings::class.java) }.getOrDefault(TagNormalizationSettings())
+    }.distinctUntilChanged()
+
+    suspend fun setTagNormalization(settings: TagNormalizationSettings) {
+        dataStore.edit { preferences -> preferences[TAG_NORMALIZATION] = Gson().toJson(settings) }
     }
 
     suspend fun setThemeMode(mode: Int) {

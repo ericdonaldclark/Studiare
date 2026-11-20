@@ -178,6 +178,7 @@ fun SimpleEditorScreen(
     }
     val dimensions = LocalStudiareDimensions.current
     val allTags by viewModel.tags.collectAsState()
+    val tagNormalization by viewModel.tagNormalization.collectAsState()
     val savedTemplateSets by viewModel.templateSets.collectAsState()
     val alwaysOpenBulkEditor by viewModel.alwaysOpenBulkEditor.collectAsState()
     val allDecksState by viewModel.allDecks.observeAsState(emptyList())
@@ -717,6 +718,7 @@ fun SimpleEditorScreen(
             totalCards = totalCards,
             allTags = allTags,
             currentDeckTags = currentDeckTags,
+            tagNormalization = tagNormalization,
             onUpdateTags = { newTags -> editState.tags.value = newTags.toList() },
             onCreateTag = { name, color -> viewModel.saveTagDefinition(TagDefinition(name = name, color = color)) },
             onRenameTag = { tag, oldName ->
@@ -726,6 +728,7 @@ fun SimpleEditorScreen(
                 }
             },
             onDeleteTag = { tag -> viewModel.deleteTagDefinition(tag) },
+            onSetTagNormalization = { viewModel.setTagNormalization(it) },
             mode = CardEditDialogMode.Edit(
                 onSave = {
                     deckWithCards?.let { viewModel.saveSingleCard(it, cardDataFrom(editState)) }
@@ -762,6 +765,7 @@ fun SimpleEditorScreen(
             totalCards = totalCards,
             allTags = allTags,
             currentDeckTags = currentDeckTags,
+            tagNormalization = tagNormalization,
             onUpdateTags = { newTags -> state.tags.value = newTags.toList() },
             onCreateTag = { name, color -> viewModel.saveTagDefinition(TagDefinition(name = name, color = color)) },
             onRenameTag = { tag, oldName ->
@@ -771,6 +775,7 @@ fun SimpleEditorScreen(
                 }
             },
             onDeleteTag = { tag -> viewModel.deleteTagDefinition(tag) },
+            onSetTagNormalization = { viewModel.setTagNormalization(it) },
             mode = CardEditDialogMode.Create(
                 onAdd = {
                     deckWithCards?.let { viewModel.saveSingleCard(it, cardDataFrom(state)) }

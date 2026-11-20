@@ -346,8 +346,11 @@ internal fun LegacyArrangement(
                                                     onStudy = { autoOpen ->
                                                         viewModel.pushPaneAfter("deckList", PaneDestination.StudyModeSelection(set.deck.id, autoOpen))
                                                     },
-                                                    onOpenSets = {
-                                                        viewModel.setCurrentDeckId(mainDeck.deck.id)
+                                                    onEdit = { navController.navigate(viewModel.deckEditRoute(set.deck.id)) },
+                                                    onDelete = { onDeleteRequested(set) },
+                                                    onTogglePin = { viewModel.toggleDeckPinned(set.deck) },
+                                                    onManageSets = {
+                                                        viewModel.setCurrentDeckId(set.deck.id)
                                                         viewModel.setCurrentSetId(null)
                                                     },
                                                     activeSession = sessionActions.latestFor(set.deck.id),
@@ -523,8 +526,11 @@ internal fun FlowArrangement(
                                         onStudy = { autoOpen ->
                                             viewModel.pushPaneAfter("deckList", PaneDestination.StudyModeSelection(set.deck.id, autoOpen))
                                         },
-                                        onOpenSets = {
-                                            viewModel.setCurrentDeckId(mainDeck.deck.id)
+                                        onEdit = { navController.navigate(viewModel.deckEditRoute(set.deck.id)) },
+                                        onDelete = { onDeleteRequested(set) },
+                                        onTogglePin = { viewModel.toggleDeckPinned(set.deck) },
+                                        onManageSets = {
+                                            viewModel.setCurrentDeckId(set.deck.id)
                                             viewModel.setCurrentSetId(null)
                                         },
                                         activeSession = sessionActions.latestFor(set.deck.id),

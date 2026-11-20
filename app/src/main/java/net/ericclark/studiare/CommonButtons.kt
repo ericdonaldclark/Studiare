@@ -1,5 +1,6 @@
 package net.ericclark.studiare
 
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
@@ -9,8 +10,10 @@ import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.text.style.TextOverflow
+import kotlinx.coroutines.launch
 import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
 import net.ericclark.studiare.data.*
 import androidx.compose.ui.graphics.Color
@@ -118,22 +121,34 @@ fun TextWithOverflowTooltip(
     modifier: Modifier = Modifier,
     style: androidx.compose.ui.text.TextStyle = LocalTextStyle.current,
     color: Color = Color.Unspecified,
-    fontWeight: androidx.compose.ui.text.font.FontWeight? = null
+    fontWeight: androidx.compose.ui.text.font.FontWeight? = null,
+    onTextLayout: (androidx.compose.ui.text.TextLayoutResult) -> Unit = {}
 ) {
     var isOverflowing by remember(text) { mutableStateOf(false) }
+    val tooltipState = rememberTooltipState(isPersistent = true)
+    val coroutineScope = rememberCoroutineScope()
     // TooltipBox is always present now, never conditionally swapped for a plain Box: switching
     // the composable structure based on isOverflowing — which is itself derived from this Text's
     // measured layout — let TooltipBox's own wrapping change what width the Text measured against
     // from one recomposition to the next, flipping isOverflowing back and forth forever. With the
-    // structure fixed, only enableUserInput reacts to isOverflowing (no tooltip trigger when the
-    // text already fits), so the Text is always measured the same way.
+    // structure fixed, only the long-press detector below reacts to isOverflowing (no tooltip
+    // trigger when the text already fits), so the Text is always measured the same way.
+    //
+    // enableUserInput is deliberately false — TooltipBox's own built-in long-press detector sits
+    // on this same anchor Box, which is nested *inside* the deck/set tile's own
+    // combinedClickable(onLongClick = ...) (multi-select entry). Both gestures were racing the
+    // same long-press, so long-pressing an overflowing name could enter multi-select instead of
+    // (or as well as) showing the tooltip. Driving tooltipState.show() from our own
+    // Modifier.pointerInput on the Text node — the deepest point in the tree — consumes the
+    // long-press there, before it can bubble up to the tile's gesture, the same way the
+    // Edit/Pin/Delete icon buttons already don't trigger the tile's own click/long-click.
     TooltipBox(
         positionProvider = TooltipDefaults.rememberTooltipPositionProvider(
             positioning = TooltipAnchorPosition.Below
         ),
         tooltip = { PlainTooltip { Text(text) } },
-        state = rememberTooltipState(isPersistent = true),
-        enableUserInput = isOverflowing,
+        state = tooltipState,
+        enableUserInput = false,
         modifier = modifier
     ) {
         Text(
@@ -143,8 +158,14 @@ fun TextWithOverflowTooltip(
             color = color,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.fillMaxWidth(),
-            onTextLayout = { isOverflowing = it.hasVisualOverflow }
+            modifier = Modifier
+                .fillMaxWidth()
+                .pointerInput(isOverflowing) {
+                    if (isOverflowing) {
+                        detectTapGestures(onLongPress = { coroutineScope.launch { tooltipState.show() } })
+                    }
+                },
+            onTextLayout = { result -> isOverflowing = result.hasVisualOverflow; onTextLayout(result) }
         )
     }
 }

@@ -26,10 +26,12 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Save
@@ -70,6 +72,7 @@ import net.ericclark.studiare.AnimatedDialog
 import net.ericclark.studiare.TooltipFilledTonalIconButton
 import net.ericclark.studiare.TooltipIconButton
 import net.ericclark.studiare.data.*
+import net.ericclark.studiare.screens.Dialogs.TextNormalizationDialog
 import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
 import kotlin.collections.forEach
 import net.ericclark.studiare.R
@@ -557,10 +560,12 @@ fun CardTagRow(
     cardTags: List<String>,
     allTags: List<TagDefinition>,
     currentDeckTags: Set<String>,
+    tagNormalization: TagNormalizationSettings,
     onUpdateTags: (Set<String>) -> Unit,
     onCreateTag: (String, String) -> Unit,
     onRenameTag: (TagDefinition, String) -> Unit,
-    onDeleteTag: (TagDefinition) -> Unit
+    onDeleteTag: (TagDefinition) -> Unit,
+    onSetTagNormalization: (TagNormalizationSettings) -> Unit
 ) {
     val dimensions = LocalStudiareDimensions.current
     var showAddDialog by remember { mutableStateOf(false) }
@@ -574,6 +579,7 @@ fun CardTagRow(
             currentlyOnCard = cardTags.toSet(),
             allTags = allTags,
             currentDeckTags = currentDeckTags,
+            tagNormalization = tagNormalization,
             onDismiss = { showAddDialog = false },
             onSave = { newTagSet ->
                 onUpdateTags(newTagSet)
@@ -581,7 +587,8 @@ fun CardTagRow(
             },
             onCreateTag = onCreateTag,
             onRenameTag = onRenameTag,
-            onDeleteTag = onDeleteTag
+            onDeleteTag = onDeleteTag,
+            onSetTagNormalization = onSetTagNormalization
         )
     }
 
@@ -636,11 +643,13 @@ fun TagSelectionDialog(
     currentlyOnCard: Set<String>,
     allTags: List<TagDefinition>,
     currentDeckTags: Set<String>,
+    tagNormalization: TagNormalizationSettings,
     onDismiss: () -> Unit,
     onSave: (Set<String>) -> Unit,
     onCreateTag: (String, String) -> Unit,
     onRenameTag: (TagDefinition, String) -> Unit,
-    onDeleteTag: (TagDefinition) -> Unit
+    onDeleteTag: (TagDefinition) -> Unit,
+    onSetTagNormalization: (TagNormalizationSettings) -> Unit
 ) {
     val context = LocalContext.current
     val dimensions = LocalStudiareDimensions.current
@@ -682,6 +691,8 @@ fun TagSelectionDialog(
         editNameError = null
     }
 
+    var showTagNormalizationDialog by remember { mutableStateOf(false) }
+
     val tagSnackbarHostState = remember { androidx.compose.material3.SnackbarHostState() }
     val coroutineScope = rememberCoroutineScope()
 
@@ -705,7 +716,16 @@ fun TagSelectionDialog(
                     // actually sees — it only honors align() on its direct child, and that param is
                     // applied two layers deeper inside TooltipBox/IconButton, so it was a no-op and
                     // the button fell back to Box's default TopStart.
-                    Box(modifier = Modifier.align(Alignment.CenterEnd)) {
+                    Row(modifier = Modifier.align(Alignment.CenterEnd), verticalAlignment = Alignment.CenterVertically) {
+                        // Tag Text Normalization — template icon badged with the same "opens in a
+                        // dialog" OpenInNew indicator the Card Text Normalization button shows,
+                        // shrunk onto a badge since there's no room for label text here.
+                        TooltipIconButton(
+                            description = getText(R.string.tag_text_normalization),
+                            onClick = { showTagNormalizationDialog = true }
+                        ) {
+                            Icon(Icons.Default.Description, contentDescription = null)
+                        }
                         if (editMode) {
                             // Active: shown with its normal (non-highlighted) filled-tonal background
                             // to read as "toggled on," not as an accent-colored call to action.
@@ -1107,6 +1127,20 @@ fun TagSelectionDialog(
             androidx.compose.material3.SnackbarHost(tagSnackbarHostState, modifier = Modifier.align(Alignment.BottomCenter))
             }
         }
+    }
+
+    if (showTagNormalizationDialog) {
+        TextNormalizationDialog(
+            initialType = tagNormalization.normalizationType,
+            initialCorrections = tagNormalization.textCorrections,
+            title = getText(R.string.tag_text_normalization),
+            subtitle = getText(R.string.tag_text_normalization_dialog_subtitle),
+            onDismiss = { showTagNormalizationDialog = false },
+            onConfirm = { newType, newCorrections ->
+                onSetTagNormalization(TagNormalizationSettings(newType, newCorrections))
+                showTagNormalizationDialog = false
+            }
+        )
     }
 }
 

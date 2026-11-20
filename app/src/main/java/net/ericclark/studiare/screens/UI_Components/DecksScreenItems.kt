@@ -18,15 +18,19 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import kotlin.math.roundToInt
 import java.util.*
 import net.ericclark.studiare.*
 import net.ericclark.studiare.R
@@ -131,12 +135,17 @@ fun DeckListItem(
         // At small (Compact) padding, the fixed corner radius crowds the name/count into the
         // top-left corner; keep at least as much clearance as the corner itself needs.
         Column(modifier = Modifier.padding(dimensions.paddingMedium.coerceAtLeast(dimensions.cornerRadiusMedium))) {
+            // alignByBaseline (not a Row-level verticalAlignment) lines up the Manage Sets button
+            // with the name's own baseline specifically, regardless of what's below it (the chip)
+            // — a plain Alignment.Bottom would instead align with the bottom of this whole Column
+            // (name+chip), and a weight+Bottom combination here previously blew up this Row's
+            // measured height for reasons that weren't worth chasing further; alignByBaseline is
+            // the standard, well-supported Compose tool for "align with this one line of text."
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.Top
+                horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Column(modifier = Modifier.weight(1f)) {
+                Column(modifier = Modifier.weight(1f).alignByBaseline()) {
                     val titleText = displayName ?: deck.deck.name
                     if (fullPathTooltip != null) {
                         // Generations were skipped in titleText (e.g. "Nouns...Set 1") — always
@@ -179,29 +188,27 @@ fun DeckListItem(
                     )
                 }
 
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    if (showManageSetsButton) {
-                        // Changed to display number of sets
-                        val manageInteractionSource = remember { MutableInteractionSource() }
-                        TextButton(
-                            onClick = onManageSets,
-                            interactionSource = manageInteractionSource,
-                            modifier = Modifier.pressSquish(manageInteractionSource),
-                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
-                            shape = RoundedCornerShape(dimensions.cornerRadiusButton)
-                        ) {
-                            Icon(
-                                Icons.Default.AccountTree,
-                                getText(R.string.manage_sets),
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(18.dp)
-                            )
-                            Spacer(Modifier.width(8.dp))
-                            Text(
-                                stringResource(R.string.sets_count_simple, setsCount),
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                        }
+                if (showManageSetsButton) {
+                    // Changed to display number of sets
+                    val manageInteractionSource = remember { MutableInteractionSource() }
+                    TextButton(
+                        onClick = onManageSets,
+                        interactionSource = manageInteractionSource,
+                        modifier = Modifier.alignByBaseline().pressSquish(manageInteractionSource),
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                        shape = RoundedCornerShape(dimensions.cornerRadiusButton)
+                    ) {
+                        Icon(
+                            Icons.Default.AccountTree,
+                            getText(R.string.manage_sets),
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            stringResource(R.string.sets_count_simple, setsCount),
+                            color = MaterialTheme.colorScheme.primary
+                        )
                     }
                 }
             }
@@ -311,7 +318,10 @@ fun SetListItem(
     deck: DeckSummary,
     dimensions: StudiareDimensions,
     onStudy: (String?) -> Unit,
-    onOpenSets: () -> Unit = {},
+    onEdit: () -> Unit = {},
+    onDelete: () -> Unit = {},
+    onManageSets: () -> Unit = {},
+    onTogglePin: (() -> Unit)? = null,
     activeSession: ActiveSession? = null,
     onResumeSession: (ActiveSession) -> Unit = {},
     onRestartSession: (ActiveSession) -> Unit = {},
@@ -324,6 +334,7 @@ fun SetListItem(
     val interactionSource = remember { MutableInteractionSource() }
     val isFocused by interactionSource.collectIsFocusedAsState()
     val borderColor = if (isFocused) MaterialTheme.colorScheme.primary else Color.Transparent
+    var showOverflow by remember { mutableStateOf(false) }
 
     SelectableTileOverlay(selected = selected, shape = RoundedCornerShape(dimensions.cornerRadiusMedium)) {
     Card(
@@ -343,7 +354,13 @@ fun SetListItem(
                 interactionSource = interactionSource,
                 indication = LocalIndication.current,
                 onLongClick = onLongClick
-            ) { if (selectionMode) onToggleSelect() else onOpenSets() },
+            ) {
+                // Tapping elsewhere in the tile opens this set's Study Hub, same as tapping the
+                // split button's main action — it no longer jumps to the PARENT deck's set
+                // manager (that was never this set's own manager to begin with). Drilling into
+                // this set's own sets is now only reachable via the overflow menu's "Manage".
+                if (selectionMode) onToggleSelect() else onStudy(null)
+            },
         shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainer
@@ -354,17 +371,121 @@ fun SetListItem(
                 // Same corner-clearance floor as DeckListItem, above.
                 .padding(dimensions.paddingMedium.coerceAtLeast(dimensions.cornerRadiusMedium))
         ) {
-            TextWithOverflowTooltip(
-                text = deck.deck.name,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold
-            )
-            Spacer(Modifier.height(4.dp))
-            Text(
-                pluralStringResource(R.plurals.cards_count_lowercase, deck.totalCards, deck.totalCards),
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            // Top-right corner, same as DeckListItem's Manage Sets button — not next to the
+            // Study button below, which has no room to spare on this tile's fixed setTileWidth.
+            //
+            // Baseline alignment (alignByBaseline) turned out unreliable here: Material's type
+            // styles carry line-height padding above/below the actual glyphs, so a font's
+            // "baseline" isn't the same point as the text's visual bottom — and a bare Icon has no
+            // baseline at all to approximate it with, unlike DeckListItem's Manage Sets button
+            // (real Text inside, so baseline alignment happened to land close enough there).
+            // Instead: measure the name's REAL rendered line-bottom via onTextLayout, measure the
+            // button's own actual height via onSizeChanged, and offset the button by the exact
+            // difference — exact pixel math from real measurements, not a font-metric guess, and
+            // it never touches the button's own size/touch target.
+            var nameLineBottomPx by remember { mutableStateOf(0f) }
+            var overflowButtonHeightPx by remember { mutableStateOf(0f) }
+            // The icon isn't drawn at the bottom of its own touch-target box — IconButton centers
+            // it within that (larger) box — so matching the box's bottom to the text's line-bottom
+            // left the icon glyph itself floating well above the text. This measures the icon's
+            // own rendered size too, so the offset below targets where the GLYPH ends up, not the
+            // invisible touch-target bounds around it.
+            var overflowIconHeightPx by remember { mutableStateOf(0f) }
+            // Same story horizontally: the icon sits centered inside its touch-target box
+            // left-to-right too, leaving more empty space between it and the tile's right edge
+            // than the name has on the left. Shifting the box right by half the box/icon width
+            // difference brings the icon's own right edge flush with where the (unshifted) box's
+            // right edge already lines up against the Column's matching left padding.
+            var overflowButtonWidthPx by remember { mutableStateOf(0f) }
+            var overflowIconWidthPx by remember { mutableStateOf(0f) }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    TextWithOverflowTooltip(
+                        text = deck.deck.name,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        onTextLayout = { nameLineBottomPx = it.getLineBottom(0) }
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        pluralStringResource(R.plurals.cards_count_lowercase, deck.totalCards, deck.totalCards),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
+                // Edit/Pin/Delete/Manage, collapsed into one overflow button — DeckListItem shows
+                // these as separate bare icons, but the set tile's fixed setTileWidth has no room
+                // for four more icons.
+                Box(
+                    modifier = Modifier
+                        .onSizeChanged {
+                            overflowButtonHeightPx = it.height.toFloat()
+                            overflowButtonWidthPx = it.width.toFloat()
+                        }
+                        .offset {
+                            // The icon glyph sits centered inside the touch-target box, i.e. at
+                            // boxTop + (boxHeight + iconHeight) / 2 once placed — solve for the
+                            // boxTop (this offset, since the Row places it at relative 0 by
+                            // default) that puts that point exactly at the name's line-bottom.
+                            val targetY = nameLineBottomPx - (overflowButtonHeightPx + overflowIconHeightPx) / 2f
+                            val targetX = (overflowButtonWidthPx - overflowIconWidthPx) / 2f
+                            IntOffset(targetX.roundToInt(), targetY.roundToInt())
+                        }
+                ) {
+                    TooltipIconButton(
+                        description = getText(R.string.options_more),
+                        onClick = { showOverflow = true }
+                    ) {
+                        Icon(
+                            Icons.Default.MoreVert,
+                            contentDescription = getText(R.string.options_more),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.onSizeChanged {
+                                overflowIconHeightPx = it.height.toFloat()
+                                overflowIconWidthPx = it.width.toFloat()
+                            }
+                        )
+                    }
+                    DropdownMenu(expanded = showOverflow, onDismissRequest = { showOverflow = false }) {
+                        DropdownMenuItem(
+                            text = { Text(getText(R.string.edit)) },
+                            leadingIcon = { Icon(Icons.Default.Edit, contentDescription = null) },
+                            onClick = { showOverflow = false; onEdit() }
+                        )
+                        if (onTogglePin != null) {
+                            val pinned = deck.deck.isPinned
+                            DropdownMenuItem(
+                                text = { Text(getText(if (pinned) R.string.unpin_set else R.string.pin_set)) },
+                                leadingIcon = {
+                                    Icon(
+                                        Icons.Rounded.PushPin,
+                                        contentDescription = null,
+                                        tint = if (pinned) MaterialTheme.colorScheme.primary else LocalContentColor.current
+                                    )
+                                },
+                                onClick = { showOverflow = false; onTogglePin() }
+                            )
+                        }
+                        DropdownMenuItem(
+                            text = { Text(getText(R.string.delete), color = MaterialTheme.colorScheme.error) },
+                            leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
+                            onClick = { showOverflow = false; onDelete() }
+                        )
+                        DropdownMenuItem(
+                            text = { Text(getText(R.string.manage_sets)) },
+                            // This set's OWN manager (its children), not the parent deck's — see
+                            // onManageSets' doc comment on the composable's callers.
+                            leadingIcon = { Icon(Icons.Default.AccountTree, contentDescription = null) },
+                            onClick = { showOverflow = false; onManageSets() }
+                        )
+                    }
+                }
+            }
 
             // Same fixed gap DeckListItem uses between its content block and the button row.
             Spacer(Modifier.height(dimensions.paddingLarge))
@@ -373,7 +494,6 @@ fun SetListItem(
                 modifier = Modifier.fillMaxWidth(),
                 contentAlignment = Alignment.Center
             ) {
-                // REPLACED: Normal Button with the new Split Button
                 StudySplitButton(
                     onStudyMain = { onStudy(null) },
                     onResumeSession = activeSession?.let { session -> { onResumeSession(session) } },
@@ -382,38 +502,6 @@ fun SetListItem(
                     enabled = deck.totalCards > 0
                 )
             }
-
-            // This Box fills the rest of the height, floating the button perfectly in the middle
-            /*
-            Box(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center
-            ) {
-                val studyInteractionSource = remember { MutableInteractionSource() }
-                val isStudyPressed by studyInteractionSource.collectIsPressedAsState()
-                val studyScale by animateFloatAsState(
-                    targetValue = if (isStudyPressed) 0.95f else 1f,
-                    animationSpec = spring(
-                        dampingRatio = Spring.DampingRatioMediumBouncy,
-                        stiffness = Spring.StiffnessMedium
-                    ),
-                    label = "studySquish"
-                )
-
-                Button(
-                    onClick = onStudy,
-                    interactionSource = studyInteractionSource,
-                    enabled = deck.cards.isNotEmpty(),
-                    modifier = Modifier.scale(studyScale),
-                    contentPadding = PaddingValues(horizontal = 24.dp, vertical = 12.dp),
-                    shape = RoundedCornerShape(dimensions.cornerRadiusButton)
-                ) {
-                    Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(8.dp))
-                    Text(getText(R.string.study))
-                }
-            }
-            */
         }
     }
     }

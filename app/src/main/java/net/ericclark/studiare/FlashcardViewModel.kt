@@ -204,6 +204,8 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
     val defaultDeckOptions: StateFlow<DefaultDeckOptions?> = preferenceManager.defaultDeckOptionsFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+    val tagNormalization: StateFlow<TagNormalizationSettings> = preferenceManager.tagNormalizationFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), TagNormalizationSettings())
 
     // --- Delegated State Flows (Audio) ---
     val audioFeedback: StateFlow<String?> get() = audioServiceManager.audioFeedback
@@ -1932,6 +1934,20 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         viewModelScope.launch { preferenceManager.setDefaultDeckOptions(options) }
     }
 
+    /** Settings → Tags' "Tag Text Normalization" rule set. */
+    fun setTagNormalization(settings: TagNormalizationSettings) {
+        viewModelScope.launch { preferenceManager.setTagNormalization(settings) }
+    }
+
+    /** Applies the current [tagNormalization] rules to a tag name exactly as
+     * [applyDeckOptionsToDecks] applies card normalization — corrections (whitespace/punctuation
+     * cleanup) first, then the case rule. Used by [saveTagDefinition]/[renameTag] so every tag
+     * create/rename path in the app normalizes the same way, without each call site repeating it. */
+    private fun normalizeTagName(name: String): String {
+        val settings = tagNormalization.value
+        return normalizeText(settings.normalizationType, applyTextCorrections(settings.textCorrections, name))
+    }
+
     /** Result of [applyDeckOptionsToDecks] — [deckCount]/[cardCount] drive the confirmation/
      * snackbar copy, while [snapshotDecks]/[snapshotCards] (the pre-apply rows, held only in
      * memory) are handed back to [undoDeckOptionsApply] if the user taps Undo. */
@@ -2768,7 +2784,13 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
 
     // --- Tag Operations (Delegated to Room) ---
     fun saveTagDefinition(tag: TagDefinition) {
-        viewModelScope.launch(Dispatchers.IO) { tagDao.insertOrUpdate(tag.copy(isPendingSync = true)) }
+        val normalizedName = normalizeTagName(tag.name)
+        // Normalization can turn two distinct typed names into the same string (e.g. "Spanish"
+        // and "spanish" both normalizing to "Spanish") even though the caller's own duplicate-name
+        // check already passed against the raw, pre-normalization name — skip rather than insert
+        // a second TagDefinition row the rest of the app assumes can't exist.
+        if (tags.value.any { it.id != tag.id && it.name == normalizedName }) return
+        viewModelScope.launch(Dispatchers.IO) { tagDao.insertOrUpdate(tag.copy(name = normalizedName, isPendingSync = true)) }
     }
 
     fun deleteTagDefinition(tag: TagDefinition) {
@@ -2898,19 +2920,23 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
     }
 
     fun renameTag(tag: TagDefinition, oldName: String) {
-        if (tag.name.trim() == oldName) {
-            saveTagDefinition(tag)
+        val normalizedName = normalizeTagName(tag.name.trim())
+        if (normalizedName == oldName) {
+            saveTagDefinition(tag.copy(name = normalizedName))
             return
         }
+        // See the matching guard in saveTagDefinition — normalization can collapse this rename
+        // onto another tag's existing name.
+        if (tags.value.any { it.id != tag.id && it.name == normalizedName }) return
 
         viewModelScope.launch(Dispatchers.IO) {
             // 1. Save the renamed tag to Room
-            tagDao.insertOrUpdate(tag.copy(isPendingSync = true))
+            tagDao.insertOrUpdate(tag.copy(name = normalizedName, isPendingSync = true))
 
             // 2. Update any cards that had the old tag name
             val cardsToUpdate = localCards.filter { it.tags.contains(oldName) }.map { card ->
                 card.copy(
-                    tags = card.tags.map { if (it == oldName) tag.name.trim() else it },
+                    tags = card.tags.map { if (it == oldName) normalizedName else it },
                     updatedAt = System.currentTimeMillis(),
                     isPendingSync = true
                 )

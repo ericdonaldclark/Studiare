@@ -270,6 +270,7 @@ fun DeckEditorScreen(
     var postSaveNavigation by remember { mutableStateOf<(() -> Unit)?>(null) }
 
     val allTags by viewModel.tags.collectAsState()
+    val tagNormalization by viewModel.tagNormalization.collectAsState()
     val savedTemplateSets by viewModel.templateSets.collectAsState()
     val alwaysOpenBulkEditor by viewModel.alwaysOpenBulkEditor.collectAsState()
     val allDecksState by viewModel.allDecks.observeAsState(emptyList())
@@ -1571,6 +1572,7 @@ fun DeckEditorScreen(
                                             onClearDataClick = { showClearDataConfirmForSelection = setOf(cardState.id) },
                                             allTags = allTags,
                                             currentDeckTags = currentDeckTags,
+                                            tagNormalization = tagNormalization,
                                             onUpdateTags = { newTags ->
                                                 cardState.tags.value = newTags.toList()
                                             },
@@ -1582,6 +1584,7 @@ fun DeckEditorScreen(
                                                     )
                                                 )
                                             },
+                                            onSetTagNormalization = { viewModel.setTagNormalization(it) },
                                             onRenameTag = { tag, oldName ->
                                                 viewModel.renameTag(tag, oldName)
                                                 if (tag.name != oldName) {
@@ -1665,6 +1668,7 @@ fun DeckEditorScreen(
                                         onClearDataClick = { showClearDataConfirmForSelection = setOf(cardState.id) },
                                         allTags = allTags,
                                         currentDeckTags = currentDeckTags,
+                                        tagNormalization = tagNormalization,
                                         onUpdateTags = { newTags -> cardState.tags.value = newTags.toList() },
                                         onCreateTag = { name, color -> viewModel.saveTagDefinition(
                                             TagDefinition(
@@ -1672,6 +1676,7 @@ fun DeckEditorScreen(
                                                 color = color
                                             )
                                         ) },
+                                        onSetTagNormalization = { viewModel.setTagNormalization(it) },
                                         onRenameTag = { tag, oldName ->
                                             viewModel.renameTag(tag, oldName)
                                             if (tag.name != oldName) {

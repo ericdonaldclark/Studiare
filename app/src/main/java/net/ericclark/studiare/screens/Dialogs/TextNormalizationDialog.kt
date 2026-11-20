@@ -49,11 +49,12 @@ private val correctionToggles: List<CorrectionToggle> = listOf(
 )
 
 /**
- * The "Text Normalization" dialog: pick how card text is capitalized, and which whitespace/
- * punctuation corrections run alongside it — both are persisted per-deck. [initialType]/
- * [initialCorrections] seed the starting selection; [onConfirm] fires with the chosen
- * [NormalizationType] and [TextCorrectionSettings] when Save is pressed, [onDismiss] on
- * Cancel/outside-tap without committing anything.
+ * Shared by "Card Text Normalization" (per-deck) and "Tag Text Normalization" (one global rule
+ * set): pick how text is capitalized, and which whitespace/punctuation corrections run alongside
+ * it. [initialType]/[initialCorrections] seed the starting selection; [onConfirm] fires with the
+ * chosen [NormalizationType] and [TextCorrectionSettings] when Save is pressed, [onDismiss] on
+ * Cancel/outside-tap without committing anything. [title]/[subtitle] default to the card-text
+ * copy; the tag-name caller passes its own.
  *
  * [NormalizationType.NONE] is shown on its own above the three collapsible categories (all
  * collapsed by default) — it's the default state, not really a "case" to pick among the rest.
@@ -62,6 +63,8 @@ private val correctionToggles: List<CorrectionToggle> = listOf(
 fun TextNormalizationDialog(
     initialType: NormalizationType,
     initialCorrections: TextCorrectionSettings = TextCorrectionSettings(),
+    title: String = getText(R.string.case_normalization),
+    subtitle: String = getText(R.string.text_normalization_dialog_subtitle),
     onDismiss: () -> Unit,
     onConfirm: (NormalizationType, TextCorrectionSettings) -> Unit
 ) {
@@ -124,12 +127,12 @@ fun TextNormalizationDialog(
         ) {
             Column(modifier = Modifier.padding(dimensions.paddingLarge)) {
                 Text(
-                    getText(R.string.case_normalization),
+                    title,
                     style = MaterialTheme.typography.headlineSmall,
                     modifier = Modifier.fillMaxWidth()
                 )
                 Text(
-                    getText(R.string.text_normalization_dialog_subtitle),
+                    subtitle,
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier

@@ -107,6 +107,7 @@ fun PinnedScreen(navController: NavController, viewModel: FlashcardViewModel) {
     val pinnedCards by viewModel.pinnedCards.collectAsState()
     val activeSessions by viewModel.allActiveSessions.collectAsState()
     val allTagDefinitions by viewModel.tags.collectAsState()
+    val tagNormalization by viewModel.tagNormalization.collectAsState()
     val savedTemplateSets by viewModel.templateSets.collectAsState()
 
     val deckSortMode by viewModel.pinnedScreenDeckSortMode.collectAsState()
@@ -623,6 +624,7 @@ fun PinnedScreen(navController: NavController, viewModel: FlashcardViewModel) {
             totalCards = 1,
             allTags = allTagDefinitions,
             currentDeckTags = currentDeckTags,
+            tagNormalization = tagNormalization,
             onUpdateTags = { newTags -> editState.tags.value = newTags.toList() },
             onCreateTag = { name, color -> viewModel.saveTagDefinition(TagDefinition(name = name, color = color)) },
             onRenameTag = { tag, oldName ->
@@ -632,6 +634,7 @@ fun PinnedScreen(navController: NavController, viewModel: FlashcardViewModel) {
                 }
             },
             onDeleteTag = { tag -> viewModel.deleteTagDefinition(tag) },
+            onSetTagNormalization = { viewModel.setTagNormalization(it) },
             mode = CardEditDialogMode.Edit(
                 onSave = {
                     deck?.let { viewModel.saveSingleCard(it, cardDataFromState(editState)) }

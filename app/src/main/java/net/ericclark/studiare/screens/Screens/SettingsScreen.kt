@@ -41,6 +41,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
@@ -87,6 +88,7 @@ import net.ericclark.studiare.screens.Dialogs.BulkCardSelectionDialog
 import net.ericclark.studiare.screens.Dialogs.CustomThemeDialog
 import net.ericclark.studiare.screens.Dialogs.ExportDecksDialog
 import net.ericclark.studiare.screens.Dialogs.SavedPreferencesDialog
+import net.ericclark.studiare.screens.Dialogs.TextNormalizationDialog
 import net.ericclark.studiare.screens.UI_Components.ConnectedButtonGroup
 import net.ericclark.studiare.screens.UI_Components.ExpressiveDropdownMenuField
 import net.ericclark.studiare.screens.UI_Components.KeyboardShortcutSettingsContent
@@ -1446,6 +1448,8 @@ private fun TagsCategoryContent(
     val isWideSettingsLayout = windowWidthSizeClass >= WindowWidthSizeClass.Expanded
     val sortTagsByDateCreated by viewModel.sortTagsByDateCreated.collectAsState()
     val sortTemplatesByDateCreated by viewModel.sortTemplatesByDateCreated.collectAsState()
+    val tagNormalization by viewModel.tagNormalization.collectAsState()
+    var showTagNormalizationDialog by remember { mutableStateOf(false) }
     var tagToEdit by tagToEditState
     var tagToCleanup by tagToCleanupState
     var showTagEditor by showTagEditorState
@@ -1531,6 +1535,54 @@ private fun TagsCategoryContent(
             Icon(Icons.Default.Add, contentDescription = null)
             Spacer(Modifier.width(dimensions.spacingSmall))
             Text(getText(R.string.tag_create_new))
+        }
+
+        Spacer(Modifier.height(dimensions.spacingLarge))
+        Text(
+            getText(R.string.tag_text_normalization),
+            style = MaterialTheme.typography.titleSmall,
+            color = MaterialTheme.colorScheme.primary,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(bottom = dimensions.paddingSmall)
+        )
+        Text(
+            getText(R.string.tag_text_normalization_explainer),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(Modifier.height(dimensions.spacingSmall))
+        Text(
+            tagNormalization.normalizationType.asString(),
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.primary
+        )
+        Spacer(Modifier.height(dimensions.spacingSmall))
+        FilledTonalButton(
+            onClick = { showTagNormalizationDialog = true },
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(dimensions.cornerRadiusButton)
+        ) {
+            // Centered on the full button width, same as the Card Text Normalization/Template
+            // Editor buttons in DeckEditorSettings — the icon sits at the trailing edge without
+            // pulling the label off-center.
+            Box(modifier = Modifier.fillMaxWidth()) {
+                Text(getText(R.string.tag_text_normalization), modifier = Modifier.align(Alignment.Center))
+                Icon(Icons.AutoMirrored.Filled.OpenInNew, contentDescription = null, modifier = Modifier.align(Alignment.CenterEnd))
+            }
+        }
+
+        if (showTagNormalizationDialog) {
+            TextNormalizationDialog(
+                initialType = tagNormalization.normalizationType,
+                initialCorrections = tagNormalization.textCorrections,
+                title = getText(R.string.tag_text_normalization),
+                subtitle = getText(R.string.tag_text_normalization_dialog_subtitle),
+                onDismiss = { showTagNormalizationDialog = false },
+                onConfirm = { newType, newCorrections ->
+                    viewModel.setTagNormalization(TagNormalizationSettings(newType, newCorrections))
+                    showTagNormalizationDialog = false
+                }
+            )
         }
 
         Spacer(Modifier.height(dimensions.spacingLarge))

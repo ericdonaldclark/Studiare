@@ -865,6 +865,7 @@ fun EditCardDialog(
 
     // Collect all tags to pass to the picker
     val allTags by viewModel.tags.collectAsState()
+    val tagNormalization by viewModel.tagNormalization.collectAsState()
 
     // Determine tags in the current deck for "Quick Select" (Context aware)
     val studyState = viewModel.studyState
@@ -1044,6 +1045,7 @@ fun EditCardDialog(
                     cardTags = tags,
                     allTags = allTags,
                     currentDeckTags = currentDeckTags,
+                    tagNormalization = tagNormalization,
                     onUpdateTags = { newTags -> tags = newTags.toList() },
                     onCreateTag = { name, color ->
                         viewModel.saveTagDefinition(TagDefinition(name = name, color = color))
@@ -1054,7 +1056,8 @@ fun EditCardDialog(
                             tags = tags.map { if (it == oldName) tag.name else it }
                         }
                     },
-                    onDeleteTag = { tag -> viewModel.deleteTagDefinition(tag) }
+                    onDeleteTag = { tag -> viewModel.deleteTagDefinition(tag) },
+                    onSetTagNormalization = { viewModel.setTagNormalization(it) }
                 )
 
                 Spacer(Modifier.height(dimensions.spacingSmall))

@@ -86,10 +86,12 @@ fun CardEditDialog(
     totalCards: Int,
     allTags: List<TagDefinition>,
     currentDeckTags: Set<String>,
+    tagNormalization: TagNormalizationSettings,
     onUpdateTags: (Set<String>) -> Unit,
     onCreateTag: (String, String) -> Unit,
     onRenameTag: (TagDefinition, String) -> Unit,
     onDeleteTag: (TagDefinition) -> Unit,
+    onSetTagNormalization: (TagNormalizationSettings) -> Unit,
     mode: CardEditDialogMode,
     onCancel: () -> Unit,
     normalizationType: NormalizationType = NormalizationType.NONE,
@@ -171,10 +173,12 @@ fun CardEditDialog(
                             onPinClick = { cardState.isPinned.value = !cardState.isPinned.value },
                             allTags = allTags,
                             currentDeckTags = currentDeckTags,
+                            tagNormalization = tagNormalization,
                             onUpdateTags = onUpdateTags,
                             onCreateTag = onCreateTag,
                             onRenameTag = onRenameTag,
                             onDeleteTag = onDeleteTag,
+                            onSetTagNormalization = onSetTagNormalization,
                             onOpenRichTextEditor = { target, initialHtml, title ->
                                 richTextTarget = target
                                 richTextInitialHtml = initialHtml

@@ -123,6 +123,9 @@
     <string name="language_set_explainer">Used for language-aware features like text-to-speech and case normalization.</string>
     <string name="case_normalization_explainer">Automatically cleans up spacing and punctuation, then adjusts letter casing, when cards are saved.</string>
     <string name="text_normalization_dialog_subtitle">Choose how card text is cleaned up and capitalized when saved.</string>
+    <string name="tag_text_normalization">Tag Text Normalization</string>
+    <string name="tag_text_normalization_explainer">Automatically cleans up spacing and punctuation, then adjusts letter casing, whenever a tag is created or renamed.</string>
+    <string name="tag_text_normalization_dialog_subtitle">Choose how tag names are cleaned up and capitalized when created or renamed.</string>
     <string name="field_name">Field Name</string>
     <string name="remove_template">Remove Template</string>
     <string name="move_field_up">Move Field Up</string>
@@ -338,7 +341,7 @@
 
     <!-- Deck options dialog -->
     <string name="deck_options">Deck Options</string>
-    <string name="case_normalization">Text Normalization</string>
+    <string name="case_normalization">Card Text Normalization</string>
     <string name="card_order">Card Order</string>
     <string name="alphabetical_a_to_z">Alphabetical (A-Z)</string>
     <string name="alphabetical_z_to_a">Alphabetical (Z-A)</string>
