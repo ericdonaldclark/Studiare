@@ -93,21 +93,12 @@ fun DeckListItem(
         if (isCardFocused) MaterialTheme.colorScheme.primary else Color.Transparent
 
     val density = LocalDensity.current
-    val titleTextForStyleReset = displayName ?: deck.deck.name
-    // Headline Medium is preferred; if the name would still be ellipsized at 3 lines in Headline
-    // Medium, drop to Headline Small instead (which may still truncate — there's no smaller
-    // fallback). Keyed on the title text so a changed/renamed deck always retries Medium rather
-    // than staying stuck on a previous downgrade — verified in the UI Playground's "Combined
-    // Pill" deck tile experiment before porting here.
-    var useMediumIfItFits by remember(titleTextForStyleReset) { mutableStateOf(true) }
-    val nameStyle = (if (useMediumIfItFits) MaterialTheme.typography.headlineMedium else MaterialTheme.typography.headlineSmall)
-        .copy(hyphens = Hyphens.Auto, lineBreak = LineBreak.Paragraph)
+    val textMeasurer = androidx.compose.ui.text.rememberTextMeasurer()
+    val mediumStyle = MaterialTheme.typography.headlineMedium.copy(hyphens = Hyphens.Auto, lineBreak = LineBreak.Paragraph)
+    val smallStyle = MaterialTheme.typography.headlineSmall.copy(hyphens = Hyphens.Auto, lineBreak = LineBreak.Paragraph)
     var nameHeightPx by remember { mutableFloatStateOf(0f) }
     fun onNameTextLayout(result: androidx.compose.ui.text.TextLayoutResult) {
         nameHeightPx = result.size.height.toFloat()
-        if (useMediumIfItFits && result.hasVisualOverflow) {
-            useMediumIfItFits = false
-        }
     }
     // The reference — "the card size this tile already has today" — is Headline Small's own
     // 3-line height (2 * its line height; see the Playground's doc comment for the full
@@ -195,7 +186,22 @@ fun DeckListItem(
                 // direct child and treats it as unweighted — which let the name's own internal
                 // fillMaxWidth() silently claim the whole row, squeezing the pill/chip beside it
                 // down to nothing (confirmed on-device before this fix).
-                Box(modifier = Modifier.weight(1f).padding(end = dimensions.spacingSmall)) {
+                BoxWithConstraints(modifier = Modifier.weight(1f).padding(end = dimensions.spacingSmall)) {
+                    // Decide Medium-vs-Small up front by measuring against this box's own resolved
+                    // width, instead of rendering Medium first and only downgrading to Small after
+                    // onTextLayout reports overflow — that two-pass retry was visibly flashing
+                    // (render at the larger size, then resize/rewrap down to Small a frame or two
+                    // later) whenever a long title didn't fit Medium, confirmed on-device.
+                    val maxWidthPx = with(density) { maxWidth.roundToPx() }
+                    val nameStyle = remember(titleText, maxWidthPx, mediumStyle, smallStyle) {
+                        val mediumFits = !textMeasurer.measure(
+                            text = titleText,
+                            style = mediumStyle,
+                            maxLines = 3,
+                            constraints = Constraints(maxWidth = maxWidthPx)
+                        ).hasVisualOverflow
+                        if (mediumFits) mediumStyle else smallStyle
+                    }
                     if (fullPathTooltip != null) {
                         // Generations were skipped in titleText (e.g. "Nouns...Set 1") — always
                         // show the full path on tooltip, not just when the (already-shortened)

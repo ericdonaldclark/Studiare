@@ -99,6 +99,8 @@
     <string name="drag_handle">Drag Handle</string>
     <string name="change_media_type">Change Media Type</string>
     <string name="linkage_settings">Linkage Settings</string>
+    <string name="linked_to_parent_deck_explainer">Linked to the parent deck. Open Linkage Settings to edit this here.</string>
+    <string name="open_linkage_settings">Open Linkage Settings</string>
     <string name="clear_data">Clear Data</string>
     <string name="rich_text">Rich Text</string>
     <string name="plain_text">Plain Text</string>

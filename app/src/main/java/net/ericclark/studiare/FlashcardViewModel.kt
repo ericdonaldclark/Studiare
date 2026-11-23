@@ -1838,13 +1838,45 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
             val allCards = localCards
             val movedIds = cardsToMove.map { it.id }
             val now = System.currentTimeMillis()
+
+            // Deck id -> cardIds to add/remove, accumulated (not applied directly) so a deck that's
+            // touched from two directions at once — e.g. a parent shared by both the from- and
+            // to-set, or moving directly into/out of a set's own parent — only gets written once,
+            // with the net effect, instead of one write clobbering the other.
+            val additions = mutableMapOf<String, MutableSet<String>>()
+            val removals = mutableMapOf<String, MutableSet<String>>()
+            fun addTo(deckId: String, ids: List<String>) = additions.getOrPut(deckId) { mutableSetOf() }.addAll(ids)
+            fun removeFrom(deckId: String, ids: List<String>) = removals.getOrPut(deckId) { mutableSetOf() }.addAll(ids)
+
+            if (fromDeckId != toDeckId) {
+                removeFrom(fromDeckId, movedIds)
+                addTo(toDeckId, movedIds)
+
+                // Mirror saveDeckWithCards' parent-sync for a direct single-deck edit — a move is a
+                // delete from one deck plus an add to another, so it needs the same
+                // syncCardDeletions/syncCardAdditions propagation to each side's own parent (if it
+                // has one and is linked that way), or the parent is left referencing a card its set
+                // no longer has, or missing one it just gained.
+                fromDeck?.let { from ->
+                    if (from.parentDeckId != null && from.linkageSettings.syncCardDeletions) {
+                        removeFrom(from.parentDeckId, movedIds)
+                    }
+                }
+                if (toDeck.parentDeckId != null && toDeck.linkageSettings.syncCardAdditions) {
+                    addTo(toDeck.parentDeckId, movedIds)
+                }
+            }
+
             database.withTransaction {
                 cardsToMove.forEach { data ->
                     cardDao.insertOrUpdate(data.toMovedCard(ownerDeckId = toDeckId, existing = allCards.find { it.id == data.id }))
                 }
-                if (fromDeckId != toDeckId) {
-                    fromDeck?.let { deckDao.insertOrUpdate(it.copy(cardIds = it.cardIds - movedIds.toSet(), updatedAt = now, isPendingSync = true)) }
-                    deckDao.insertOrUpdate(toDeck.copy(cardIds = (toDeck.cardIds + movedIds).distinct(), updatedAt = now, isPendingSync = true))
+                (additions.keys + removals.keys).forEach { deckId ->
+                    val deck = localDecks.find { it.id == deckId } ?: return@forEach
+                    val newCardIds = (deck.cardIds + additions[deckId].orEmpty()).distinct() - removals[deckId].orEmpty()
+                    if (newCardIds != deck.cardIds) {
+                        deckDao.insertOrUpdate(deck.copy(cardIds = newCardIds, updatedAt = now, isPendingSync = true))
+                    }
                 }
             }
         }
@@ -1879,7 +1911,19 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
                     cardDao.insertOrUpdate(data.toMovedCard(ownerDeckId = newId, existing = allCards.find { it.id == data.id }))
                 }
                 deckDao.insertOrUpdate(newDeck)
-                fromDeck?.let { deckDao.insertOrUpdate(it.copy(cardIds = it.cardIds - movedIds.toSet(), updatedAt = now, isPendingSync = true)) }
+                fromDeck?.let { from ->
+                    deckDao.insertOrUpdate(from.copy(cardIds = from.cardIds - movedIds.toSet(), updatedAt = now, isPendingSync = true))
+                    // Mirror saveDeckWithCards' parent-sync — see moveCardsToDeck's comment. The new
+                    // deck itself is never linked (it was just created), so only this side applies.
+                    if (from.parentDeckId != null && from.linkageSettings.syncCardDeletions) {
+                        localDecks.find { it.id == from.parentDeckId }?.let { parent ->
+                            val newParentCardIds = parent.cardIds - movedIds.toSet()
+                            if (newParentCardIds != parent.cardIds) {
+                                deckDao.insertOrUpdate(parent.copy(cardIds = newParentCardIds, updatedAt = now, isPendingSync = true))
+                            }
+                        }
+                    }
+                }
             }
             withContext(Dispatchers.Main) { onCreated(newId) }
         }

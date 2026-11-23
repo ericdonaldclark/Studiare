@@ -7,6 +7,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.Spacer
@@ -77,7 +78,8 @@ fun LanguageDropdown(
     languages: List<Pair<String, String>>,
     selectedCode: String,
     onLanguageSelected: (String) -> Unit,
-    label: String? = null
+    label: String? = null,
+    enabled: Boolean = true
 ) {
     val selected = languages.find { it.first == selectedCode }
         ?: (selectedCode to getText(R.string.unknown))
@@ -87,7 +89,8 @@ fun LanguageDropdown(
         optionLabel = { it.second },
         onSelect = { onLanguageSelected(it.first) },
         menuMaxHeight = 300.dp,
-        label = label
+        label = label,
+        enabled = enabled
     )
 }
 
@@ -137,21 +140,23 @@ fun <T> ExpressiveDropdownMenuField(
     menuMaxHeight: Dp = 400.dp,
     /** Optional built-in field label, e.g. "Front"/"Back" for a language picker. Every other
      * caller leaves this null, which keeps their dropdown exactly as it was. */
-    label: String? = null
+    label: String? = null,
+    enabled: Boolean = true
 ) {
     var expanded by remember { mutableStateOf(false) }
     val swatchColors = expressiveSwatchColors()
     val dimensions = LocalStudiareDimensions.current
 
     ExposedDropdownMenuBox(
-        expanded = expanded,
-        onExpandedChange = { expanded = it },
+        expanded = expanded && enabled,
+        onExpandedChange = { if (enabled) expanded = it },
         modifier = modifier.fillMaxWidth()
     ) {
         OutlinedTextField(
             value = optionLabel(selectedOption),
             onValueChange = {},
             readOnly = true,
+            enabled = enabled,
             label = label?.let { labelText -> { Text(labelText) } },
             trailingIcon = {
                 ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded)
@@ -339,6 +344,26 @@ fun DeckInfoDialog(deckWithCards: DeckWithCards, onDismiss: () -> Unit) {
     }
 }
 
+/** Shown under a section disabled because its value is currently linked to the parent set/deck
+ * (see [net.ericclark.studiare.data.LinkageSettings] / [net.ericclark.studiare.components.DeckLinkageResolver])
+ * — editing it here would be silently overwritten the next time decks recombine, so the control
+ * itself is disabled instead, with this as the explanation and a shortcut to actually change it. */
+@Composable
+private fun LinkedFieldNotice(onOpenLinkageSettings: () -> Unit) {
+    val dimensions = LocalStudiareDimensions.current
+    Column {
+        Spacer(Modifier.height(dimensions.spacingSmall))
+        Text(
+            getText(R.string.linked_to_parent_deck_explainer),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        TextButton(onClick = onOpenLinkageSettings, contentPadding = PaddingValues(0.dp)) {
+            Text(getText(R.string.open_linkage_settings))
+        }
+    }
+}
+
 @Composable
 fun DeckSettingsDialog(
     initialDeckName: String,
@@ -369,6 +394,13 @@ fun DeckSettingsDialog(
         textCorrections: TextCorrectionSettings
     ) -> Unit = { _, _, _, _, _, _, _, _ -> },
     canOpenTemplateEditor: Boolean = true,
+    // Same linkage gating as canOpenTemplateEditor, but for the Language and Card Text
+    // Normalization sections — both get silently overwritten by DeckLinkageResolver on a linked
+    // set, so editing them here would be a no-op. Non-null onOpenLinkageSettings (only passed for
+    // an actual child set) shows a shortcut under whichever of these three sections is disabled.
+    canEditLanguage: Boolean = true,
+    canEditNormalization: Boolean = true,
+    onOpenLinkageSettings: (() -> Unit)? = null,
     // Global (not per-deck) default-editor preference — same StateFlow/setter FlashcardViewModel
     // exposes to Settings' Customization > Editor section, shown here too as a shortcut so it
     // doesn't need its own trip to Settings.
@@ -621,14 +653,19 @@ fun DeckSettingsDialog(
                             languages = availableLanguages,
                             selectedCode = frontLanguage,
                             onLanguageSelected = { frontLanguage = it },
-                            label = getText(R.string.language_front)
+                            label = getText(R.string.language_front),
+                            enabled = canEditLanguage
                         )
                         LanguageDropdown(
                             languages = availableLanguages,
                             selectedCode = backLanguage,
                             onLanguageSelected = { backLanguage = it },
-                            label = getText(R.string.language_back)
+                            label = getText(R.string.language_back),
+                            enabled = canEditLanguage
                         )
+                        if (!canEditLanguage && onOpenLinkageSettings != null) {
+                            LinkedFieldNotice(onOpenLinkageSettings)
+                        }
                     }
                 }
                 }
@@ -650,6 +687,7 @@ fun DeckSettingsDialog(
                     Spacer(Modifier.height(dimensions.spacingSmall))
                     FilledTonalButton(
                         onClick = { showTextNormalizationDialog = true },
+                        enabled = canEditNormalization,
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                     ) {
@@ -664,6 +702,9 @@ fun DeckSettingsDialog(
                                 modifier = Modifier.align(Alignment.CenterEnd)
                             )
                         }
+                    }
+                    if (!canEditNormalization && onOpenLinkageSettings != null) {
+                        LinkedFieldNotice(onOpenLinkageSettings)
                     }
                 }
                 }
@@ -717,6 +758,9 @@ fun DeckSettingsDialog(
                                 modifier = Modifier.align(Alignment.CenterEnd)
                             )
                         }
+                    }
+                    if (!canOpenTemplateEditor && onOpenLinkageSettings != null) {
+                        LinkedFieldNotice(onOpenLinkageSettings)
                     }
                 }
                 }

@@ -29,6 +29,7 @@ import androidx.compose.material.icons.filled.DriveFileMove
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Label
+import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.RestartAlt
 import androidx.compose.material.icons.filled.Search
@@ -202,6 +203,8 @@ fun SimpleEditorScreen(
     var showFilterOverlay by remember { mutableStateOf(false) }
     var showDeckInfo by remember { mutableStateOf(false) }
     var showDeckOptions by remember { mutableStateOf(false) }
+    val isChildSet = deckWithCards?.deck?.parentDeckId != null
+    var showLinkageDialog by remember { mutableStateOf(false) }
     var filterQuery by remember { mutableStateOf("") }
     val lazyGridState = rememberLazyGridState()
     // Restores position only if Bulk Editor's toggle button just handed one off for this deck
@@ -388,6 +391,11 @@ fun SimpleEditorScreen(
                     }
                 },
                 actions = {
+                    if (isChildSet) {
+                        TooltipIconButton(description = getText(R.string.linkage_settings), onClick = { showLinkageDialog = true }) {
+                            Icon(Icons.Default.Link, contentDescription = getText(R.string.linkage_settings))
+                        }
+                    }
                     FilledTonalButton(
                         onClick = ::goToBulkEditor,
                         contentPadding = PaddingValues(horizontal = 16.dp),
@@ -851,6 +859,20 @@ fun SimpleEditorScreen(
         DeckInfoDialog(deckWithCards = deckWithCards, onDismiss = { showDeckInfo = false })
     }
 
+    // Simple Editor has no deck-level batch save (every card edit already persists immediately
+    // via saveSingleCard), so unlike Bulk Editor's deferred-to-Save linkageSettings, this applies
+    // straight away.
+    if (showLinkageDialog && deckWithCards != null) {
+        net.ericclark.studiare.screens.UI_Components.LinkageSettingsDialog(
+            currentSettings = deckWithCards.deck.linkageSettings,
+            onDismiss = { showLinkageDialog = false },
+            onSave = { newSettings ->
+                viewModel.updateLinkageSettings(deckWithCards.deck.id, newSettings)
+                showLinkageDialog = false
+            }
+        )
+    }
+
     if (showDeckOptions && deckWithCards != null) {
         DeckSettingsDialog(
             initialDeckName = deckWithCards.deck.name,
@@ -873,6 +895,12 @@ fun SimpleEditorScreen(
                 showDeckOptions = false
                 showTemplateEditor = true
             },
+            canOpenTemplateEditor = !(isChildSet && deckWithCards.deck.linkageSettings.linkFieldConfig),
+            canEditLanguage = !(isChildSet && deckWithCards.deck.linkageSettings.linkFieldConfig),
+            canEditNormalization = !(isChildSet && deckWithCards.deck.linkageSettings.linkNormalization),
+            onOpenLinkageSettings = if (isChildSet) {
+                { showDeckOptions = false; showLinkageDialog = true }
+            } else null,
             onClearReviewData = {
                 viewModel.clearDeckReviewData(deckWithCards.deck.id)
                 showDeckOptions = false

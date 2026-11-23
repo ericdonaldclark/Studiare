@@ -779,6 +779,11 @@ fun DeckEditorScreen(
                 showAdvancedEditor = true
             },
             canOpenTemplateEditor = !(isChildSet && linkageSettings.linkFieldConfig),
+            canEditLanguage = !(isChildSet && linkageSettings.linkFieldConfig),
+            canEditNormalization = !(isChildSet && linkageSettings.linkNormalization),
+            onOpenLinkageSettings = if (isChildSet) {
+                { showSettingsDialog = false; showLinkageDialog = true }
+            } else null,
             onClearReviewData = {
                 // 1. Call ViewModel to reset persistent data (if deck exists)
                 if (deckWithCards != null) {
