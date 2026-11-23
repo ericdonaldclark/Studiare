@@ -38,8 +38,11 @@ object DeckLinkageResolver {
                             backNoteTemplates = parent.backNoteTemplates
                         )
                     }
-                    if (linkage.linkCardOrder) {
-                        effectiveDeck = effectiveDeck.copy(deckSortMode = parent.deckSortMode)
+                    if (linkage.linkNormalization) {
+                        effectiveDeck = effectiveDeck.copy(
+                            normalizationType = parent.normalizationType,
+                            textCorrections = parent.textCorrections
+                        )
                     }
                     if (linkage.linkScoring) {
                         effectiveDeck = effectiveDeck.copy(

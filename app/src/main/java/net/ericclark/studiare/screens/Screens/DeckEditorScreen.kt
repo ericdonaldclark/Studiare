@@ -5,11 +5,16 @@ import net.ericclark.studiare.ShortcutScreen
 import net.ericclark.studiare.TooltipIconButton
 import net.ericclark.studiare.withShortcut
 import androidx.compose.ui.input.key.Key
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.EnterExitState
 import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.togetherWith
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -88,6 +93,7 @@ import androidx.compose.ui.platform.LocalContext
 import net.ericclark.studiare.FlashcardViewModel
 import net.ericclark.studiare.LocalWindowWidthSizeClass
 import net.ericclark.studiare.screens.Dialogs.AdvancedDeckEditorDialog
+import net.ericclark.studiare.screens.Dialogs.ClearCardDataConfirmDialog
 import net.ericclark.studiare.screens.Dialogs.DuplicateWarningDialog
 import net.ericclark.studiare.screens.Dialogs.RichTextEditorDialog
 import net.ericclark.studiare.screens.Dialogs.UnsavedChangesDialog
@@ -147,15 +153,23 @@ fun DeckEditorScreen(
     // State for the deck name
     var deckName by remember { mutableStateOf(deckWithCards?.deck?.name ?: "") }
 
+    // Settings → Deck Options' "All future decks"/"All current and future decks" choice — a
+    // brand-new deck (deckWithCards == null) starts from this instead of the plain literals
+    // below, whenever the user has saved one. Read once at first composition (same timing as
+    // every other `?: literal` fallback here): it's a hot StateFlow that's already loaded its
+    // persisted value well before the user ever reaches "create a new deck".
+    val defaultDeckOptions = viewModel.defaultDeckOptions.value
+
     // State for deck settings
-    var normalizationType by remember { mutableStateOf(deckWithCards?.deck?.normalizationType ?: NormalizationType.NONE) }
-    var sortType by remember { mutableStateOf(deckWithCards?.deck?.deckSortMode ?: DeckSortMode.DATE_ADDED_OLD_TO_NEW) }
+    var normalizationType by remember { mutableStateOf(deckWithCards?.deck?.normalizationType ?: defaultDeckOptions?.normalizationType ?: NormalizationType.NONE) }
+    var textCorrections by remember { mutableStateOf(deckWithCards?.deck?.textCorrections ?: defaultDeckOptions?.textCorrections ?: TextCorrectionSettings()) }
+    var sortType by remember { mutableStateOf(deckWithCards?.deck?.deckSortMode ?: defaultDeckOptions?.deckSortMode ?: DeckSortMode.DATE_ADDED_OLD_TO_NEW) }
     var sortPinnedCardsFirst by remember { mutableStateOf(deckWithCards?.deck?.sortPinnedCardsFirst ?: true) }
-    var defaultPromptSide by remember { mutableStateOf(deckWithCards?.deck?.defaultPromptSide ?: CardSide.AUTO_BY_DECK) }
+    var defaultPromptSide by remember { mutableStateOf(deckWithCards?.deck?.defaultPromptSide ?: defaultDeckOptions?.defaultPromptSide ?: CardSide.AUTO_BY_DECK) }
 
     // State for Languages (Default to system default if new, or load from deck)
-    var frontLanguage by remember { mutableStateOf(deckWithCards?.deck?.frontLanguage ?: Locale.getDefault().language) }
-    var backLanguage by remember { mutableStateOf(deckWithCards?.deck?.backLanguage ?: Locale.getDefault().language) }
+    var frontLanguage by remember { mutableStateOf(deckWithCards?.deck?.frontLanguage ?: defaultDeckOptions?.frontLanguage ?: Locale.getDefault().language) }
+    var backLanguage by remember { mutableStateOf(deckWithCards?.deck?.backLanguage ?: defaultDeckOptions?.backLanguage ?: Locale.getDefault().language) }
 
     // State for Note Templates and Advanced Editor
     // Keyed on the deck's id so that if `deckWithCards` is still null/loading on this screen's
@@ -182,9 +196,26 @@ fun DeckEditorScreen(
 
     // State for the filter text to search for specific cards
     var filterText by remember { mutableStateOf("") }
+    // Tags selected in the filter overlay's chip row — a card must carry at least one to pass
+    // (OR across tags), same as filterText narrows further (AND with the text filter).
+    var filterTags by remember { mutableStateOf<Set<String>>(emptySet()) }
+    // Difficulty (only one at a time, chosen via SetDifficultyDialog) and known/unknown
+    // quick-filter buttons, same OR-within/AND-across-categories rule as filterTags.
+    var filterDifficulty by remember { mutableStateOf<Int?>(null) }
+    var filterKnownStates by remember { mutableStateOf<Set<Boolean>>(emptySet()) }
     // Whether the floating filter search bar (opened from the bottom toolbar) is showing
     var showFilterOverlay by remember { mutableStateOf(false) }
     val lazyListState = rememberLazyListState()
+    // The selection table's own scroll state — deliberately NOT shared with lazyListState above.
+    // Before the card-editor-list/selection-table swap was animated (see the AnimatedContent
+    // below), only one of the two LazyColumns was ever actually composed at a time, so sharing one
+    // LazyListState between them was harmless. AnimatedContent keeps the outgoing and incoming
+    // content both composed for the length of the crossfade, which meant two LazyColumns were
+    // briefly attached to the very same LazyListState at once — undefined behavior for that state,
+    // and the cause of a stale extra row rendering behind the real ones after the first
+    // enter/exit. Scroll position isn't synced between the two: selectionCards' own sort/filter can
+    // already differ from the editor list's, so "same index" was never a reliable mapping anyway.
+    val selectionLazyListState = rememberLazyListState()
     val coroutineScope = rememberCoroutineScope()
     val snackbarHostState = remember { androidx.compose.material3.SnackbarHostState() }
 
@@ -200,6 +231,9 @@ fun DeckEditorScreen(
     var selectionSortType by remember { mutableStateOf(sortType) }
     var selectionSortPinnedCardsFirst by remember { mutableStateOf(sortPinnedCardsFirst) }
     var selectionFilterText by remember { mutableStateOf("") }
+    var selectionFilterTags by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var selectionFilterDifficulty by remember { mutableStateOf<Int?>(null) }
+    var selectionFilterKnownStates by remember { mutableStateOf<Set<Boolean>>(emptySet()) }
     var showSelectionSortDialog by remember { mutableStateOf(false) }
     var showSelectionFilterOverlay by remember { mutableStateOf(false) }
     // State for Language Dialog
@@ -214,6 +248,9 @@ fun DeckEditorScreen(
     var showSettingsDialog by remember { mutableStateOf(deckWithCards == null || cameFromMerge) }
     var showTagDialogForSelection by remember { mutableStateOf<Set<String>?>(null) }
     var showMoveDialogForSelection by remember { mutableStateOf<Set<String>?>(null) }
+    // Null hides the confirmation dialog; non-null is the captured id(s) to clear once confirmed.
+    var showClearDataConfirmForSelection by remember { mutableStateOf<Set<String>?>(null) }
+    var showDifficultyDialogForSelection by remember { mutableStateOf<Set<String>?>(null) }
     var showUseTemplateDialogForSelection by remember { mutableStateOf<Set<String>?>(null) }
     // Set only when the Template Editor was opened via the Use Template dialog's "Open Template
     // Editor" button — Cancel/Save there should return to that dialog (with the same selection),
@@ -233,6 +270,7 @@ fun DeckEditorScreen(
     var postSaveNavigation by remember { mutableStateOf<(() -> Unit)?>(null) }
 
     val allTags by viewModel.tags.collectAsState()
+    val tagNormalization by viewModel.tagNormalization.collectAsState()
     val savedTemplateSets by viewModel.templateSets.collectAsState()
     val alwaysOpenBulkEditor by viewModel.alwaysOpenBulkEditor.collectAsState()
     val allDecksState by viewModel.allDecks.observeAsState(emptyList())
@@ -404,26 +442,16 @@ fun DeckEditorScreen(
     }
 
     // --- Helper Functions for Applying Settings ---
-    fun applyNormalization(type: NormalizationType) {
+    fun applyNormalization(type: NormalizationType, corrections: TextCorrectionSettings = textCorrections) {
+        fun normalizeOne(text: String) = normalizeText(type, applyTextCorrections(corrections, text))
         cards.forEach { card ->
-            val normalize = { text: String ->
-                when (type) {
-                    NormalizationType.UPPERCASE_FIRST_LETTER -> text.replaceFirstChar { it.uppercase() }
-                    NormalizationType.UPPERCASE_ALL_LETTERS -> text.uppercase()
-                    NormalizationType.UPPERCASE_EACH_WORD -> text.split(" ").joinToString(" ") { it.replaceFirstChar { char -> char.uppercase() } }
-                    NormalizationType.LOWERCASE_FIRST_LETTER -> text.replaceFirstChar { it.lowercase() }
-                    NormalizationType.LOWERCASE_ALL_LETTERS -> text.lowercase()
-                    NormalizationType.LOWERCASE_EACH_WORD -> text.split(" ").joinToString(" ") { it.replaceFirstChar { char -> char.lowercase() } }
-                    NormalizationType.NONE -> text
-                }
-            }
-            card.front.value = normalize(card.front.value)
-            card.back.value = normalize(card.back.value)
+            card.front.value = normalizeOne(card.front.value)
+            card.back.value = normalizeOne(card.back.value)
             card.frontNotes.value = card.frontNotes.value.map { note ->
-                if (note.type == MediaType.PLAIN_TEXT) note.copy(content = normalize(note.content)) else note
+                if (note.type == MediaType.PLAIN_TEXT) note.copy(content = normalizeOne(note.content)) else note
             }
             card.backNotes.value = card.backNotes.value.map { note ->
-                if (note.type == MediaType.PLAIN_TEXT) note.copy(content = normalize(note.content)) else note
+                if (note.type == MediaType.PLAIN_TEXT) note.copy(content = normalizeOne(note.content)) else note
             }
         }
     }
@@ -568,6 +596,37 @@ fun DeckEditorScreen(
         cards.filter { it.id in ids }.forEach { it.isPinned.value = pinned }
     }
 
+    fun setDifficultyForSelection(ids: Set<String>, difficulty: DifficultySetting) {
+        cards.filter { it.id in ids }.forEach { it.difficulty.value = difficulty }
+    }
+
+    /** Immediate, unstaged DB write — same "Clear Review Data" semantics as Deck Options'
+     * deck-wide version, just scoped to the already-confirmed card id(s). Also resets the
+     * matching local [CardEditorState]s so this editor's still-open, in-memory cards reflect the
+     * clear right away instead of showing stale values until the screen is reopened — unlike
+     * isKnown/isPinned above, the FSRS fields cleared here are otherwise never written back by
+     * this editor's own Save (see CardEditorState's fsrs* doc comment), so without this they'd
+     * only catch up the next time the deck is loaded fresh from the DB. */
+    fun clearDataForSelection(ids: Set<String>) {
+        viewModel.clearCardReviewData(ids)
+        cards.filter { it.id in ids }.forEach { card ->
+            card.isKnown.value = false
+            card.reviewedCount.value = 0
+            card.gradedAttempts.value = emptyList()
+            card.incorrectAttempts.value = emptyList()
+            card.reviewLogs.value = emptyList()
+            card.absoluteDueDate.value = null
+            card.fsrsStability.value = null
+            card.fsrsDifficulty.value = null
+            card.fsrsElapsedDays.value = null
+            card.fsrsScheduledDays.value = null
+            card.fsrsState.value = FsrsState.NEW
+            card.fsrsLastReview.value = null
+            card.fsrsLapses.value = 0
+        }
+        showClearDataConfirmForSelection = null
+    }
+
     fun applyTagsForSelection(ids: Set<String>, addTags: Set<String>, removeTags: Set<String>) {
         cards.filter { it.id in ids }.forEach { card ->
             card.tags.value = (card.tags.value.toSet() + addTags - removeTags).toList()
@@ -660,7 +719,8 @@ fun DeckEditorScreen(
             activeTemplateSetId,
             // This screen always knows the deck's definitive current template link (even when
             // null, meaning Remove was pressed) — never "unspecified, preserve whatever's saved."
-            clearActiveTemplateSetId = true
+            clearActiveTemplateSetId = true,
+            textCorrections = textCorrections
         )
 
         if (viewModel.editorDuplicateResult.value == null) {
@@ -683,6 +743,7 @@ fun DeckEditorScreen(
             initialDefaultPromptSide = defaultPromptSide,
             initialFrontLanguage = frontLanguage, // NEW: Pass initial languages
             initialBackLanguage = backLanguage,
+            initialTextCorrections = textCorrections,
             isCreatingNewDeck = deckWithCards == null,
             onDismiss = {
                 if (isInitialNewDeckDialog) {
@@ -691,7 +752,7 @@ fun DeckEditorScreen(
                     showSettingsDialog = false
                 }
             },
-            onSave = { newName, newNorm, newSort, newPinnedFirst, newPromptSide, newFrontLang, newBackLang -> // NEW: Receive updated languages
+            onSave = { newName, newNorm, newSort, newPinnedFirst, newPromptSide, newFrontLang, newBackLang, newCorrections -> // NEW: Receive updated languages
                 deckName = newName
                 normalizationType = newNorm
                 sortType = newSort
@@ -699,12 +760,13 @@ fun DeckEditorScreen(
                 defaultPromptSide = newPromptSide
                 frontLanguage = newFrontLang
                 backLanguage = newBackLang
-                applyNormalization(newNorm)
+                textCorrections = newCorrections
+                applyNormalization(newNorm, newCorrections)
                 applySorting(newSort, newPinnedFirst)
                 isInitialNewDeckDialog = false
                 showSettingsDialog = false
             },
-            onOpenTemplateEditor = { newName, newNorm, newSort, newPinnedFirst, newPromptSide, newFrontLang, newBackLang ->
+            onOpenTemplateEditor = { newName, newNorm, newSort, newPinnedFirst, newPromptSide, newFrontLang, newBackLang, newCorrections ->
                 deckName = newName
                 normalizationType = newNorm
                 sortType = newSort
@@ -712,10 +774,16 @@ fun DeckEditorScreen(
                 defaultPromptSide = newPromptSide
                 frontLanguage = newFrontLang
                 backLanguage = newBackLang
+                textCorrections = newCorrections
                 showSettingsDialog = false
                 showAdvancedEditor = true
             },
             canOpenTemplateEditor = !(isChildSet && linkageSettings.linkFieldConfig),
+            canEditLanguage = !(isChildSet && linkageSettings.linkFieldConfig),
+            canEditNormalization = !(isChildSet && linkageSettings.linkNormalization),
+            onOpenLinkageSettings = if (isChildSet) {
+                { showSettingsDialog = false; showLinkageDialog = true }
+            } else null,
             onClearReviewData = {
                 // 1. Call ViewModel to reset persistent data (if deck exists)
                 if (deckWithCards != null) {
@@ -964,10 +1032,18 @@ fun DeckEditorScreen(
         )
     }
 
-    // Filter the cards based on the filter text
-    val filteredCards = remember(filterText.trim(), cards.toList()) {
+    val currentDeckTags = remember(cards.map { it.tags.value }) {
+        cards.flatMap { it.tags.value }.toSet()
+    }
+    val currentDeckTagDefinitions = remember(currentDeckTags, allTags) {
+        allTags.filter { it.name in currentDeckTags }
+    }
+
+    // Filter the cards based on the filter text and any selected tag/difficulty/known chips (OR
+    // within each category, AND across categories — see filterTags' doc comment above).
+    val filteredCards = remember(filterText.trim(), filterTags, filterDifficulty, filterKnownStates, cards.toList()) {
         val trimmedFilterText = filterText.trim()
-        if (trimmedFilterText.isBlank()) {
+        val textFiltered = if (trimmedFilterText.isBlank()) {
             cards
         } else {
             cards.filter {
@@ -975,10 +1051,9 @@ fun DeckEditorScreen(
                         it.back.value.contains(trimmedFilterText, ignoreCase = true)
             }
         }
-    }
-
-    val currentDeckTags = remember(cards.map { it.tags.value }) {
-        cards.flatMap { it.tags.value }.toSet()
+        val tagFiltered = if (filterTags.isEmpty()) textFiltered else textFiltered.filter { it.tags.value.any { tag -> tag in filterTags } }
+        val difficultyFiltered = if (filterDifficulty == null) tagFiltered else tagFiltered.filter { it.difficulty.value.value == filterDifficulty }
+        if (filterKnownStates.isEmpty()) difficultyFiltered else difficultyFiltered.filter { it.isKnown.value in filterKnownStates }
     }
 
     showTagDialogForSelection?.let { ids ->
@@ -993,6 +1068,25 @@ fun DeckEditorScreen(
             },
             onCreateTag = { name, color ->
                 viewModel.saveTagDefinition(TagDefinition(name = name, color = color))
+            }
+        )
+    }
+
+    showClearDataConfirmForSelection?.let { ids ->
+        ClearCardDataConfirmDialog(
+            cardCount = ids.size,
+            onDismiss = { showClearDataConfirmForSelection = null },
+            onConfirm = { clearDataForSelection(ids) }
+        )
+    }
+
+    showDifficultyDialogForSelection?.let { ids ->
+        net.ericclark.studiare.screens.Dialogs.SetDifficultyDialog(
+            message = androidx.compose.ui.res.pluralStringResource(R.plurals.set_difficulty_message, ids.size, ids.size),
+            onDismiss = { showDifficultyDialogForSelection = null },
+            onConfirm = { difficulty ->
+                setDifficultyForSelection(ids, difficulty)
+                showDifficultyDialogForSelection = null
             }
         )
     }
@@ -1027,13 +1121,16 @@ fun DeckEditorScreen(
     // above. Hoisted here (not local to the table's own render block) since the toolbar's Select
     // All button and count tile need it too.
     val totalRealCards = remember(cards.toList()) { cards.count { it.front.value.isNotBlank() || it.back.value.isNotBlank() } }
-    val selectionCards = remember(cards.toList(), selectionFilterText.trim(), selectionSortType, selectionSortPinnedCardsFirst) {
+    val selectionCards = remember(cards.toList(), selectionFilterText.trim(), selectionFilterTags, selectionFilterDifficulty, selectionFilterKnownStates, selectionSortType, selectionSortPinnedCardsFirst) {
         val base = cards.filter { it.front.value.isNotBlank() || it.back.value.isNotBlank() }
         val trimmed = selectionFilterText.trim()
-        val filtered = if (trimmed.isBlank()) base else base.filter {
+        val textFiltered = if (trimmed.isBlank()) base else base.filter {
             it.front.value.contains(trimmed, ignoreCase = true) || it.back.value.contains(trimmed, ignoreCase = true)
         }
-        sortCardStates(filtered, selectionSortType, selectionSortPinnedCardsFirst)
+        val tagFiltered = if (selectionFilterTags.isEmpty()) textFiltered else textFiltered.filter { it.tags.value.any { tag -> tag in selectionFilterTags } }
+        val difficultyFiltered = if (selectionFilterDifficulty == null) tagFiltered else tagFiltered.filter { it.difficulty.value.value == selectionFilterDifficulty }
+        val knownFiltered = if (selectionFilterKnownStates.isEmpty()) difficultyFiltered else difficultyFiltered.filter { it.isKnown.value in selectionFilterKnownStates }
+        sortCardStates(knownFiltered, selectionSortType, selectionSortPinnedCardsFirst)
     }
 
     Scaffold(
@@ -1161,12 +1258,21 @@ fun DeckEditorScreen(
                                 id = "unknown",
                                 icon = Icons.Default.Close,
                                 label = getText(context, R.string.mark_as_not_known),
+                                iconContent = {
+                                    net.ericclark.studiare.components.MaterialSymbol(
+                                        codepoint = net.ericclark.studiare.components.MaterialSymbols.PRELIMINARY,
+                                        contentDescription = null,
+                                        fill = 0f,
+                                        size = 30.dp
+                                    )
+                                },
                                 onClick = { setKnownForSelection(selection.selected, false) }
                             ),
                             SelectionAction(
                                 id = "known",
                                 icon = Icons.Default.Check,
                                 label = getText(context, R.string.mark_as_known),
+                                iconContent = { Icon(Icons.Filled.CheckCircle, contentDescription = null) },
                                 onClick = { setKnownForSelection(selection.selected, true) }
                             ),
                             SelectionAction(
@@ -1217,6 +1323,22 @@ fun DeckEditorScreen(
                                 }
                             ),
                             SelectionAction(
+                                id = "difficulty",
+                                icon = Icons.Default.Speed,
+                                label = getText(context, R.string.difficulty),
+                                onClick = { showDifficultyDialogForSelection = selection.selected }
+                            ),
+                            SelectionAction(
+                                id = "clearData",
+                                icon = Icons.Default.RestartAlt,
+                                label = getText(context, R.string.clear_data),
+                                isDestructive = true,
+                                // Doesn't exit selection — clearing data removes nothing, so
+                                // (unlike clone/move/delete) there's no reason to drop out of
+                                // multi-select; the confirmation dialog floats on top of it.
+                                onClick = { showClearDataConfirmForSelection = selection.selected }
+                            ),
+                            SelectionAction(
                                 id = "delete",
                                 icon = Icons.Default.Delete,
                                 label = getText(context, R.string.delete),
@@ -1246,13 +1368,13 @@ fun DeckEditorScreen(
                     ) {
                         TooltipIconButton(
                             description = getText(R.string.scroll_to_bottom),
-                            onClick = { coroutineScope.launch { lazyListState.jumpThenAnimateTo((filteredCards.size - 1).coerceAtLeast(0), scrollOffset = Int.MAX_VALUE) } }
+                            onClick = { coroutineScope.launch { selectionLazyListState.jumpThenAnimateTo((selectionCards.size - 1).coerceAtLeast(0), scrollOffset = Int.MAX_VALUE) } }
                         ) {
                             Icon(Icons.Default.ArrowDownward, contentDescription = getText(R.string.scroll_to_bottom))
                         }
                         TooltipIconButton(
                             description = getText(R.string.scroll_to_top),
-                            onClick = { coroutineScope.launch { lazyListState.jumpThenAnimateTo(0) } }
+                            onClick = { coroutineScope.launch { selectionLazyListState.jumpThenAnimateTo(0) } }
                         ) {
                             Icon(Icons.Default.ArrowUpward, contentDescription = getText(R.string.scroll_to_top))
                         }
@@ -1350,7 +1472,39 @@ fun DeckEditorScreen(
                 exit = ExitTransition.None,
                 modifier = Modifier.fillMaxSize()
             ) {
-                if (selection.inSelectionMode) {
+                // selection.inSelectionMode swaps the whole content area between the spacious
+                // card-editor list and the compact multi-select table — a density/mode change on
+                // this same screen, not a "deeper/back" navigation, so a symmetric scale+fade
+                // crossfade is used rather than a directional slide (that's reserved for the
+                // Decks screen's pane-depth navigation). Same transitionSpec shape as
+                // SettingsScreen.kt's wide/compact layout swap (the other non-hierarchical
+                // "mode swap" in this app) for consistency, and genuinely M3 Expressive: both
+                // specs resolve to real spring tokens via motionScheme (see Theme.kt's
+                // `motionScheme = MotionScheme.expressive()`), not a legacy tween. No separate
+                // transitionSettled/debug gate needed here — this AnimatedContent is already
+                // nested inside the mainContentReady-gated AnimatedVisibility above, so it never
+                // composes (let alone animates) until that NavHost-entrance gate has already
+                // settled, same as SettingsScreen.kt nests its own layout-swap inside
+                // hasComposedSettingsOnce.
+                AnimatedContent(
+                    targetState = selection.inSelectionMode,
+                    transitionSpec = {
+                        (scaleIn(initialScale = 0.95f, animationSpec = motionScheme.defaultSpatialSpec()) +
+                            fadeIn(animationSpec = motionScheme.defaultEffectsSpec())) togetherWith
+                            (scaleOut(targetScale = 1.05f, animationSpec = motionScheme.defaultSpatialSpec()) +
+                                fadeOut(animationSpec = motionScheme.defaultEffectsSpec()))
+                    },
+                    // scaleOut's 1.05x is a pure graphicsLayer transform on the exiting child, not
+                    // a layout-bounds change — with both sides here being tall scrolling lists
+                    // (not SettingsScreen.kt's static content, where the same 1.05x is imperceptible),
+                    // that extra 5% drew past the exiting list's own edge and revealed a sliver of
+                    // one more row underneath the entering content until the exit animation's
+                    // composition was disposed. clipToBounds() keeps both children's drawing inside
+                    // this container's real bounds regardless of their enter/exit scale.
+                    modifier = Modifier.clipToBounds(),
+                    label = "cardSelectionTableTransition"
+                ) { inSelectionMode ->
+                if (inSelectionMode) {
                     // Same compact table regardless of window width — it's already dense enough
                     // not to need a separate wide-screen arrangement like the normal card list has.
                     // selectionCards (sorted/filtered by the selection-local state, not the deck's
@@ -1363,13 +1517,13 @@ fun DeckEditorScreen(
                             onDeleteOne = { card -> deleteCardsWithUndo(listOf(card)) },
                             onToggleKnownOne = { card -> card.isKnown.value = !card.isKnown.value },
                             onTogglePinOne = { card -> card.isPinned.value = !card.isPinned.value },
-                            listState = lazyListState,
+                            listState = selectionLazyListState,
                             modifier = Modifier.fillMaxSize()
                         )
                         if (selectionCards.size > 3) {
                             // Same grabbable fast-scroll slider the normal card list uses.
                             CustomVerticalScrollbar(
-                                listState = lazyListState,
+                                listState = selectionLazyListState,
                                 bottomClearance = 120.dp,
                                 modifier = Modifier
                                     .align(Alignment.CenterEnd)
@@ -1420,8 +1574,10 @@ fun DeckEditorScreen(
                                             onCloneClick = { cloneCardStates(setOf(cardState.id)) },
                                             onMoveClick = if (deckWithCards != null) { { showMoveDialogForSelection = setOf(cardState.id) } } else null,
                                             onUseTemplateClick = { showUseTemplateDialogForSelection = setOf(cardState.id) },
+                                            onClearDataClick = { showClearDataConfirmForSelection = setOf(cardState.id) },
                                             allTags = allTags,
                                             currentDeckTags = currentDeckTags,
+                                            tagNormalization = tagNormalization,
                                             onUpdateTags = { newTags ->
                                                 cardState.tags.value = newTags.toList()
                                             },
@@ -1433,6 +1589,18 @@ fun DeckEditorScreen(
                                                     )
                                                 )
                                             },
+                                            onSetTagNormalization = { viewModel.setTagNormalization(it) },
+                                            onRenameTag = { tag, oldName ->
+                                                viewModel.renameTag(tag, oldName)
+                                                if (tag.name != oldName) {
+                                                    cards.forEach { cs ->
+                                                        if (oldName in cs.tags.value) {
+                                                            cs.tags.value = cs.tags.value.map { if (it == oldName) tag.name else it }
+                                                        }
+                                                    }
+                                                }
+                                            },
+                                            onDeleteTag = { tag -> viewModel.deleteTagDefinition(tag) },
                                             onOpenRichTextEditor = { target, initialHtml, title ->
                                                 richTextCardIndex = index
                                                 richTextEditorTarget = target
@@ -1447,6 +1615,7 @@ fun DeckEditorScreen(
                                                 placementSpec = motionScheme.defaultSpatialSpec()
                                             ) else Modifier,
                                             normalizationType = normalizationType,
+                                            textCorrections = textCorrections,
                                             nextCardFocusRequester = filteredCards.getOrNull(index + 1)?.frontFocusRequester,
                                             previousCardFocusRequester = filteredCards.getOrNull(index - 1)?.backFocusRequester,
                                             playNoteEntranceAnimations = cardAnimationsEnabled
@@ -1501,8 +1670,10 @@ fun DeckEditorScreen(
                                         onCloneClick = { cloneCardStates(setOf(cardState.id)) },
                                         onMoveClick = if (deckWithCards != null) { { showMoveDialogForSelection = setOf(cardState.id) } } else null,
                                         onUseTemplateClick = { showUseTemplateDialogForSelection = setOf(cardState.id) },
+                                        onClearDataClick = { showClearDataConfirmForSelection = setOf(cardState.id) },
                                         allTags = allTags,
                                         currentDeckTags = currentDeckTags,
+                                        tagNormalization = tagNormalization,
                                         onUpdateTags = { newTags -> cardState.tags.value = newTags.toList() },
                                         onCreateTag = { name, color -> viewModel.saveTagDefinition(
                                             TagDefinition(
@@ -1510,6 +1681,18 @@ fun DeckEditorScreen(
                                                 color = color
                                             )
                                         ) },
+                                        onSetTagNormalization = { viewModel.setTagNormalization(it) },
+                                        onRenameTag = { tag, oldName ->
+                                            viewModel.renameTag(tag, oldName)
+                                            if (tag.name != oldName) {
+                                                cards.forEach { cs ->
+                                                    if (oldName in cs.tags.value) {
+                                                        cs.tags.value = cs.tags.value.map { if (it == oldName) tag.name else it }
+                                                    }
+                                                }
+                                            }
+                                        },
+                                        onDeleteTag = { tag -> viewModel.deleteTagDefinition(tag) },
                                         onOpenRichTextEditor = { target, initialHtml, title ->
                                             richTextCardIndex = index
                                             richTextEditorTarget = target
@@ -1524,6 +1707,7 @@ fun DeckEditorScreen(
                                             placementSpec = motionScheme.defaultSpatialSpec()
                                         ) else Modifier,
                                         normalizationType = normalizationType,
+                                        textCorrections = textCorrections,
                                         nextCardFocusRequester = filteredCards.getOrNull(index + 1)?.frontFocusRequester,
                                         previousCardFocusRequester = filteredCards.getOrNull(index - 1)?.backFocusRequester,
                                         playNoteEntranceAnimations = cardAnimationsEnabled
@@ -1547,6 +1731,7 @@ fun DeckEditorScreen(
                         }
                     }
                 }
+                }
             }
         }
     }
@@ -1555,14 +1740,30 @@ fun DeckEditorScreen(
         visible = showFilterOverlay,
         filterText = filterText,
         onFilterTextChange = { filterText = it },
-        onDismiss = { showFilterOverlay = false }
+        onDismiss = { showFilterOverlay = false },
+        availableTags = currentDeckTagDefinitions,
+        selectedTags = filterTags,
+        onToggleTag = { name -> filterTags = if (name in filterTags) filterTags - name else filterTags + name },
+        showQuickFilters = true,
+        selectedDifficulty = filterDifficulty,
+        onDifficultySelected = { d -> filterDifficulty = d },
+        selectedKnownStates = filterKnownStates,
+        onToggleKnown = { k -> filterKnownStates = if (k in filterKnownStates) filterKnownStates - k else filterKnownStates + k }
     )
 
     FloatingFilterOverlay(
         visible = showSelectionFilterOverlay,
         filterText = selectionFilterText,
         onFilterTextChange = { selectionFilterText = it },
-        onDismiss = { showSelectionFilterOverlay = false }
+        onDismiss = { showSelectionFilterOverlay = false },
+        availableTags = currentDeckTagDefinitions,
+        selectedTags = selectionFilterTags,
+        onToggleTag = { name -> selectionFilterTags = if (name in selectionFilterTags) selectionFilterTags - name else selectionFilterTags + name },
+        showQuickFilters = true,
+        selectedDifficulty = selectionFilterDifficulty,
+        onDifficultySelected = { d -> selectionFilterDifficulty = d },
+        selectedKnownStates = selectionFilterKnownStates,
+        onToggleKnown = { k -> selectionFilterKnownStates = if (k in selectionFilterKnownStates) selectionFilterKnownStates - k else selectionFilterKnownStates + k }
     )
 
     if (showSelectionSortDialog) {

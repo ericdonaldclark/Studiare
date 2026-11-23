@@ -48,8 +48,9 @@ object SampleDeckProvider {
             description = "A child set nested under the showcase deck, demonstrating Studiare's set hierarchy and per-set linkage settings.",
             linkageSettings = LinkageSettings(
                 syncCardAdditions = true, syncCardDeletions = false,
-                linkCardData = false, linkCardOrder = false,
-                linkFieldConfig = true, linkMetadata = false, linkScoring = false
+                linkCardData = false,
+                linkFieldConfig = true, linkMetadata = false, linkScoring = false,
+                linkNormalization = false
             ),
             isPendingSync = true, isDeleted = false
         )

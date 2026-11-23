@@ -13,9 +13,11 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -23,7 +25,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.OutlinedButton
@@ -33,6 +34,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
@@ -444,67 +446,76 @@ fun WhisperFirstUsePrompt(viewModel: FlashcardViewModel, onDismiss: () -> Unit) 
         downloadProgress = 0f
     }
 
-    AlertDialog(
+    net.ericclark.studiare.AnimatedDialog(
         // Tapping outside/back while downloading cancels rather than being blocked outright.
-        onDismissRequest = { if (downloadingSize != null) cancelDownload() else onDismiss() },
-        title = { Text(getText(R.string.whisper_first_use_title)) },
-        text = {
-            Column {
-                Text(getText(R.string.whisper_first_use_body), style = MaterialTheme.typography.bodyMedium)
+        onDismissRequest = { if (downloadingSize != null) cancelDownload() else onDismiss() }
+    ) {
+        Surface(
+            shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+            tonalElevation = 6.dp,
+            modifier = Modifier.widthIn(min = 280.dp, max = 560.dp)
+        ) {
+            Column(modifier = Modifier.padding(dimensions.paddingLarge)) {
+                Text(getText(R.string.whisper_first_use_title), style = MaterialTheme.typography.headlineSmall)
                 Spacer(Modifier.height(dimensions.spacingMedium))
-                WhisperModelSize.entries.forEach { size ->
-                    val isDownloadingThis = downloadingSize == size
-                    Card(
-                        onClick = {
-                            if (downloadingSize == null) {
-                                downloadingSize = size
-                                downloadProgress = 0f
-                                downloadJob = viewModel.startWhisperModelDownload(
-                                    size = size,
-                                    onProgress = { downloadProgress = it },
-                                    onComplete = { onDismiss() }
+                Column(modifier = Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState())) {
+                    Text(getText(R.string.whisper_first_use_body), style = MaterialTheme.typography.bodyMedium)
+                    Spacer(Modifier.height(dimensions.spacingMedium))
+                    WhisperModelSize.entries.forEach { size ->
+                        val isDownloadingThis = downloadingSize == size
+                        Card(
+                            onClick = {
+                                if (downloadingSize == null) {
+                                    downloadingSize = size
+                                    downloadProgress = 0f
+                                    downloadJob = viewModel.startWhisperModelDownload(
+                                        size = size,
+                                        onProgress = { downloadProgress = it },
+                                        onComplete = { onDismiss() }
+                                    )
+                                }
+                            },
+                            shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 4.dp)
+                        ) {
+                            Column(modifier = Modifier.padding(dimensions.paddingMedium)) {
+                                Text(
+                                    stringResource(R.string.whisper_model_name_and_size_format, size.asString(), stringResource(size.downloadSizeLabelResId)),
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
-                            }
-                        },
-                        shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 4.dp)
-                    ) {
-                        Column(modifier = Modifier.padding(dimensions.paddingMedium)) {
-                            Text(
-                                stringResource(R.string.whisper_model_name_and_size_format, size.asString(), stringResource(size.downloadSizeLabelResId)),
-                                fontWeight = FontWeight.SemiBold,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Spacer(Modifier.height(2.dp))
-                            Text(stringResource(size.descriptionResId), style = MaterialTheme.typography.bodyMedium)
-                            if (isDownloadingThis) {
-                                Spacer(Modifier.height(dimensions.spacingSmall))
-                                LinearProgressIndicator(
-                                    progress = { downloadProgress },
-                                    modifier = Modifier.fillMaxWidth()
-                                )
+                                Spacer(Modifier.height(2.dp))
+                                Text(stringResource(size.descriptionResId), style = MaterialTheme.typography.bodyMedium)
+                                if (isDownloadingThis) {
+                                    Spacer(Modifier.height(dimensions.spacingSmall))
+                                    LinearProgressIndicator(
+                                        progress = { downloadProgress },
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+                                }
                             }
                         }
                     }
+                    Spacer(Modifier.height(dimensions.spacingMedium))
+                    Text(
+                        getText(R.string.speech_settings_note),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
-                Spacer(Modifier.height(dimensions.spacingMedium))
-                Text(
-                    getText(R.string.speech_settings_note),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        },
-        confirmButton = {},
-        dismissButton = {
-            if (downloadingSize != null) {
-                TextButton(onClick = { cancelDownload() }) { Text(getText(R.string.cancel)) }
-            } else {
-                TextButton(onClick = onDismiss) { Text(getText(R.string.not_now)) }
+                Spacer(Modifier.height(dimensions.spacingLarge))
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                    if (downloadingSize != null) {
+                        TextButton(onClick = { cancelDownload() }) { Text(getText(R.string.cancel)) }
+                    } else {
+                        TextButton(onClick = onDismiss) { Text(getText(R.string.not_now)) }
+                    }
+                }
             }
         }
-    )
+    }
 }

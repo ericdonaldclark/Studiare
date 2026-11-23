@@ -37,7 +37,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.DialogProperties
 import net.ericclark.studiare.AnimatedDialog
@@ -133,15 +132,13 @@ fun ChangePresetDeckDialog(
                 Text(
                     getText(R.string.change_preset_deck_title),
                     style = MaterialTheme.typography.headlineSmall,
-                    modifier = Modifier.fillMaxWidth(),
-                    textAlign = TextAlign.Center
+                    modifier = Modifier.fillMaxWidth()
                 )
                 Text(
                     getText(R.string.change_preset_deck_subtitle),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(bottom = dimensions.spacingSmall).fillMaxWidth(),
-                    textAlign = TextAlign.Center
+                    modifier = Modifier.padding(bottom = dimensions.spacingSmall).fillMaxWidth()
                 )
 
                 Box {
@@ -210,32 +207,31 @@ fun ChangePresetDeckDialog(
 
                 Spacer(Modifier.height(dimensions.spacingMedium))
 
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
+                    if (isDirty) {
+                        IconButton(onClick = { onSave(selectedDeckId) }) {
+                            Icon(Icons.Default.Save, contentDescription = getText(R.string.save_preset))
+                        }
+                    }
+                    IconButton(onClick = { if (isDirty) showPinNameDialog = true else onUnpin() }) {
+                        Icon(
+                            imageVector = if (isDirty) Icons.Outlined.PushPin else Icons.Default.FilledPushPin,
+                            contentDescription = getText(R.string.pin_preset)
+                        )
+                    }
+                    Spacer(Modifier.width(dimensions.spacingSmall))
                     TextButton(onClick = onDismiss, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
                         Text(getText(R.string.cancel))
                     }
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        if (isDirty) {
-                            IconButton(onClick = { onSave(selectedDeckId) }) {
-                                Icon(Icons.Default.Save, contentDescription = getText(R.string.save_preset))
-                            }
-                        }
-                        IconButton(onClick = { if (isDirty) showPinNameDialog = true else onUnpin() }) {
-                            Icon(
-                                imageVector = if (isDirty) Icons.Outlined.PushPin else Icons.Default.FilledPushPin,
-                                contentDescription = getText(R.string.pin_preset)
-                            )
-                        }
-                        Spacer(Modifier.width(dimensions.spacingSmall))
-                        val startInteractionSource = remember { MutableInteractionSource() }
-                        Button(
-                            onClick = { onStartSession(selectedDeckId) },
-                            interactionSource = startInteractionSource,
-                            modifier = Modifier.pressSquish(startInteractionSource, 0.95f),
-                            shape = RoundedCornerShape(dimensions.cornerRadiusButton)
-                        ) {
-                            Text(getText(R.string.session_start))
-                        }
+                    Spacer(Modifier.width(dimensions.spacingSmall))
+                    val startInteractionSource = remember { MutableInteractionSource() }
+                    Button(
+                        onClick = { onStartSession(selectedDeckId) },
+                        interactionSource = startInteractionSource,
+                        modifier = Modifier.pressSquish(startInteractionSource, 0.95f),
+                        shape = RoundedCornerShape(dimensions.cornerRadiusButton)
+                    ) {
+                        Text(getText(R.string.session_start))
                     }
                 }
             }

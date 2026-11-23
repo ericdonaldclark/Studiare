@@ -4,6 +4,7 @@ import net.ericclark.studiare.TooltipFilledTonalIconButton
 import net.ericclark.studiare.AnimatedDialog
 import net.ericclark.studiare.TooltipIconButton
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -16,6 +17,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -38,7 +40,8 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.FilledTonalButton
-import androidx.compose.material3.TextFieldDefaults
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -55,7 +58,6 @@ import androidx.compose.ui.unit.dp
 import net.ericclark.studiare.components.*
 import net.ericclark.studiare.data.*
 import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
-import androidx.compose.material3.TextField
 import androidx.compose.runtime.LaunchedEffect
 import net.ericclark.studiare.R
 import androidx.compose.ui.window.DialogProperties
@@ -66,7 +68,7 @@ import net.ericclark.studiare.screens.UI_Components.DynamicNoteEditor
 
 /** The action buttons at the bottom of a [CardEditDialog] — either Cancel/Save (editing an existing card) or Cancel/Add More/Add (creating a new one). */
 sealed class CardEditDialogMode {
-    data class Edit(val onSave: () -> Unit, val onDelete: () -> Unit, val onClone: () -> Unit, val onMove: () -> Unit, val onUseTemplate: () -> Unit) : CardEditDialogMode()
+    data class Edit(val onSave: () -> Unit, val onDelete: () -> Unit, val onClone: () -> Unit, val onMove: () -> Unit, val onUseTemplate: () -> Unit, val onClearData: () -> Unit) : CardEditDialogMode()
     data class Create(val onAdd: () -> Unit, val onAddMore: () -> Unit) : CardEditDialogMode()
 }
 
@@ -84,11 +86,16 @@ fun CardEditDialog(
     totalCards: Int,
     allTags: List<TagDefinition>,
     currentDeckTags: Set<String>,
+    tagNormalization: TagNormalizationSettings,
     onUpdateTags: (Set<String>) -> Unit,
     onCreateTag: (String, String) -> Unit,
+    onRenameTag: (TagDefinition, String) -> Unit,
+    onDeleteTag: (TagDefinition) -> Unit,
+    onSetTagNormalization: (TagNormalizationSettings) -> Unit,
     mode: CardEditDialogMode,
     onCancel: () -> Unit,
-    normalizationType: NormalizationType = NormalizationType.NONE
+    normalizationType: NormalizationType = NormalizationType.NONE,
+    textCorrections: TextCorrectionSettings = TextCorrectionSettings()
 ) {
     val dimensions = LocalStudiareDimensions.current
     val dialogSnackbarHostState = remember { androidx.compose.material3.SnackbarHostState() }
@@ -143,57 +150,76 @@ fun CardEditDialog(
         ) {
             Box {
                 Column(
-                    modifier = Modifier
-                        .padding(dimensions.paddingMedium)
-                        .verticalScroll(rememberScrollState())
+                    modifier = Modifier.padding(dimensions.paddingMedium)
                 ) {
-                    CardEditor(
-                        cardState = cardState,
-                        cardNumber = cardNumber,
-                        totalCards = totalCards,
-                        onDelete = { if (mode is CardEditDialogMode.Edit) mode.onDelete() },
-                        onCloneClick = if (mode is CardEditDialogMode.Edit) mode.onClone else null,
-                        onMoveClick = if (mode is CardEditDialogMode.Edit) mode.onMove else null,
-                        onUseTemplateClick = if (mode is CardEditDialogMode.Edit) mode.onUseTemplate else null,
-                        onKnownClick = { cardState.isKnown.value = !cardState.isKnown.value },
-                        onPinClick = { cardState.isPinned.value = !cardState.isPinned.value },
-                        allTags = allTags,
-                        currentDeckTags = currentDeckTags,
-                        onUpdateTags = onUpdateTags,
-                        onCreateTag = onCreateTag,
-                        onOpenRichTextEditor = { target, initialHtml, title ->
-                            richTextTarget = target
-                            richTextInitialHtml = initialHtml
-                            richTextTitle = title
-                        },
-                        snackbarHostState = dialogSnackbarHostState,
-                        coroutineScope = coroutineScope,
-                        showInfoButton = false,
-                        normalizationType = normalizationType
-                    )
+                    // Scrolls on its own, bounded by the Surface's heightIn above, so the
+                    // Cancel/Save row below stays pinned to the bottom instead of scrolling away
+                    // with long card content.
+                    Column(
+                        modifier = Modifier
+                            .weight(1f, fill = false)
+                            .verticalScroll(rememberScrollState())
+                    ) {
+                        CardEditor(
+                            cardState = cardState,
+                            cardNumber = cardNumber,
+                            totalCards = totalCards,
+                            onDelete = { if (mode is CardEditDialogMode.Edit) mode.onDelete() },
+                            onCloneClick = if (mode is CardEditDialogMode.Edit) mode.onClone else null,
+                            onMoveClick = if (mode is CardEditDialogMode.Edit) mode.onMove else null,
+                            onUseTemplateClick = if (mode is CardEditDialogMode.Edit) mode.onUseTemplate else null,
+                            onClearDataClick = if (mode is CardEditDialogMode.Edit) mode.onClearData else null,
+                            onKnownClick = { cardState.isKnown.value = !cardState.isKnown.value },
+                            onPinClick = { cardState.isPinned.value = !cardState.isPinned.value },
+                            allTags = allTags,
+                            currentDeckTags = currentDeckTags,
+                            tagNormalization = tagNormalization,
+                            onUpdateTags = onUpdateTags,
+                            onCreateTag = onCreateTag,
+                            onRenameTag = onRenameTag,
+                            onDeleteTag = onDeleteTag,
+                            onSetTagNormalization = onSetTagNormalization,
+                            onOpenRichTextEditor = { target, initialHtml, title ->
+                                richTextTarget = target
+                                richTextInitialHtml = initialHtml
+                                richTextTitle = title
+                            },
+                            snackbarHostState = dialogSnackbarHostState,
+                            coroutineScope = coroutineScope,
+                            showInfoButton = false,
+                            normalizationType = normalizationType,
+                            textCorrections = textCorrections
+                        )
+                    }
 
                     Spacer(Modifier.height(dimensions.spacingMedium))
 
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
                         TextButton(onClick = onCancel, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
                             Text(getText(R.string.cancel))
                         }
                         Spacer(Modifier.width(dimensions.spacingSmall))
-                        when (mode) {
-                            is CardEditDialogMode.Edit -> {
-                                val hasContent = cardState.front.value.isNotBlank() && cardState.back.value.isNotBlank()
-                                Button(onClick = mode.onSave, enabled = hasContent, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
-                                    Text(getText(R.string.save))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            when (mode) {
+                                is CardEditDialogMode.Edit -> {
+                                    val hasContent = cardState.front.value.isNotBlank() && cardState.back.value.isNotBlank()
+                                    Button(onClick = mode.onSave, enabled = hasContent, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
+                                        Text(getText(R.string.save))
+                                    }
                                 }
-                            }
-                            is CardEditDialogMode.Create -> {
-                                val hasContent = cardState.front.value.isNotBlank() && cardState.back.value.isNotBlank()
-                                OutlinedButton(onClick = mode.onAddMore, enabled = hasContent, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
-                                    Text(getText(R.string.add_more))
-                                }
-                                Spacer(Modifier.width(dimensions.spacingSmall))
-                                Button(onClick = mode.onAdd, enabled = hasContent, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
-                                    Text(getText(R.string.add))
+                                is CardEditDialogMode.Create -> {
+                                    val hasContent = cardState.front.value.isNotBlank() && cardState.back.value.isNotBlank()
+                                    OutlinedButton(onClick = mode.onAddMore, enabled = hasContent, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
+                                        Text(getText(R.string.add_more))
+                                    }
+                                    Spacer(Modifier.width(dimensions.spacingSmall))
+                                    Button(onClick = mode.onAdd, enabled = hasContent, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
+                                        Text(getText(R.string.add))
+                                    }
                                 }
                             }
                         }
@@ -215,15 +241,112 @@ fun UnsavedChangesDialog(onDismiss: () -> Unit, onDiscard: () -> Unit, onSave: (
             color = MaterialTheme.colorScheme.surfaceContainer,
             tonalElevation = 6.dp
         ) {
-            Column(modifier = Modifier.padding(dimensions.paddingLarge).widthIn(min = 280.dp, max = 560.dp)) {
+            Column(
+                modifier = Modifier.padding(dimensions.paddingLarge).widthIn(min = 280.dp, max = 560.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Icon(Icons.Filled.Emergency, contentDescription = null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(32.dp))
+                Spacer(Modifier.height(dimensions.spacingSmall))
                 Text(getText(R.string.unsaved_changes), style = MaterialTheme.typography.headlineSmall, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
                 Spacer(Modifier.height(dimensions.spacingSmall))
-                Text(getText(R.string.unsaved_changes_save))
+                Text(getText(R.string.unsaved_changes_save), textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
                 Spacer(Modifier.height(dimensions.spacingLarge))
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                     TextButton(onClick = onDiscard, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(getText(R.string.discard)) }
                     Spacer(Modifier.width(dimensions.spacingSmall))
                     Button(onClick = onSave, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(getText(R.string.save)) }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Same warning [DeckSettingsDialog]'s "Clear Review Data" confirms, scoped down to the card(s)
+ * this was invoked on — the per-card overflow menu's and multi-select's own "Clear Data" action,
+ * in both deck editors. [cardCount] only changes the message's wording (singular/plural); it
+ * never resets anything outside the specific card id(s) the caller already captured before
+ * showing this.
+ */
+@Composable
+fun ClearCardDataConfirmDialog(cardCount: Int, onDismiss: () -> Unit, onConfirm: () -> Unit) {
+    val dimensions = LocalStudiareDimensions.current
+    AnimatedDialog(onDismissRequest = onDismiss) {
+        Surface(
+            shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+            color = MaterialTheme.colorScheme.surfaceContainer,
+            tonalElevation = 6.dp
+        ) {
+            Column(
+                modifier = Modifier.padding(dimensions.paddingLarge).widthIn(min = 280.dp, max = 560.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Icon(Icons.Filled.Emergency, contentDescription = null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(32.dp))
+                Spacer(Modifier.height(dimensions.spacingSmall))
+                Text(getText(R.string.clear_data_question), style = MaterialTheme.typography.headlineSmall, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+                Spacer(Modifier.height(dimensions.spacingSmall))
+                Text(pluralStringResource(R.plurals.clear_data_message, cardCount, cardCount), textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+                Spacer(Modifier.height(dimensions.spacingLarge))
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                    TextButton(onClick = onDismiss, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(getText(R.string.cancel)) }
+                    Spacer(Modifier.width(dimensions.spacingSmall))
+                    Button(
+                        onClick = onConfirm,
+                        shape = RoundedCornerShape(dimensions.cornerRadiusButton),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                    ) { Text(getText(R.string.clear_data)) }
+                }
+            }
+        }
+    }
+}
+
+/** Sets a [DifficultySetting] via a [net.ericclark.studiare.DifficultySlider] — shared by the
+ * multi-select "Difficulty" bulk action (mirrors [ClearCardDataConfirmDialog]'s small-
+ * confirmation-dialog shape, [message] is the pluralized "Set the difficulty for N cards" text,
+ * no [onClear]) and the filter overlay's difficulty quick-filter (a plain explanatory [message],
+ * [onClear] clears the filter back to "any difficulty" instead of applying one). */
+@Composable
+fun SetDifficultyDialog(
+    message: String,
+    onDismiss: () -> Unit,
+    onConfirm: (net.ericclark.studiare.data.DifficultySetting) -> Unit,
+    initialDifficulty: net.ericclark.studiare.data.DifficultySetting = net.ericclark.studiare.data.DifficultySetting.ONE,
+    onClear: (() -> Unit)? = null
+) {
+    val dimensions = LocalStudiareDimensions.current
+    var difficulty by remember { mutableStateOf(initialDifficulty) }
+    AnimatedDialog(onDismissRequest = onDismiss) {
+        Surface(
+            shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+            color = MaterialTheme.colorScheme.surfaceContainer,
+            tonalElevation = 6.dp
+        ) {
+            Column(modifier = Modifier.padding(dimensions.paddingLarge).widthIn(min = 280.dp, max = 560.dp)) {
+                Text(getText(R.string.set_difficulty), style = MaterialTheme.typography.headlineSmall, modifier = Modifier.fillMaxWidth())
+                Spacer(Modifier.height(dimensions.spacingSmall))
+                Text(message)
+                Spacer(Modifier.height(dimensions.spacingSmall))
+                net.ericclark.studiare.DifficultySlider(
+                    label = getText(R.string.difficulty),
+                    difficulty = difficulty,
+                    onDifficultyChange = { difficulty = it }
+                )
+                Spacer(Modifier.height(dimensions.spacingLarge))
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    if (onClear != null) {
+                        TextButton(onClick = onClear, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(getText(R.string.clear_filter_text)) }
+                    } else {
+                        Spacer(Modifier.width(1.dp))
+                    }
+                    Row {
+                        TextButton(onClick = onDismiss, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(getText(R.string.cancel)) }
+                        Spacer(Modifier.width(dimensions.spacingSmall))
+                        Button(
+                            onClick = { onConfirm(difficulty) },
+                            shape = RoundedCornerShape(dimensions.cornerRadiusButton)
+                        ) { Text(getText(R.string.save)) }
+                    }
                 }
             }
         }
@@ -271,7 +394,14 @@ fun AdvancedDeckEditorDialog(
      * empty) — there's nothing an "Apply to All" could sweep that "Apply to New" wouldn't already
      * cover, so the footer collapses to a single "Apply" button instead of offering a choice
      * that's really the same outcome either way. */
-    hasExistingCards: Boolean = true
+    hasExistingCards: Boolean = true,
+    /** False for Settings' global Templates list, which opens this same dialog to edit a shared
+     * template in place with no particular deck in context — Apply/Apply to New/Apply to All (and
+     * the name field's "Remove" button, which detaches *a deck's* link) don't mean anything
+     * without one, so the footer collapses to a plain Cancel/Save instead, and Save closes the
+     * dialog once it persists (every other path here leaves it open, since Apply/Save there are
+     * just one step in a still-open deck editor). */
+    footerShowsApplyButtons: Boolean = true
 ) {
     val dimensions = LocalStudiareDimensions.current
     // Keyed on the incoming templates so each fresh open of this dialog starts from whatever was
@@ -336,7 +466,23 @@ fun AdvancedDeckEditorDialog(
         commitTemplateEdit(forceFork = forceFork) { resolvedId ->
             if (applyAll != null) {
                 onSave(localFront, localBack, resolvedId, templateName, applyAll)
+            } else if (!footerShowsApplyButtons) {
+                // A bare Save (no Apply involved) in the footerless-Apply mode — see saveTemplate.
+                onDismiss()
             }
+        }
+    }
+
+    // Bottom Save button for the no-Apply-buttons footer (and the overflow menu's own "Save"
+    // item, in every mode) — commits under the existing name, or asks for one first via the same
+    // naming dialog Apply uses. Closes the dialog afterward only in the no-Apply-buttons mode (see
+    // footerShowsApplyButtons's doc comment); resolveNaming above mirrors that for the
+    // naming-dialog path.
+    fun saveTemplate() {
+        if (templateName.isNotBlank()) {
+            commitTemplateEdit { if (!footerShowsApplyButtons) onDismiss() }
+        } else {
+            requestNaming(applyAll = null)
         }
     }
 
@@ -417,10 +563,7 @@ fun AdvancedDeckEditorDialog(
                                 leadingIcon = { Icon(Icons.Default.Save, contentDescription = null) },
                                 onClick = {
                                     showOverflowMenu = false
-                                    // Already named (editing an existing template, or typed one in
-                                    // already via this same dialog earlier this session) — no need
-                                    // to ask again; otherwise, same naming dialog Apply uses below.
-                                    if (templateName.isNotBlank()) commitTemplateEdit {} else requestNaming(applyAll = null)
+                                    saveTemplate()
                                 }
                             )
                             // Only meaningful for an existing template whose name hasn't already
@@ -508,7 +651,7 @@ fun AdvancedDeckEditorDialog(
                         // Scrolls with the rest now, rather than permanently pinned — Save/Save As/
                         // Apply still work without ever having scrolled here, via the naming dialog.
                         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                            TextField(
+                            OutlinedTextField(
                                 value = templateName,
                                 onValueChange = { templateName = it },
                                 singleLine = true,
@@ -519,8 +662,10 @@ fun AdvancedDeckEditorDialog(
                             // Only once there's an actual shared template this deck is linked to —
                             // more discoverable here than buried in the overflow menu, since
                             // "stop using a template" is otherwise easy to miss entirely (blanking
-                            // the editor and pressing Apply silently does nothing).
-                            if (editingTemplateId != null) {
+                            // the editor and pressing Apply silently does nothing). Meaningless
+                            // without a deck in context, so hidden in footerShowsApplyButtons's
+                            // false (global-library-edit) mode too.
+                            if (editingTemplateId != null && footerShowsApplyButtons) {
                                 Spacer(Modifier.width(dimensions.spacingSmall))
                                 Button(
                                     onClick = {
@@ -618,14 +763,24 @@ fun AdvancedDeckEditorDialog(
 
                 Spacer(Modifier.height(dimensions.spacingSmall))
 
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                     TextButton(onClick = onDismiss, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(getText(R.string.cancel), style = MaterialTheme.typography.labelLarge) }
+                    Spacer(Modifier.width(dimensions.spacingSmall))
                     Row(horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)) {
-                        // Never disabled on name alone — pressing either one either applies
-                        // directly (nothing changed since opening this template) or asks for/
-                        // confirms a name first via the naming dialog, rather than silently
-                        // refusing to do anything until the user notices why.
-                        if (hasExistingCards) {
+                        if (!footerShowsApplyButtons) {
+                            // Settings' global-library-edit mode: no deck in context for Apply to
+                            // mean anything against, so just a plain Save — closes once it
+                            // persists (see saveTemplate's doc comment).
+                            Button(
+                                onClick = { saveTemplate() },
+                                enabled = hasChanges,
+                                shape = RoundedCornerShape(dimensions.cornerRadiusButton)
+                            ) { Text(getText(R.string.save), style = MaterialTheme.typography.labelLarge) }
+                        } else if (hasExistingCards) {
+                            // Never disabled on name alone — pressing either one either applies
+                            // directly (nothing changed since opening this template) or asks for/
+                            // confirms a name first via the naming dialog, rather than silently
+                            // refusing to do anything until the user notices why.
                             OutlinedButton(
                                 onClick = { applyTemplate(applyAll = false) },
                                 shape = RoundedCornerShape(dimensions.cornerRadiusButton)
@@ -665,17 +820,17 @@ fun AdvancedDeckEditorDialog(
                         style = MaterialTheme.typography.headlineSmall
                     )
                     Spacer(Modifier.height(dimensions.spacingMedium))
-                    TextField(
+                    OutlinedTextField(
                         value = nameDialogDraft,
                         onValueChange = { nameDialogDraft = it },
                         singleLine = true,
-                        label = { Text(getText(R.string.template_name)) },
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
                     )
                     Spacer(Modifier.height(dimensions.spacingLarge))
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                         TextButton(onClick = { showNameDialog = false }, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(getText(R.string.cancel)) }
+                        Spacer(Modifier.width(dimensions.spacingSmall))
                         Row(horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)) {
                             // Save As is the primary action here when it's offered at all — this
                             // dialog only exists because something changed on an existing template,
@@ -712,10 +867,15 @@ fun AdvancedDeckEditorDialog(
                 color = MaterialTheme.colorScheme.surfaceContainer,
                 tonalElevation = 6.dp
             ) {
-                Column(modifier = Modifier.padding(dimensions.paddingLarge).widthIn(min = 280.dp, max = 560.dp)) {
-                    Text(getText(R.string.delete_template_question), style = MaterialTheme.typography.headlineSmall)
+                Column(
+                    modifier = Modifier.padding(dimensions.paddingLarge).widthIn(min = 280.dp, max = 560.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Icon(Icons.Filled.Emergency, contentDescription = null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(32.dp))
+                    Spacer(Modifier.height(dimensions.spacingSmall))
+                    Text(getText(R.string.delete_template_question), style = MaterialTheme.typography.headlineSmall, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
                     Spacer(Modifier.height(dimensions.spacingMedium))
-                    Text(stringResource(R.string.delete_template_confirm, toDelete.name), style = MaterialTheme.typography.bodyMedium)
+                    Text(stringResource(R.string.delete_template_confirm, toDelete.name), style = MaterialTheme.typography.bodyMedium, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
                     Spacer(Modifier.height(dimensions.spacingSmall))
                     val usedByDecks = remember(toDelete.id) { decksUsingTemplate(toDelete.id) }
                     Text(
@@ -730,7 +890,9 @@ fun AdvancedDeckEditorDialog(
                             )
                         },
                         style = MaterialTheme.typography.bodyMedium,
-                        color = if (usedByDecks.isEmpty()) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.error
+                        color = if (usedByDecks.isEmpty()) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.error,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.fillMaxWidth()
                     )
                     Spacer(Modifier.height(dimensions.spacingLarge))
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
@@ -769,6 +931,80 @@ fun AdvancedDeckEditorDialog(
     }
 }
 
+/**
+ * Settings' Templates section's "Apply" picker — checklist of every deck, linking+seeding
+ * whichever ones get checked to [templateName]'s template (via [onConfirm]'s deck-id set). Same
+ * "Apply to New" semantics as the per-deck Template Editor's own Apply button, just across however
+ * many decks are chosen here instead of the one deck that dialog is always scoped to; existing
+ * cards are never touched. "Apply to All" (this template's split button's dropdown, not this
+ * dialog) skips the picker entirely rather than offering a "select all" shortcut here.
+ */
+@Composable
+fun ApplyTemplateToDecksDialog(
+    templateName: String,
+    decks: List<DeckWithCards>,
+    onDismiss: () -> Unit,
+    onConfirm: (Set<String>) -> Unit
+) {
+    val dimensions = LocalStudiareDimensions.current
+    val selected = remember { mutableStateOf<Set<String>>(emptySet()) }
+    AnimatedDialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        Surface(
+            shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+            tonalElevation = 6.dp,
+            modifier = Modifier.widthIn(min = 280.dp, max = 560.dp).fillMaxHeight(0.8f)
+        ) {
+            Column(modifier = Modifier.padding(dimensions.paddingLarge)) {
+                Text(
+                    stringResource(R.string.apply_template_to_decks_title, templateName),
+                    style = MaterialTheme.typography.headlineSmall,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(Modifier.height(dimensions.spacingMedium))
+                if (decks.isEmpty()) {
+                    Text(
+                        getText(R.string.no_decks_to_apply_template),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.fillMaxWidth().padding(vertical = dimensions.paddingMedium),
+                        textAlign = TextAlign.Center
+                    )
+                } else {
+                    LazyColumn(modifier = Modifier.weight(1f, fill = false)) {
+                        itemsIndexed(decks, key = { _, deck -> deck.deck.id }) { _, deckWithCards ->
+                            val deckId = deckWithCards.deck.id
+                            val isChecked = deckId in selected.value
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { selected.value = if (isChecked) selected.value - deckId else selected.value + deckId }
+                                    .padding(vertical = 4.dp)
+                            ) {
+                                androidx.compose.material3.Checkbox(checked = isChecked, onCheckedChange = {
+                                    selected.value = if (isChecked) selected.value - deckId else selected.value + deckId
+                                })
+                                Text(deckWithCards.deck.name, style = MaterialTheme.typography.bodyLarge)
+                            }
+                        }
+                    }
+                }
+                Spacer(Modifier.height(dimensions.spacingMedium))
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                    TextButton(onClick = onDismiss, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(getText(R.string.cancel)) }
+                    Spacer(Modifier.width(dimensions.spacingSmall))
+                    Button(
+                        onClick = { onConfirm(selected.value) },
+                        enabled = selected.value.isNotEmpty(),
+                        shape = RoundedCornerShape(dimensions.cornerRadiusButton)
+                    ) { Text(getText(R.string.apply)) }
+                }
+            }
+        }
+    }
+}
+
 /** A non-editable row showing a card's always-present base Front/Back field, so the custom
  * fields listed below it read as additions on top of it rather than a replacement for it. */
 @Composable
@@ -778,19 +1014,18 @@ fun LockedFieldRow(label: String) {
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier.fillMaxWidth().padding(vertical = dimensions.spacingSmall)
     ) {
-        TextField(
+        OutlinedTextField(
             value = label,
             onValueChange = {},
             readOnly = true,
             enabled = false,
+            label = { Text(getText(R.string.field_name)) },
             modifier = Modifier.weight(1f),
             textStyle = MaterialTheme.typography.bodyLarge,
             singleLine = true,
             shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
-            colors = TextFieldDefaults.colors(
-                disabledContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
-                disabledTextColor = MaterialTheme.colorScheme.onSurface,
-                disabledIndicatorColor = Color.Transparent
+            colors = OutlinedTextFieldDefaults.colors(
+                disabledTextColor = MaterialTheme.colorScheme.onSurface
             ),
             trailingIcon = {
                 Icon(Icons.Default.Lock, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -838,7 +1073,7 @@ fun TemplateRow(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier.fillMaxWidth().padding(vertical = dimensions.spacingSmall)
     ) {
-        TextField(
+        OutlinedTextField(
             value = template.name,
             onValueChange = { onUpdate(template.copy(name = it)) },
             modifier = Modifier.weight(1f),
@@ -847,12 +1082,6 @@ fun TemplateRow(
             textStyle = MaterialTheme.typography.bodyLarge,
             singleLine = true,
             shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
-            colors = TextFieldDefaults.colors(
-                focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
-                unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
-                focusedIndicatorColor = Color.Transparent,
-                unfocusedIndicatorColor = Color.Transparent
-            ),
             trailingIcon = typeDropdown // ADDED: Trailing Icon
         )
         Spacer(Modifier.width(4.dp))

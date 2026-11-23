@@ -86,23 +86,10 @@ fun ExportDecksDialog(
     val selectedDecks = remember { mutableStateListOf<net.ericclark.studiare.data.DeckWithCards>() }
     var format by remember { mutableStateOf(initialFormat) }
     var hasAppliedInitialSelection by remember { mutableStateOf(false) }
-    // Starts empty — every node with children begins collapsed, not expanded.
-    val expandedDeckIds = remember { mutableStateSetOf<String>() }
-    val listState = rememberLazyListState()
 
-    // Sets can themselves have sets, arbitrarily deep — so this is a genuine tree, not just two
-    // levels. Group once by parent id; `childrenOf`/`rootDecks` below walk it recursively.
-    // naturalOrderComparator (shared with the decks list's own "A to Z" sort) sorts "Set 10"
-    // after "Set 9" instead of right after "Set 1" the way a plain string compare would.
-    val childrenByParent = remember(decks) {
-        decks.filter { it.deck.parentDeckId != null }
-            .groupBy { it.deck.parentDeckId!! }
-            .mapValues { (_, children) -> children.sortedWith(compareBy(naturalOrderComparator) { it.deck.name }) }
-    }
+    // Only needed here for the initial-selection-restore effect below — DeckSetPickerGrid
+    // recomputes this same (cheap, pure) derivation itself for its own tree/select-all/counter.
     val rootDecks = remember(decks) { decks.filter { it.deck.parentDeckId == null }.sortedWith(compareBy(naturalOrderComparator) { it.deck.name }) }
-    fun childrenOf(deckId: String): List<net.ericclark.studiare.data.DeckWithCards> = childrenByParent[deckId] ?: emptyList()
-    fun hasChildren(deckId: String): Boolean = childrenByParent[deckId]?.isNotEmpty() == true
-
     val availableItemsToSelect = remember(includeSets, decks, rootDecks) {
         if (includeSets) decks else rootDecks
     }
@@ -115,31 +102,6 @@ fun ExportDecksDialog(
         } else {
             selectedDecks.addAll(availableItemsToSelect)
         }
-    }
-
-    val areAllSelected = selectedDecks.size == availableItemsToSelect.size && availableItemsToSelect.isNotEmpty()
-
-    val canScrollUp by remember {
-        derivedStateOf { listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 0 }
-    }
-    val canScrollDown by remember {
-        derivedStateOf {
-            val layoutInfo = listState.layoutInfo
-            val lastVisibleItem = layoutInfo.visibleItemsInfo.lastOrNull() ?: return@derivedStateOf false
-            // A merely-peeking last item still counts as "visible" to LazyListState, so an index
-            // comparison alone misses a barely-clipped final item — also require it to be fully
-            // visible (bottom not past the viewport) before saying there's nothing left to scroll to.
-            val viewportEnd = layoutInfo.viewportEndOffset - layoutInfo.afterContentPadding
-            lastVisibleItem.index < layoutInfo.totalItemsCount - 1 || lastVisibleItem.offset + lastVisibleItem.size > viewportEnd
-        }
-    }
-
-    fun toggleSelected(deck: net.ericclark.studiare.data.DeckWithCards) {
-        if (deck in selectedDecks) selectedDecks.remove(deck) else selectedDecks.add(deck)
-    }
-
-    fun toggleExpanded(deckId: String) {
-        if (deckId in expandedDeckIds) expandedDeckIds.remove(deckId) else expandedDeckIds.add(deckId)
     }
 
     val labelForFormat: @Composable (String) -> String = { fmt ->
@@ -167,122 +129,14 @@ fun ExportDecksDialog(
                     style = MaterialTheme.typography.headlineSmall,
                     modifier = Modifier
                         .padding(bottom = dimensions.spacingSmall)
-                        .fillMaxWidth(),
-                    textAlign = TextAlign.Center
-                )
-
-                val selectAllInteractionSource = remember { MutableInteractionSource() }
-                TextButton(
-                    onClick = {
-                        if (areAllSelected) {
-                            selectedDecks.clear()
-                        } else {
-                            selectedDecks.clear()
-                            selectedDecks.addAll(availableItemsToSelect)
-                        }
-                    },
-                    interactionSource = selectAllInteractionSource,
-                    modifier = Modifier
                         .fillMaxWidth()
-                        .pressSquish(selectAllInteractionSource, 0.95f),
-                    contentPadding = PaddingValues(horizontal = dimensions.paddingSmall, vertical = 4.dp),
-                    shape = RoundedCornerShape(dimensions.cornerRadiusButton)
-                ) {
-                    Text(if (areAllSelected) getText(R.string.deselect_all_button) else getText(R.string.all_select))
-                }
-                Text(
-                    "${selectedDecks.size} / ${availableItemsToSelect.size} selected",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.secondary,
-                    modifier = Modifier.fillMaxWidth(),
-                    textAlign = TextAlign.Center
                 )
-                Spacer(Modifier.height(dimensions.spacingSmall))
 
-                Box {
-                    LazyColumn(
-                        state = listState,
-                        modifier = Modifier
-                            .heightIn(min = 100.dp, max = 240.dp)
-                            .border(
-                                1.dp,
-                                MaterialTheme.colorScheme.outlineVariant,
-                                RoundedCornerShape(dimensions.cornerRadiusSmall)
-                            )
-                    ) {
-                        // A local recursive fun emitting `item { }` calls — Compose has no issue with
-                        // recursion inside a LazyListScope builder lambda, and this is the only way to
-                        // interleave each node directly beneath its parent at arbitrary depth (sets
-                        // can have their own sets) instead of grouping everything by level.
-                        fun LazyListScope.emitNode(node: net.ericclark.studiare.data.DeckWithCards, depth: Int) {
-                            val nodeHasChildren = includeSets && hasChildren(node.deck.id)
-                            item(key = "deck-${node.deck.id}") {
-                                DeckExportTreeItem(
-                                    deck = node,
-                                    depth = depth,
-                                    isSelected = node in selectedDecks,
-                                    onToggleSelected = { toggleSelected(node) },
-                                    hasChildren = nodeHasChildren,
-                                    isExpanded = node.deck.id in expandedDeckIds,
-                                    onToggleExpanded = { toggleExpanded(node.deck.id) }
-                                )
-                            }
-                            if (nodeHasChildren && node.deck.id in expandedDeckIds) {
-                                childrenOf(node.deck.id).forEach { child -> emitNode(child, depth + 1) }
-                            }
-                        }
-                        rootDecks.forEach { root -> emitNode(root, 0) }
-                    }
-
-                    Column(modifier = Modifier.align(Alignment.TopCenter)) {
-                        AnimatedVisibility(
-                            visible = canScrollUp,
-                            enter = slideInVertically() + fadeIn() + expandVertically(),
-                            exit = slideOutVertically() + fadeOut() + shrinkVertically()
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(24.dp)
-                                    .background(
-                                        brush = Brush.verticalGradient(
-                                            colors = listOf(
-                                                MaterialTheme.colorScheme.surfaceContainer,
-                                                Color.Transparent
-                                            )
-                                        )
-                                    ),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(Icons.Default.KeyboardArrowUp, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                            }
-                        }
-                    }
-                    Column(modifier = Modifier.align(Alignment.BottomCenter)) {
-                        AnimatedVisibility(
-                            visible = canScrollDown,
-                            enter = slideInVertically() + fadeIn() + expandVertically(),
-                            exit = slideOutVertically() + fadeOut() + shrinkVertically()
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(24.dp)
-                                    .background(
-                                        brush = Brush.verticalGradient(
-                                            colors = listOf(
-                                                Color.Transparent,
-                                                MaterialTheme.colorScheme.surfaceContainer
-                                            )
-                                        )
-                                    ),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(Icons.Default.KeyboardArrowDown, contentDescription = getText(R.string.more_decks_available), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                            }
-                        }
-                    }
-                }
+                net.ericclark.studiare.screens.UI_Components.DeckSetPickerGrid(
+                    decks = decks,
+                    selectedDecks = selectedDecks,
+                    includeSets = includeSets
+                )
                 Spacer(Modifier.height(dimensions.spacingSmall))
 
                 val includeSetsInteractionSource = remember { MutableInteractionSource() }
@@ -321,8 +175,9 @@ fun ExportDecksDialog(
                 Spacer(Modifier.height(dimensions.spacingMedium))
               }
 
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                     TextButton(onClick = onDismiss, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(getText(R.string.cancel)) }
+                    Spacer(Modifier.width(dimensions.spacingSmall))
 
                     val exportInteractionSource = remember { MutableInteractionSource() }
                     Button(
@@ -352,7 +207,12 @@ fun ExportDecksDialog(
  */
 @Composable
 fun ExportDecksLauncher(show: Boolean, onDismiss: () -> Unit, viewModel: FlashcardViewModel) {
-    if (!show) return
+    // Deliberately NOT gated behind `if (!show) return` at the top: the three launchers below
+    // (and decksToExport/exportIncludeMetadata) must stay alive across the dialog closing, since
+    // onExport dismisses the dialog and THEN launches the system file picker — if this whole
+    // composable left composition when `show` flips to false, rememberLauncherForActivityResult's
+    // DisposableEffect would unregister the callback before the picker returns a result, so the
+    // SAF-created document would never get written to (exported as an empty file).
     val context = androidx.compose.ui.platform.LocalContext.current
     var decksToExport by remember { mutableStateOf<List<net.ericclark.studiare.data.DeckWithCards>?>(null) }
     var exportIncludeMetadata by remember { mutableStateOf(true) }
@@ -396,6 +256,7 @@ fun ExportDecksLauncher(show: Boolean, onDismiss: () -> Unit, viewModel: Flashca
         }
     )
 
+    if (!show) return
     val allDecksWithCards by viewModel.allDecks.observeAsState(emptyList())
     ExportDecksDialog(
         decks = allDecksWithCards,
@@ -415,73 +276,3 @@ fun ExportDecksLauncher(show: Boolean, onDismiss: () -> Unit, viewModel: Flashca
     )
 }
 
-/**
- * One row in the deck/set tree, modeled on the visual style of the Decks screen's own tree view
- * (`NavigationDrawerNode.kt`'s `DrawerDeckHierarchyNode`) — depth-scaled indentation, an
- * expand/collapse chevron, bold text only at the root — but with none of that component's
- * navigation/overflow-menu/ViewModel coupling: no `NavController`, no `FlashcardViewModel`, no
- * tapping a row to open the deck, no three-dot menu. Instead it gets a leading checkbox (this
- * dialog's whole purpose is picking decks, not browsing them).
- *
- * Tapping the checkbox or the row body (anything but the chevron) toggles **selection**; tapping
- * the chevron toggles **expand/collapse** only — two independent concerns on one row. Selection is
- * never cascaded parent↔child.
- */
-@Composable
-private fun DeckExportTreeItem(
-    deck: net.ericclark.studiare.data.DeckWithCards,
-    depth: Int,
-    isSelected: Boolean,
-    onToggleSelected: () -> Unit,
-    hasChildren: Boolean,
-    isExpanded: Boolean,
-    onToggleExpanded: () -> Unit
-) {
-    val dimensions = LocalStudiareDimensions.current
-    val interactionSource = remember { MutableInteractionSource() }
-    val chevronRotation by animateFloatAsState(if (isExpanded) 180f else 0f, label = "deckExportTreeChevron")
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .pressSquish(interactionSource, 0.95f)
-            .clickable(
-                interactionSource = interactionSource,
-                indication = LocalIndication.current
-            ) { onToggleSelected() }
-            .padding(
-                start = (dimensions.paddingSmall + dimensions.paddingSmall * depth),
-                end = dimensions.paddingSmall,
-                top = 2.dp, // Tight vertical spacing
-                bottom = 2.dp
-            ),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Checkbox(
-            checked = isSelected,
-            onCheckedChange = { onToggleSelected() }
-        )
-        Spacer(Modifier.width(8.dp))
-        Text(
-            deck.deck.name,
-            style = if (depth == 0) MaterialTheme.typography.titleMedium else MaterialTheme.typography.bodyLarge,
-            fontWeight = if (depth == 0) FontWeight.Bold else FontWeight.Normal,
-            modifier = Modifier.weight(1f)
-        )
-        if (hasChildren) {
-            val chevronInteractionSource = remember { MutableInteractionSource() }
-            Icon(
-                Icons.Default.ExpandMore,
-                contentDescription = if (isExpanded) getText(R.string.collapse) else getText(R.string.expand),
-                modifier = Modifier
-                    .size(32.dp)
-                    .clip(CircleShape)
-                    .clickable(
-                        interactionSource = chevronInteractionSource,
-                        indication = LocalIndication.current
-                    ) { onToggleExpanded() }
-                    .graphicsLayer { rotationZ = chevronRotation }
-                    .padding(4.dp)
-            )
-        }
-    }
-}

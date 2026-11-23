@@ -36,7 +36,6 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import kotlin.math.max
 import kotlin.math.min
@@ -222,7 +221,6 @@ fun AutomaticSetCreatorDialog(
                 Text(
                     text = getText(R.string.filter_and_sort),
                     style = MaterialTheme.typography.headlineSmall,
-                    textAlign = TextAlign.Center,
                     modifier = Modifier.fillMaxWidth()
                 )
                 Spacer(Modifier.height(dimensions.spacingMedium))

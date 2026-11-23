@@ -47,6 +47,7 @@ data class FirestoreDeck(
     val fsrsMaximumInterval: Int = 36500,
     // --- NEW: Hierarchy & Linkage ---
     val linkageSettings: Map<String, Boolean>? = null,
+    val textCorrections: Map<String, Boolean>? = null,
     val lastExportedAt: Long? = null,
 
     // --- TEMPLATE LOCKING ---
@@ -89,12 +90,21 @@ data class FirestoreDeck(
                     syncCardAdditions = settings["syncCardAdditions"] ?: true,
                     syncCardDeletions = settings["syncCardDeletions"] ?: false,
                     linkCardData = settings["linkCardData"] ?: true,
-                    linkCardOrder = settings["linkCardOrder"] ?: true,
                     linkFieldConfig = settings["linkFieldConfig"] ?: true,
                     linkMetadata = settings["linkMetadata"] ?: true,
-                    linkScoring = settings["linkScoring"] ?: true
+                    linkScoring = settings["linkScoring"] ?: true,
+                    linkNormalization = settings["linkNormalization"] ?: true
                 )
             } ?: LinkageSettings(),
+            textCorrections = this.textCorrections?.let { settings ->
+                TextCorrectionSettings(
+                    trimWhitespace = settings["trimWhitespace"] ?: true,
+                    collapseConsecutiveSpaces = settings["collapseConsecutiveSpaces"] ?: true,
+                    addSpaceAfterPunctuation = settings["addSpaceAfterPunctuation"] ?: true,
+                    removeSpaceBeforePunctuation = settings["removeSpaceBeforePunctuation"] ?: true,
+                    removeDuplicateConsecutiveWords = settings["removeDuplicateConsecutiveWords"] ?: true
+                )
+            } ?: TextCorrectionSettings(),
             lastExportedAt = this.lastExportedAt,
             templateMode = TemplateMode.fromInt(this.templateMode),
             templateScope = TemplateScope.fromInt(this.templateScope),
@@ -131,10 +141,17 @@ fun Deck.toFirestoreDeck(): FirestoreDeck {
             "syncCardAdditions" to this.linkageSettings.syncCardAdditions,
             "syncCardDeletions" to this.linkageSettings.syncCardDeletions,
             "linkCardData" to this.linkageSettings.linkCardData,
-            "linkCardOrder" to this.linkageSettings.linkCardOrder,
             "linkFieldConfig" to this.linkageSettings.linkFieldConfig,
             "linkMetadata" to this.linkageSettings.linkMetadata,
-            "linkScoring" to this.linkageSettings.linkScoring
+            "linkScoring" to this.linkageSettings.linkScoring,
+            "linkNormalization" to this.linkageSettings.linkNormalization
+        ),
+        textCorrections = mapOf(
+            "trimWhitespace" to this.textCorrections.trimWhitespace,
+            "collapseConsecutiveSpaces" to this.textCorrections.collapseConsecutiveSpaces,
+            "addSpaceAfterPunctuation" to this.textCorrections.addSpaceAfterPunctuation,
+            "removeSpaceBeforePunctuation" to this.textCorrections.removeSpaceBeforePunctuation,
+            "removeDuplicateConsecutiveWords" to this.textCorrections.removeDuplicateConsecutiveWords
         ),
         lastExportedAt = this.lastExportedAt,
         templateMode = this.templateMode.value,

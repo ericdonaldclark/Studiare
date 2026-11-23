@@ -892,6 +892,7 @@ private fun RenameDialog(title: String, currentName: String?, onDismiss: () -> U
                 OutlinedTextField(
                     value = typed,
                     onValueChange = { typed = it },
+                    label = { Text(getText(R.string.name)) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -1175,7 +1176,6 @@ fun SessionInfoDialog(
                 Text(
                     text = "Session Details",
                     style = MaterialTheme.typography.headlineSmall,
-                    textAlign = TextAlign.Center,
                     modifier = Modifier.fillMaxWidth()
                 )
                 Spacer(Modifier.height(dimensions.spacingMedium))

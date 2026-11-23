@@ -228,10 +228,16 @@ fun CardEditor(
     onCloneClick: (() -> Unit)? = null,
     onMoveClick: (() -> Unit)? = null,
     onUseTemplateClick: (() -> Unit)? = null,
+    /** Null for the same reason as [onCloneClick] — nothing to clear yet on an unsaved card. */
+    onClearDataClick: (() -> Unit)? = null,
     allTags: List<TagDefinition>,
     currentDeckTags: Set<String>,
+    tagNormalization: TagNormalizationSettings,
     onUpdateTags: (Set<String>) -> Unit,
     onCreateTag: (String, String) -> Unit,
+    onRenameTag: (TagDefinition, String) -> Unit,
+    onDeleteTag: (TagDefinition) -> Unit,
+    onSetTagNormalization: (TagNormalizationSettings) -> Unit,
     onOpenRichTextEditor: (target: String, initialHtml: String, title: String) -> Unit,
     snackbarHostState: androidx.compose.material3.SnackbarHostState,
     coroutineScope: kotlinx.coroutines.CoroutineScope,
@@ -240,6 +246,7 @@ fun CardEditor(
     canDelete: Boolean = true,
     modifier: Modifier = Modifier,
     normalizationType: NormalizationType = NormalizationType.NONE,
+    textCorrections: TextCorrectionSettings = TextCorrectionSettings(),
     /** Where Tab moves focus from this card's last field (Back). Bulk Editor passes the next
      * card's front field so tabbing flows card-to-card; left null (the default) in the Simple
      * Editor's single-card dialog, where there is no next card to jump to. */
@@ -304,7 +311,7 @@ fun CardEditor(
                         tint = if (isPinned) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-                if (onCloneClick != null || onMoveClick != null || onUseTemplateClick != null) {
+                if (onCloneClick != null || onMoveClick != null || onUseTemplateClick != null || onClearDataClick != null) {
                     Spacer(Modifier.width(iconSpacing))
                     var showOverflowMenu by remember { mutableStateOf(false) }
                     Box {
@@ -331,6 +338,13 @@ fun CardEditor(
                                     text = { Text(getText(R.string.use_template)) },
                                     leadingIcon = { Icon(Icons.Default.Description, contentDescription = null) },
                                     onClick = { showOverflowMenu = false; onUseTemplateClick() }
+                                )
+                            }
+                            if (onClearDataClick != null) {
+                                DropdownMenuItem(
+                                    text = { Text(getText(R.string.clear_data)) },
+                                    leadingIcon = { Icon(Icons.Default.RestartAlt, contentDescription = null) },
+                                    onClick = { showOverflowMenu = false; onClearDataClick() }
                                 )
                             }
                         }
@@ -367,6 +381,7 @@ fun CardEditor(
                             }
                         },
                         normalizationType = normalizationType,
+                        textCorrections = textCorrections,
                         focusRequester = cardState.frontFocusRequester,
                         nextFocusRequester = cardState.backFocusRequester,
                         previousFocusRequester = previousCardFocusRequester
@@ -410,6 +425,7 @@ fun CardEditor(
                                     }
                                 },
                                 normalizationType = normalizationType,
+                                textCorrections = textCorrections,
                                 onMoveUp = if (index > 0) {
                                     { cardState.frontNotes.value = cardState.frontNotes.value.toMutableList().apply { add(index - 1, removeAt(index)) } }
                                 } else null,
@@ -452,6 +468,7 @@ fun CardEditor(
                             }
                         },
                         normalizationType = normalizationType,
+                        textCorrections = textCorrections,
                         focusRequester = cardState.backFocusRequester,
                         nextFocusRequester = nextCardFocusRequester,
                         previousFocusRequester = cardState.frontFocusRequester
@@ -497,6 +514,7 @@ fun CardEditor(
                                     }
                                 },
                                 normalizationType = normalizationType,
+                                textCorrections = textCorrections,
                                 onMoveUp = if (index > 0) {
                                     { cardState.backNotes.value = cardState.backNotes.value.toMutableList().apply { add(index - 1, removeAt(index)) } }
                                 } else {
@@ -518,8 +536,12 @@ fun CardEditor(
                         cardTags = cardState.tags.value,
                         allTags = allTags,
                         currentDeckTags = currentDeckTags,
+                        tagNormalization = tagNormalization,
                         onUpdateTags = onUpdateTags,
-                        onCreateTag = onCreateTag
+                        onCreateTag = onCreateTag,
+                        onRenameTag = onRenameTag,
+                        onDeleteTag = onDeleteTag,
+                        onSetTagNormalization = onSetTagNormalization
                     )
         
                     Spacer(Modifier.height(dimensions.spacingSmall))
@@ -682,6 +704,7 @@ fun CardSideEditor(
     modifier: Modifier = Modifier,
     actionIcon: @Composable (() -> Unit)? = null,
     normalizationType: NormalizationType = NormalizationType.NONE,
+    textCorrections: TextCorrectionSettings = TextCorrectionSettings(),
     focusRequester: FocusRequester? = null,
     /** Where Tab moves focus from this field; null leaves the key event unconsumed. */
     nextFocusRequester: FocusRequester? = null,
@@ -724,7 +747,7 @@ fun CardSideEditor(
                         value = plainText,
                         onValueChange = onPlainTextChange,
                         modifier = Modifier.fillMaxWidth()
-                            .normalizeCaseOnFocusLost(normalizationType, plainText, onPlainTextChange)
+                            .normalizeCaseOnFocusLost(normalizationType, plainText, textCorrections, onPlainTextChange)
                             .let { if (focusRequester != null) it.focusRequester(focusRequester) else it }
                             .onPreviewKeyEvent { event ->
                                 if (event.type != KeyEventType.KeyDown || event.key != Key.Tab) return@onPreviewKeyEvent false
@@ -761,6 +784,7 @@ fun DynamicNoteEditor(
     onEditRichTextClick: () -> Unit,
     onRemove: () -> Unit,
     normalizationType: NormalizationType = NormalizationType.NONE,
+    textCorrections: TextCorrectionSettings = TextCorrectionSettings(),
     /** Null (and hidden, like [onRemove]) at the first/last position — mirrors
      * [net.ericclark.studiare.screens.Dialogs.TemplateRow]'s own up/down buttons. */
     onMoveUp: (() -> Unit)? = null,
@@ -967,7 +991,7 @@ fun DynamicNoteEditor(
                             // Only PLAIN_TEXT is normalized on save (see saveDeckWithCards) — WEB_LINK
                             // and HTML share this same field but must stay untouched.
                             if (note.type == MediaType.PLAIN_TEXT) {
-                                it.normalizeCaseOnFocusLost(normalizationType, note.content) { normalized ->
+                                it.normalizeCaseOnFocusLost(normalizationType, note.content, textCorrections) { normalized ->
                                     onNoteChange(note.copy(content = normalized))
                                 }
                             } else it

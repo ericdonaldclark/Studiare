@@ -35,7 +35,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.DialogProperties
 import net.ericclark.studiare.AnimatedDialog
@@ -108,15 +107,13 @@ fun MoveCardsDialog(
                 Text(
                     getText(R.string.move_cards_title),
                     style = MaterialTheme.typography.headlineSmall,
-                    modifier = Modifier.fillMaxWidth(),
-                    textAlign = TextAlign.Center
+                    modifier = Modifier.fillMaxWidth()
                 )
                 Text(
                     getText(R.string.move_cards_subtitle),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(bottom = dimensions.spacingSmall).fillMaxWidth(),
-                    textAlign = TextAlign.Center
+                    modifier = Modifier.padding(bottom = dimensions.spacingSmall).fillMaxWidth()
                 )
 
                 val createNewInteractionSource = remember { MutableInteractionSource() }
@@ -212,10 +209,11 @@ fun MoveCardsDialog(
 
                 Spacer(Modifier.height(dimensions.spacingMedium))
 
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
                     TextButton(onClick = onDismiss, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
                         Text(getText(R.string.cancel))
                     }
+                    Spacer(Modifier.width(dimensions.spacingSmall))
                     val moveInteractionSource = remember { MutableInteractionSource() }
                     Button(
                         onClick = { if (creatingNewDeck) onMoveToNewDeck(newDeckName.trim()) else selectedDeckId?.let(onMoveToExisting) },

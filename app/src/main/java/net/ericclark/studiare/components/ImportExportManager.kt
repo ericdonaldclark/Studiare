@@ -35,7 +35,11 @@ import net.ericclark.studiare.screens.Dialogs.MapperDestination
  * [net.ericclark.studiare.components.ScheduledBackupManager], which has no [ImportExportManager]
  * instance to construct (that class is wired to the ViewModel's Firestore/sync callbacks).
  */
-fun buildDecksJson(decksToExport: List<DeckWithCards>): String {
+fun buildDecksJson(
+    decksToExport: List<DeckWithCards>,
+    tags: List<TagDefinition> = emptyList(),
+    templateSets: List<TemplateSet> = emptyList()
+): String {
     val jsonArray = JSONArray()
     // Sort so parents come before sets (parentDeckId == null is false, so false comes first)
     decksToExport.sortedBy { it.deck.parentDeckId != null }.forEach { deckWithCards ->
@@ -64,11 +68,19 @@ fun buildDecksJson(decksToExport: List<DeckWithCards>): String {
         linkageObject.put("syncCardAdditions", deck.linkageSettings.syncCardAdditions)
         linkageObject.put("syncCardDeletions", deck.linkageSettings.syncCardDeletions)
         linkageObject.put("linkCardData", deck.linkageSettings.linkCardData)
-        linkageObject.put("linkCardOrder", deck.linkageSettings.linkCardOrder)
         linkageObject.put("linkFieldConfig", deck.linkageSettings.linkFieldConfig)
         linkageObject.put("linkMetadata", deck.linkageSettings.linkMetadata)
         linkageObject.put("linkScoring", deck.linkageSettings.linkScoring)
+        linkageObject.put("linkNormalization", deck.linkageSettings.linkNormalization)
         deckObject.put("linkageSettings", linkageObject)
+
+        val textCorrectionsObject = JSONObject()
+        textCorrectionsObject.put("trimWhitespace", deck.textCorrections.trimWhitespace)
+        textCorrectionsObject.put("collapseConsecutiveSpaces", deck.textCorrections.collapseConsecutiveSpaces)
+        textCorrectionsObject.put("addSpaceAfterPunctuation", deck.textCorrections.addSpaceAfterPunctuation)
+        textCorrectionsObject.put("removeSpaceBeforePunctuation", deck.textCorrections.removeSpaceBeforePunctuation)
+        textCorrectionsObject.put("removeDuplicateConsecutiveWords", deck.textCorrections.removeDuplicateConsecutiveWords)
+        deckObject.put("textCorrections", textCorrectionsObject)
 
         val gson = Gson()
         if (deck.frontNoteTemplates.isNotEmpty()) deckObject.put("frontNoteTemplates", JSONArray(gson.toJson(deck.frontNoteTemplates)))
@@ -105,11 +117,48 @@ fun buildDecksJson(decksToExport: List<DeckWithCards>): String {
 
         jsonArray.put(deckObject)
     }
-    return jsonArray.toString(2)
+
+    // Wrapped in a root object (rather than exporting `jsonArray` directly) so the tag registry
+    // and reusable template sets — neither of which is deck-scoped — can ride along in the same
+    // file. Older exports (and anything still reading `jsonString` as a bare array) stay readable:
+    // import detects the root shape (`[` vs `{`) and treats a bare array as "decks only".
+    val root = JSONObject()
+    root.put("decks", jsonArray)
+    if (tags.isNotEmpty()) {
+        val tagsArray = JSONArray()
+        tags.forEach { tag ->
+            val tagObject = JSONObject()
+            tagObject.put("id", tag.id)
+            tagObject.put("name", tag.name)
+            tagObject.put("color", tag.color)
+            tagObject.put("createdAt", tag.createdAt)
+            tagsArray.put(tagObject)
+        }
+        root.put("tags", tagsArray)
+    }
+    if (templateSets.isNotEmpty()) {
+        val gson = Gson()
+        val templateSetsArray = JSONArray()
+        templateSets.forEach { templateSet ->
+            val templateObject = JSONObject()
+            templateObject.put("id", templateSet.id)
+            templateObject.put("name", templateSet.name)
+            templateObject.put("frontFields", JSONArray(gson.toJson(templateSet.frontFields)))
+            templateObject.put("backFields", JSONArray(gson.toJson(templateSet.backFields)))
+            templateObject.put("createdAt", templateSet.createdAt)
+            templateSetsArray.put(templateObject)
+        }
+        root.put("templateSets", templateSetsArray)
+    }
+    return root.toString(2)
 }
 
 /** Pure CSV builder, promoted alongside [buildDecksJson] for the same reason — callable without an [ImportExportManager] instance. */
-fun buildDecksCsv(decksToExport: List<DeckWithCards>): String {
+fun buildDecksCsv(
+    decksToExport: List<DeckWithCards>,
+    tags: List<TagDefinition> = emptyList(),
+    templateSets: List<TemplateSet> = emptyList()
+): String {
     val stringWriter = StringWriter()
     val csvWriter = CSVWriter(stringWriter)
     val gson = Gson()
@@ -137,6 +186,30 @@ fun buildDecksCsv(decksToExport: List<DeckWithCards>): String {
             ))
         }
     }
+
+    // Tags and template sets aren't deck/card-shaped, so they ride as their own sentinel-marked
+    // sections after the main table rather than extra columns — CSVReader doesn't require a
+    // uniform column count per row, so importDecksFromCsv can split on the "__TAGS__"/
+    // "__TEMPLATE_SETS__" marker rows and parse each section with its own small header.
+    if (tags.isNotEmpty()) {
+        csvWriter.writeNext(arrayOf("__TAGS__"))
+        csvWriter.writeNext(arrayOf("id", "name", "color", "createdAt"))
+        tags.forEach { tag ->
+            csvWriter.writeNext(arrayOf(tag.id, tag.name, tag.color, tag.createdAt.toString()))
+        }
+    }
+    if (templateSets.isNotEmpty()) {
+        csvWriter.writeNext(arrayOf("__TEMPLATE_SETS__"))
+        csvWriter.writeNext(arrayOf("id", "name", "frontFields", "backFields", "createdAt"))
+        templateSets.forEach { templateSet ->
+            csvWriter.writeNext(arrayOf(
+                templateSet.id, templateSet.name,
+                gson.toJson(templateSet.frontFields), gson.toJson(templateSet.backFields),
+                templateSet.createdAt.toString()
+            ))
+        }
+    }
+
     return stringWriter.toString()
 }
 
@@ -189,12 +262,16 @@ class ImportExportManager(
     private val userIdProvider: () -> String?,
     private val getLocalDecks: () -> List<Deck>,
     private val getLocalCards: () -> List<Card>,
+    private val getLocalTags: () -> List<TagDefinition>,
+    private val getLocalTemplateSets: () -> List<TemplateSet>,
     private val onProcessingChanged: (Boolean) -> Unit,
     private val onOverwriteConfirmationChanged: (ImportSelectionData?) -> Unit,
     private val getOverwriteConfirmation: () -> ImportSelectionData?,
     private val safeWrite: suspend (Task<*>) -> Unit,
     private val saveDeckToFirestore: (Deck) -> Unit,
     private val saveCardToFirestore: (Card) -> Unit,
+    private val saveTagsLocally: (List<TagDefinition>) -> Unit,
+    private val saveTemplateSetsLocally: (List<TemplateSet>) -> Unit,
     private val onError: (String) -> Unit = {}
 ) {
     private val TAG = "ImportExportManager"
@@ -205,7 +282,9 @@ class ImportExportManager(
 
     fun getDecksAsString(decksToExport: List<DeckWithCards>, format: String): String {
         viewModelScope.launch { preferenceManager.updateLastExportTimestamp() }
-        return if (format == "CSV") buildDecksCsv(decksToExport) else buildDecksJson(decksToExport)
+        val tags = getLocalTags()
+        val templateSets = getLocalTemplateSets()
+        return if (format == "CSV") buildDecksCsv(decksToExport, tags, templateSets) else buildDecksJson(decksToExport, tags, templateSets)
     }
 
     fun importDecksFromString(content: String, mimeType: String?) {
@@ -239,7 +318,50 @@ class ImportExportManager(
                 val allParsedCards = mutableMapOf<String, Card>()
                 val parsedDecks = mutableListOf<ParsedDeck>()
                 val parsedDeckIds = mutableListOf<String>()
-                val jsonArray = JSONArray(jsonString)
+
+                // A bare `[...]` is a legacy decks-only export; a `{...}` root wraps "decks"
+                // alongside the orthogonal "tags"/"templateSets" sections (see buildDecksJson) —
+                // neither is deck-scoped, so they're applied immediately rather than waiting on
+                // the per-deck overwrite dialog below.
+                val jsonArray: JSONArray
+                if (jsonString.trim().startsWith("{")) {
+                    val root = JSONObject(jsonString)
+                    jsonArray = root.optJSONArray("decks") ?: JSONArray()
+
+                    root.optJSONArray("tags")?.let { tagsArray ->
+                        val parsedTags = (0 until tagsArray.length()).map { idx ->
+                            val tagObject = tagsArray.getJSONObject(idx)
+                            TagDefinition(
+                                id = tagObject.optString("id", UUID.randomUUID().toString()),
+                                name = tagObject.optString("name", ""),
+                                color = tagObject.optString("color", "#0D47A1"),
+                                createdAt = tagObject.optLong("createdAt", System.currentTimeMillis())
+                            )
+                        }
+                        if (parsedTags.isNotEmpty()) saveTagsLocally(parsedTags)
+                    }
+
+                    root.optJSONArray("templateSets")?.let { templateSetsArray ->
+                        val noteFieldListType = object : TypeToken<List<NoteField>>() {}.type
+                        val parsedTemplateSets = (0 until templateSetsArray.length()).map { idx ->
+                            val templateObject = templateSetsArray.getJSONObject(idx)
+                            TemplateSet(
+                                id = templateObject.optString("id", UUID.randomUUID().toString()),
+                                name = templateObject.optString("name", ""),
+                                frontFields = templateObject.optJSONArray("frontFields")?.let {
+                                    Gson().fromJson<List<NoteField>>(it.toString(), noteFieldListType) ?: emptyList()
+                                } ?: emptyList(),
+                                backFields = templateObject.optJSONArray("backFields")?.let {
+                                    Gson().fromJson<List<NoteField>>(it.toString(), noteFieldListType) ?: emptyList()
+                                } ?: emptyList(),
+                                createdAt = templateObject.optLong("createdAt", System.currentTimeMillis())
+                            )
+                        }
+                        if (parsedTemplateSets.isNotEmpty()) saveTemplateSetsLocally(parsedTemplateSets)
+                    }
+                } else {
+                    jsonArray = JSONArray(jsonString)
+                }
 
                 for (i in 0 until jsonArray.length()) {
                     yield()
@@ -340,12 +462,21 @@ class ImportExportManager(
                                 syncCardAdditions = linkageObj.optBoolean("syncCardAdditions", true),
                                 syncCardDeletions = linkageObj.optBoolean("syncCardDeletions", false),
                                 linkCardData = linkageObj.optBoolean("linkCardData", true),
-                                linkCardOrder = linkageObj.optBoolean("linkCardOrder", true),
                                 linkFieldConfig = linkageObj.optBoolean("linkFieldConfig", true),
                                 linkMetadata = linkageObj.optBoolean("linkMetadata", true),
-                                linkScoring = linkageObj.optBoolean("linkScoring", true)
+                                linkScoring = linkageObj.optBoolean("linkScoring", true),
+                                linkNormalization = linkageObj.optBoolean("linkNormalization", true)
                             )
-                        } ?: LinkageSettings()
+                        } ?: LinkageSettings(),
+                        textCorrections = deckObject.optJSONObject("textCorrections")?.let { correctionsObj ->
+                            TextCorrectionSettings(
+                                trimWhitespace = correctionsObj.optBoolean("trimWhitespace", true),
+                                collapseConsecutiveSpaces = correctionsObj.optBoolean("collapseConsecutiveSpaces", true),
+                                addSpaceAfterPunctuation = correctionsObj.optBoolean("addSpaceAfterPunctuation", true),
+                                removeSpaceBeforePunctuation = correctionsObj.optBoolean("removeSpaceBeforePunctuation", true),
+                                removeDuplicateConsecutiveWords = correctionsObj.optBoolean("removeDuplicateConsecutiveWords", true)
+                            )
+                        } ?: TextCorrectionSettings()
                     )
                     parsedDecks.add(
                         ParsedDeck(
@@ -501,8 +632,40 @@ class ImportExportManager(
             var handedOffToDialog = false
             try {
                 val reader = CSVReaderBuilder(StringReader(csvString)).withSkipLines(1).build()
-                val records = reader.readAll()
-                if (records.isEmpty()) return@launch
+                val allRecords = reader.readAll()
+                if (allRecords.isEmpty()) return@launch
+
+                // Tags/template sets ride as sentinel-marked sections after the main card table
+                // (see buildDecksCsv) — split them off before the per-card loop below, which
+                // indexes fixed column positions and would throw on these rows' shorter arrays.
+                val tagsSentinelIdx = allRecords.indexOfFirst { it.size == 1 && it[0] == "__TAGS__" }
+                val templateSetsSentinelIdx = allRecords.indexOfFirst { it.size == 1 && it[0] == "__TEMPLATE_SETS__" }
+                val sentinelIndices = listOf(tagsSentinelIdx, templateSetsSentinelIdx).filter { it >= 0 }
+                val records = if (sentinelIndices.isEmpty()) allRecords else allRecords.subList(0, sentinelIndices.min())
+
+                if (tagsSentinelIdx >= 0) {
+                    val sectionEnd = listOf(templateSetsSentinelIdx).filter { it > tagsSentinelIdx }.minOrNull() ?: allRecords.size
+                    // +1 skips the sentinel row itself, +1 again skips that section's own header row.
+                    val parsedTags = allRecords.subList(tagsSentinelIdx + 2, sectionEnd).mapNotNull { row ->
+                        if (row.size < 4) return@mapNotNull null
+                        TagDefinition(id = row[0], name = row[1], color = row[2], createdAt = row[3].toLongOrNull() ?: System.currentTimeMillis())
+                    }
+                    if (parsedTags.isNotEmpty()) saveTagsLocally(parsedTags)
+                }
+                if (templateSetsSentinelIdx >= 0) {
+                    val noteFieldListType = object : TypeToken<List<NoteField>>() {}.type
+                    val parsedTemplateSets = allRecords.subList(templateSetsSentinelIdx + 2, allRecords.size).mapNotNull { row ->
+                        if (row.size < 5) return@mapNotNull null
+                        TemplateSet(
+                            id = row[0],
+                            name = row[1],
+                            frontFields = runCatching { Gson().fromJson<List<NoteField>>(row[2], noteFieldListType) }.getOrNull() ?: emptyList(),
+                            backFields = runCatching { Gson().fromJson<List<NoteField>>(row[3], noteFieldListType) }.getOrNull() ?: emptyList(),
+                            createdAt = row[4].toLongOrNull() ?: System.currentTimeMillis()
+                        )
+                    }
+                    if (parsedTemplateSets.isNotEmpty()) saveTemplateSetsLocally(parsedTemplateSets)
+                }
 
                 val decksMap = mutableMapOf<String, Deck>()
                 val cardsMap = mutableMapOf<String, Card>()

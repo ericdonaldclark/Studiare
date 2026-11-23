@@ -306,19 +306,13 @@ fun AnkiFieldMappingDialog(
                                             SuggestionChip(onClick = {}, label = { Text(stringResource(R.string.sets_detected_count_format, subDecksDetected)) }, colors = SuggestionChipDefaults.suggestionChipColors(containerColor = MaterialTheme.colorScheme.secondaryContainer, labelColor = MaterialTheme.colorScheme.onSecondaryContainer))
                                         }
                                     }
-                                    TextField(
+                                    OutlinedTextField(
                                         value = deckName,
                                         onValueChange = { deckName = it },
                                         label = { Text(getText(R.string.deck_name)) },
                                         modifier = Modifier.fillMaxWidth(),
                                         shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
-                                        singleLine = true,
-                                        colors = TextFieldDefaults.colors(
-                                            focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
-                                            unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
-                                            focusedIndicatorColor = Color.Transparent,
-                                            unfocusedIndicatorColor = Color.Transparent
-                                        )
+                                        singleLine = true
                                     )
                                 }
                             }
@@ -337,19 +331,13 @@ fun AnkiFieldMappingDialog(
                                 }
                             }
 
-                            TextField(
+                            OutlinedTextField(
                                 value = deckName,
                                 onValueChange = { deckName = it },
                                 label = { Text(getText(R.string.deck_name)) },
                                 modifier = Modifier.fillMaxWidth(),
                                 shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
-                                singleLine = true,
-                                colors = TextFieldDefaults.colors(
-                                    focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
-                                    unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
-                                    focusedIndicatorColor = Color.Transparent,
-                                    unfocusedIndicatorColor = Color.Transparent
-                                )
+                                singleLine = true
                             )
                         }
 

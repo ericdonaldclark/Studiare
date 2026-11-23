@@ -60,6 +60,7 @@ fun PinNamingDialog(
                 OutlinedTextField(
                     value = typed,
                     onValueChange = { typed = it },
+                    label = { Text(getText(R.string.name)) },
                     placeholder = { Text(defaultName) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()

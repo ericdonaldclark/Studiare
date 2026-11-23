@@ -119,7 +119,6 @@ fun ImportSelectionDialog(
                 Text(
                     getText(R.string.select_decks_to_import),
                     style = MaterialTheme.typography.headlineSmall,
-                    textAlign = TextAlign.Center,
                     modifier = Modifier.fillMaxWidth()
                 )
                 Spacer(Modifier.height(dimensions.spacingSmall))
@@ -261,8 +260,9 @@ fun ImportSelectionDialog(
                 }
                 }
                 Spacer(Modifier.height(dimensions.spacingLarge))
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                     TextButton(onClick = onDismiss, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(getText(R.string.cancel)) }
+                    Spacer(Modifier.width(dimensions.spacingSmall))
                     Button(
                         onClick = { onConfirm(selectedImportIds.toSet(), selectedOverwriteIds.toSet()) },
                         enabled = selectedImportIds.isNotEmpty(),
@@ -377,7 +377,8 @@ fun TopSliderDialogSection(
         labelFor = { it },
         modifier = Modifier
             .fillMaxWidth()
-            .padding(4.dp)
+            .padding(4.dp),
+        equalWidth = options.size <= 2
     )
 }
 

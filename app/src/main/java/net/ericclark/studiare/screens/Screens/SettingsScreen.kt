@@ -41,6 +41,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
@@ -56,6 +57,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -80,14 +82,18 @@ import net.ericclark.studiare.components.TagEditorDialog
 import net.ericclark.studiare.components.getText
 import net.ericclark.studiare.data.*
 import net.ericclark.studiare.ui.theme.*
+import net.ericclark.studiare.screens.Dialogs.AdvancedDeckEditorDialog
 import net.ericclark.studiare.screens.Dialogs.AnkiFieldMappingDialog
+import net.ericclark.studiare.screens.Dialogs.BulkCardSelectionDialog
 import net.ericclark.studiare.screens.Dialogs.CustomThemeDialog
 import net.ericclark.studiare.screens.Dialogs.ExportDecksDialog
 import net.ericclark.studiare.screens.Dialogs.SavedPreferencesDialog
+import net.ericclark.studiare.screens.Dialogs.TextNormalizationDialog
 import net.ericclark.studiare.screens.UI_Components.ConnectedButtonGroup
 import net.ericclark.studiare.screens.UI_Components.ExpressiveDropdownMenuField
 import net.ericclark.studiare.screens.UI_Components.KeyboardShortcutSettingsContent
 import net.ericclark.studiare.screens.UI_Components.ModeDefaultsSettingsContent
+import net.ericclark.studiare.screens.UI_Components.DeckOptionsCategoryContent
 import net.ericclark.studiare.screens.UI_Components.NotificationPermissionRow
 import net.ericclark.studiare.screens.UI_Components.SettingSwitchItem
 import net.ericclark.studiare.screens.UI_Components.SettingsCategoryRow
@@ -175,8 +181,19 @@ fun SettingsScreen(
     var showTagEditor by showTagEditorState
     val tagToEditState = remember { mutableStateOf<TagDefinition?>(null) }
     var tagToEdit by tagToEditState
-    val tagToCleanupState = remember { mutableStateOf<String?>(null) }
+    val tagToCleanupState = remember { mutableStateOf<TagDefinition?>(null) }
     var tagToCleanup by tagToCleanupState
+
+    val templateSets by viewModel.templateSets.collectAsState()
+    val allDecksForTemplates by viewModel.allDecks.observeAsState(emptyList())
+    val templateToEditState = remember { mutableStateOf<TemplateSet?>(null) }
+    var templateToEdit by templateToEditState
+    val showTemplateEditorState = remember { mutableStateOf(false) }
+    var showTemplateEditor by showTemplateEditorState
+    val templateToApplyState = remember { mutableStateOf<TemplateSet?>(null) }
+    var templateToApply by templateToApplyState
+    val templateToDeleteState = remember { mutableStateOf<TemplateSet?>(null) }
+    var templateToDelete by templateToDeleteState
 
     val context = LocalContext.current
 
@@ -335,7 +352,73 @@ fun SettingsScreen(
     }
 
     if (tagToCleanup != null) {
-        TagCleanupDialog(tagName = tagToCleanup!!, viewModel = viewModel, onDismiss = { tagToCleanup = null })
+        val tag = tagToCleanup!!
+        BulkCardSelectionDialog(
+            titlePrefix = getText(R.string.bulk_edit_tag_title_prefix),
+            subtitleContent = { TagChip(text = tag.name, colorHex = tag.color) },
+            decks = allDecksForTemplates,
+            initialMatch = { card -> tag.name in card.tags },
+            onDismiss = { tagToCleanup = null },
+            onApply = { toAdd, toRemove ->
+                if (toAdd.isNotEmpty()) viewModel.addTagToCards(tag.name, toAdd)
+                if (toRemove.isNotEmpty()) viewModel.removeTagFromCards(tag.name, toRemove.toList())
+                tagToCleanup = null
+            }
+        )
+    }
+
+    if (showTemplateEditor) {
+        val editing = templateToEdit
+        AdvancedDeckEditorDialog(
+            frontTemplates = editing?.frontFields ?: emptyList(),
+            backTemplates = editing?.backFields ?: emptyList(),
+            onDismiss = { showTemplateEditor = false; templateToEdit = null },
+            // Only reached via the bottom Save button (footerShowsApplyButtons = false below),
+            // which already dismisses itself — nothing left for this screen to do with the
+            // resolved id/fields.
+            onSave = { _, _, _, _, _ -> },
+            initialTemplateName = editing?.name ?: "",
+            initialEditingTemplateId = editing?.id,
+            savedTemplateSets = templateSets,
+            onPersistTemplate = { id, name, front, back -> viewModel.upsertDeckTemplateSet(id, name, front, back) },
+            onDeleteTemplateSet = { templateSet ->
+                viewModel.deleteTemplateSet(templateSet)
+                if (editing?.id == templateSet.id) { showTemplateEditor = false; templateToEdit = null }
+            },
+            decksUsingTemplate = { templateId -> allDecksForTemplates.filter { it.deck.activeTemplateSetId == templateId }.map { it.deck.name } },
+            footerShowsApplyButtons = false
+        )
+    }
+
+    templateToApply?.let { templateSet ->
+        BulkCardSelectionDialog(
+            titlePrefix = getText(R.string.bulk_edit_template_title_prefix),
+            subtitleContent = { Text(templateSet.name, style = MaterialTheme.typography.titleMedium) },
+            decks = allDecksForTemplates,
+            initialMatch = { card -> cardHasAllTemplateFields(card, templateSet) },
+            onDismiss = { templateToApply = null },
+            onApply = { toAdd, toRemove ->
+                if (toAdd.isNotEmpty()) viewModel.addTemplateFieldsToCards(templateSet, toAdd)
+                if (toRemove.isNotEmpty()) viewModel.removeTemplateFieldsFromCards(templateSet, toRemove)
+                templateToApply = null
+            }
+        )
+    }
+
+    templateToDelete?.let { templateSet ->
+        val usedByDecks = remember(templateSet.id, allDecksForTemplates) {
+            allDecksForTemplates.filter { deck -> deck.cards.any { cardHasAllTemplateFields(it, templateSet) } }.map { it.deck.name }
+        }
+        ConfirmationDialog(
+            title = getText(R.string.delete_template_question),
+            text = stringResource(R.string.delete_template_confirm, templateSet.name) + "\n\n" + (
+                if (usedByDecks.isEmpty()) getText(R.string.delete_template_not_in_use)
+                else pluralStringResource(R.plurals.delete_template_in_use, usedByDecks.size, usedByDecks.size, usedByDecks.joinToString(", "))
+            ),
+            confirmButtonText = getText(R.string.delete),
+            onConfirm = { viewModel.deleteTemplateSet(templateSet); templateToDelete = null },
+            onDismiss = { templateToDelete = null }
+        )
     }
 
     if (languageToDownload != null) {
@@ -489,7 +572,7 @@ fun SettingsScreen(
     // Hoisted (rather than local to AppToolsAndInfoCategoryContent) so the top app bar below can
     // show the open sub-category's own title/back behavior, the same way it does for a
     // top-level category.
-    var openAppToolsSubCategoryId by rememberSaveable { mutableStateOf<String?>(null) }
+    val openAppToolsSubCategoryId by viewModel.settingsOpenAppToolsSubCategoryId.collectAsState()
     val appToolsSubCategories = listOfNotNull(
         if (!isDebug) null else AppToolsSubCategory(
             id = "debug", title = getText(R.string.debug), subtitle = getText(R.string.developer_tools)
@@ -556,11 +639,26 @@ fun SettingsScreen(
             }
         ),
         SettingCategoryData(
+            id = "deck_options",
+            title = getText(R.string.deck_options_title),
+            subtitle = getText(R.string.deck_options_subtitle),
+            content = { DeckOptionsCategoryContent(viewModel, snackbarHostState) }
+        ),
+        SettingCategoryData(
             id = "tags",
-            title = getText(R.string.tags_manage),
-            subtitle = stringResource(R.string.tags_defined_count, tags.size),
+            title = getText(R.string.tags_and_templates),
+            subtitle = stringResource(
+                R.string.tags_and_templates_defined_format,
+                pluralStringResource(R.plurals.tags_count_label, tags.size, tags.size),
+                pluralStringResource(R.plurals.templates_count_label, templateSets.size, templateSets.size)
+            ),
             content = {
-                TagsCategoryContent(viewModel, tags, tagToEditState, tagToCleanupState, showTagEditorState)
+                TagsCategoryContent(
+                    viewModel, tags, tagToEditState, tagToCleanupState, showTagEditorState,
+                    templateSets, allDecksForTemplates,
+                    templateToEditState, showTemplateEditorState,
+                    templateToApplyState, templateToDeleteState
+                )
             }
         ),
         SettingCategoryData(
@@ -573,7 +671,7 @@ fun SettingsScreen(
                     navController = navController,
                     subCategories = appToolsSubCategories,
                     openSubCategoryId = openAppToolsSubCategoryId,
-                    onOpenSubCategory = { openAppToolsSubCategoryId = it },
+                    onOpenSubCategory = { viewModel.setSettingsOpenAppToolsSubCategoryId(it) },
                     showFieldMapperState = showFieldMapperState,
                     tagCount = tags.size,
                     totalDecks = totalDecks,
@@ -596,16 +694,16 @@ fun SettingsScreen(
     // Wide: the nav rail always has one category selected, shown alone in the content pane —
     // composing only that one category instead of every category at once (and never a scrolling
     // list of them) is what keeps the wide layout's first paint cheap.
-    var openCategoryId by rememberSaveable { mutableStateOf<String?>(null) }
-    var selectedWideCategoryIndex by rememberSaveable { mutableStateOf(0) }
+    val openCategoryId by viewModel.settingsOpenCategoryId.collectAsState()
+    val selectedWideCategoryIndex by viewModel.settingsSelectedWideCategoryIndex.collectAsState()
     val isWideLayout = windowWidthSizeClass >= WindowWidthSizeClass.Expanded
     val openCategory = if (isWideLayout) null else categories.firstOrNull { it.id == openCategoryId }
     val currentCategoryId = if (isWideLayout) categories.getOrNull(selectedWideCategoryIndex)?.id else openCategory?.id
     val openAppToolsSubCategory = if (currentCategoryId == "app_tools_info") {
         appToolsSubCategories.firstOrNull { it.id == openAppToolsSubCategoryId }
     } else null
-    BackHandler(enabled = openAppToolsSubCategory != null) { openAppToolsSubCategoryId = null }
-    BackHandler(enabled = openAppToolsSubCategory == null && !isWideLayout && openCategory != null) { openCategoryId = null }
+    BackHandler(enabled = openAppToolsSubCategory != null) { viewModel.setSettingsOpenAppToolsSubCategoryId(null) }
+    BackHandler(enabled = openAppToolsSubCategory == null && !isWideLayout && openCategory != null) { viewModel.setSettingsOpenCategoryId(null) }
 
     // --- Main UI Scaffold ---
     Scaffold(
@@ -624,8 +722,8 @@ fun SettingsScreen(
                         description = getText(R.string.back),
                         onClick = {
                             when {
-                                openAppToolsSubCategory != null -> openAppToolsSubCategoryId = null
-                                !isWideLayout && openCategory != null -> openCategoryId = null
+                                openAppToolsSubCategory != null -> viewModel.setSettingsOpenAppToolsSubCategoryId(null)
+                                !isWideLayout && openCategory != null -> viewModel.setSettingsOpenCategoryId(null)
                                 else -> navController.popBackStack()
                             }
                         }
@@ -656,9 +754,9 @@ fun SettingsScreen(
                 val wasExpanded = previousWindowWidthSizeClass >= WindowWidthSizeClass.Expanded
                 val isExpanded = windowWidthSizeClass >= WindowWidthSizeClass.Expanded
                 if (!wasExpanded && isExpanded) {
-                    selectedWideCategoryIndex = categories.indexOfFirst { it.id == openCategoryId }.takeIf { it >= 0 } ?: 0
+                    viewModel.setSettingsSelectedWideCategoryIndex(categories.indexOfFirst { it.id == openCategoryId }.takeIf { it >= 0 } ?: 0)
                 } else if (wasExpanded && !isExpanded) {
-                    openCategoryId = categories.getOrNull(selectedWideCategoryIndex)?.id
+                    viewModel.setSettingsOpenCategoryId(categories.getOrNull(selectedWideCategoryIndex)?.id)
                 }
                 previousWindowWidthSizeClass = windowWidthSizeClass
             }
@@ -730,7 +828,7 @@ fun SettingsScreen(
                     ) {
                         categories.forEachIndexed { index, category ->
                             val isSelected = selectedWideCategoryIndex == index
-                            val selectCategory = { selectedWideCategoryIndex = index }
+                            val selectCategory = { viewModel.setSettingsSelectedWideCategoryIndex(index) }
 
                             // M3 Expressive Side Menu Item
                             Surface(
@@ -822,7 +920,7 @@ fun SettingsScreen(
                                     title = c.title,
                                     subtitle = c.subtitle,
                                     dimensions = dimensions,
-                                    onClick = { openCategoryId = c.id }
+                                    onClick = { viewModel.setSettingsOpenCategoryId(c.id) }
                                 )
                             }
                         }
@@ -928,14 +1026,19 @@ private fun SettingsWideRightPane(
                     }
                 },
                 label = "settingsWideCategoryTransition"
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .verticalScroll(rememberScrollState())
-                        .padding(end = dimensions.paddingLarge, bottom = 100.dp)
-                ) {
-                    content()
+            ) { targetCategoryIndex ->
+                // Keyed on the target index (not just relying on `content`'s own closure) so the
+                // IDE's AnimatedContent inspection sees the target state actually used, and so
+                // each category's scroll/composition state is correctly distinct per index.
+                key(targetCategoryIndex) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .verticalScroll(rememberScrollState())
+                            .padding(end = dimensions.paddingLarge, bottom = 100.dp)
+                    ) {
+                        content()
+                    }
                 }
             }
         }
@@ -1042,7 +1145,8 @@ private fun AboutCategoryContent(
             SettingsInfoRow("Build Type", if (BuildConfig.DEBUG) "Debug" else "Release", isAlternate = false)
             SettingsInfoRow("Version Code", "${BuildConfig.VERSION_CODE}", isAlternate = true)
             SettingsInfoRow("Package", context.packageName, isAlternate = false)
-            SettingsInfoRow("Target / Min SDK", "${context.applicationInfo.targetSdkVersion} / ${context.applicationInfo.minSdkVersion}", isAlternate = true)
+            SettingsInfoRow("Database Version", "${net.ericclark.studiare.data.DATABASE_VERSION}", isAlternate = true)
+            SettingsInfoRow("Target / Min SDK", "${context.applicationInfo.targetSdkVersion} / ${context.applicationInfo.minSdkVersion}", isAlternate = false)
 
         }
 
@@ -1313,23 +1417,55 @@ private fun InfoCategoryContent(
     }
 }
 
+/** Whether [card] already has every one of [templateSet]'s fields (matched by name+type) — the
+ * single source of truth for "does this card use this template" across the Templates section: the
+ * row's "used by" subtitle, the delete-confirmation warning, and the Add/Remove dialog's starting
+ * checked state all call this, so they can never drift from each other or from what the dialog's
+ * own add/remove actions actually changed on the card. */
+private fun cardHasAllTemplateFields(card: Card, templateSet: TemplateSet): Boolean {
+    val frontKeys = card.frontNotes.map { it.name to it.type }
+    val backKeys = card.backNotes.map { it.name to it.type }
+    return templateSet.frontFields.all { (it.name to it.type) in frontKeys } &&
+        templateSet.backFields.all { (it.name to it.type) in backKeys }
+}
+
 @Composable
 private fun TagsCategoryContent(
     viewModel: FlashcardViewModel,
     tags: List<TagDefinition>,
     tagToEditState: MutableState<TagDefinition?>,
-    tagToCleanupState: MutableState<String?>,
-    showTagEditorState: MutableState<Boolean>
+    tagToCleanupState: MutableState<TagDefinition?>,
+    showTagEditorState: MutableState<Boolean>,
+    templateSets: List<TemplateSet>,
+    allDecksForTemplates: List<DeckWithCards>,
+    templateToEditState: MutableState<TemplateSet?>,
+    showTemplateEditorState: MutableState<Boolean>,
+    templateToApplyState: MutableState<TemplateSet?>,
+    templateToDeleteState: MutableState<TemplateSet?>
 ) {
     val dimensions = LocalStudiareDimensions.current
     val windowWidthSizeClass = LocalWindowWidthSizeClass.current
     val isWideSettingsLayout = windowWidthSizeClass >= WindowWidthSizeClass.Expanded
     val sortTagsByDateCreated by viewModel.sortTagsByDateCreated.collectAsState()
+    val sortTemplatesByDateCreated by viewModel.sortTemplatesByDateCreated.collectAsState()
+    val tagNormalization by viewModel.tagNormalization.collectAsState()
+    var showTagNormalizationDialog by remember { mutableStateOf(false) }
     var tagToEdit by tagToEditState
     var tagToCleanup by tagToCleanupState
     var showTagEditor by showTagEditorState
+    var templateToEdit by templateToEditState
+    var showTemplateEditor by showTemplateEditorState
+    var templateToApply by templateToApplyState
+    var templateToDelete by templateToDeleteState
 
     Column {
+        Text(
+            getText(R.string.tags_section_title),
+            style = MaterialTheme.typography.titleSmall,
+            color = MaterialTheme.colorScheme.primary,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(bottom = dimensions.paddingSmall)
+        )
         SettingSwitchItem(
             getText(R.string.sort_tags_by_date_created),
             getText(R.string.sort_tags_by_date_created_desc),
@@ -1349,30 +1485,41 @@ private fun TagsCategoryContent(
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 val sortedTags = if (sortTagsByDateCreated) tags.sortedByDescending { it.createdAt } else tags.sortedBy { it.name.lowercase() }
                 sortedTags.forEach { tag ->
-                    ListItem(
-                        headlineContent = { TagChip(text = tag.name, colorHex = tag.color) },
-                        trailingContent = {
-                            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                TooltipFilledTonalIconButton(description = getText(R.string.tag_remove_from_cards_icon), onClick = { tagToCleanup = tag.name }) {
-                                    Icon(Icons.Default.Clear, getText(R.string.tag_remove_from_cards_icon))
-                                }
-                                TooltipFilledTonalIconButton(description = getText(R.string.edit), onClick = { tagToEdit = tag; showTagEditor = true }) {
-                                    Icon(Icons.Default.Edit, getText(R.string.edit))
-                                }
-                                TooltipFilledTonalIconButton(description = getText(R.string.delete),
-                                    onClick = { viewModel.deleteTagDefinition(tag) },
-                                    colors = IconButtonDefaults.filledTonalIconButtonColors(
-                                        containerColor = MaterialTheme.colorScheme.errorContainer,
-                                        contentColor = MaterialTheme.colorScheme.onErrorContainer
-                                    )
-                                ) {
-                                    Icon(Icons.Default.Delete, getText(R.string.delete))
-                                }
+                    // A plain Row, not ListItem — see TemplateSettingsRow's own doc comment on
+                    // why, and kept the same padding/structure as that row so the two sections'
+                    // trailing buttons land at identical x/y positions.
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(dimensions.cornerRadiusMedium))
+                            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                            // Less inset on the end than the start — pushes the buttons back out
+                            // toward the trailing edge, matching where they sat before (ListItem's
+                            // own layout, unlike a plain Row, doesn't inset its trailing content by
+                            // the full content padding).
+                            .padding(start = dimensions.paddingMedium, top = dimensions.paddingSmall, end = dimensions.paddingSmall, bottom = dimensions.paddingSmall)
+                    ) {
+                        Box(modifier = Modifier.weight(1f)) { TagChip(text = tag.name, colorHex = tag.color) }
+                        Spacer(Modifier.width(dimensions.spacingSmall))
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            TooltipFilledTonalIconButton(description = getText(R.string.tag_remove_from_cards_icon), onClick = { tagToCleanup = tag }) {
+                                Icon(Icons.Default.Checklist, getText(R.string.tag_remove_from_cards_icon))
                             }
-                        },
-                        colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
-                        modifier = Modifier.clip(RoundedCornerShape(dimensions.cornerRadiusMedium))
-                    )
+                            TooltipFilledTonalIconButton(description = getText(R.string.edit), onClick = { tagToEdit = tag; showTagEditor = true }) {
+                                Icon(Icons.Default.Edit, getText(R.string.edit))
+                            }
+                            TooltipFilledTonalIconButton(description = getText(R.string.delete),
+                                onClick = { viewModel.deleteTagDefinition(tag) },
+                                colors = IconButtonDefaults.filledTonalIconButtonColors(
+                                    containerColor = MaterialTheme.colorScheme.errorContainer,
+                                    contentColor = MaterialTheme.colorScheme.onErrorContainer
+                                )
+                            ) {
+                                Icon(Icons.Default.Delete, getText(R.string.delete))
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -1388,6 +1535,173 @@ private fun TagsCategoryContent(
             Icon(Icons.Default.Add, contentDescription = null)
             Spacer(Modifier.width(dimensions.spacingSmall))
             Text(getText(R.string.tag_create_new))
+        }
+
+        Spacer(Modifier.height(dimensions.spacingLarge))
+        Text(
+            getText(R.string.tag_text_normalization),
+            style = MaterialTheme.typography.titleSmall,
+            color = MaterialTheme.colorScheme.primary,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(bottom = dimensions.paddingSmall)
+        )
+        Text(
+            getText(R.string.tag_text_normalization_explainer),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(Modifier.height(dimensions.spacingSmall))
+        Text(
+            tagNormalization.normalizationType.asString(),
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.primary
+        )
+        Spacer(Modifier.height(dimensions.spacingSmall))
+        FilledTonalButton(
+            onClick = { showTagNormalizationDialog = true },
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(dimensions.cornerRadiusButton)
+        ) {
+            // Centered on the full button width, same as the Card Text Normalization/Template
+            // Editor buttons in DeckEditorSettings — the icon sits at the trailing edge without
+            // pulling the label off-center.
+            Box(modifier = Modifier.fillMaxWidth()) {
+                Text(getText(R.string.tag_text_normalization), modifier = Modifier.align(Alignment.Center))
+                Icon(Icons.AutoMirrored.Filled.OpenInNew, contentDescription = null, modifier = Modifier.align(Alignment.CenterEnd))
+            }
+        }
+
+        if (showTagNormalizationDialog) {
+            TextNormalizationDialog(
+                initialType = tagNormalization.normalizationType,
+                initialCorrections = tagNormalization.textCorrections,
+                title = getText(R.string.tag_text_normalization),
+                subtitle = getText(R.string.tag_text_normalization_dialog_subtitle),
+                onDismiss = { showTagNormalizationDialog = false },
+                onConfirm = { newType, newCorrections ->
+                    viewModel.setTagNormalization(TagNormalizationSettings(newType, newCorrections))
+                    showTagNormalizationDialog = false
+                }
+            )
+        }
+
+        Spacer(Modifier.height(dimensions.spacingLarge))
+        androidx.compose.material3.HorizontalDivider()
+        Spacer(Modifier.height(dimensions.spacingLarge))
+
+        Text(
+            getText(R.string.templates_section_title),
+            style = MaterialTheme.typography.titleSmall,
+            color = MaterialTheme.colorScheme.primary,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(bottom = dimensions.paddingSmall)
+        )
+        SettingSwitchItem(
+            getText(R.string.sort_templates_by_date_created),
+            getText(R.string.sort_templates_by_date_created_desc),
+            sortTemplatesByDateCreated
+        ) { viewModel.setSortTemplatesByDateCreated(it) }
+        Spacer(Modifier.height(dimensions.spacingSmall))
+
+        if (templateSets.isEmpty()) {
+            Text(
+                getText(R.string.no_templates_created),
+                style = MaterialTheme.typography.bodyMedium,
+                fontStyle = FontStyle.Italic,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth().padding(vertical = dimensions.paddingSmall)
+            )
+        } else {
+            Column(verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)) {
+                val sortedTemplates = if (sortTemplatesByDateCreated) templateSets.sortedByDescending { it.createdAt } else templateSets.sortedBy { it.name.lowercase() }
+                sortedTemplates.forEach { templateSet ->
+                    val usedByDecks = remember(templateSet.id, allDecksForTemplates) {
+                        allDecksForTemplates.filter { deck -> deck.cards.any { cardHasAllTemplateFields(it, templateSet) } }.map { it.deck.name }
+                    }
+                    TemplateSettingsRow(
+                        templateSet = templateSet,
+                        usedByDecks = usedByDecks,
+                        onEdit = { templateToEdit = templateSet; showTemplateEditor = true },
+                        onDelete = { templateToDelete = templateSet },
+                        onApply = { templateToApply = templateSet }
+                    )
+                }
+            }
+        }
+        Spacer(Modifier.height(dimensions.spacingMedium))
+
+        val createTemplateInteractionSource = remember { MutableInteractionSource() }
+        Button(
+            onClick = { templateToEdit = null; showTemplateEditor = true },
+            interactionSource = createTemplateInteractionSource,
+            modifier = Modifier.align(Alignment.CenterHorizontally).fillMaxWidth(if (isWideSettingsLayout) 0.5f else 1f).defaultMinSize(minHeight = 56.dp).pressSquish(createTemplateInteractionSource),
+            shape = RoundedCornerShape(dimensions.cornerRadiusButton)
+        ) {
+            Icon(Icons.Default.Add, contentDescription = null)
+            Spacer(Modifier.width(dimensions.spacingSmall))
+            Text(getText(R.string.template_create_new))
+        }
+    }
+}
+
+/**
+ * One row of Settings' Templates section — name, which decks (if any) currently use it, and
+ * Edit/Delete/Apply actions. Apply opens [onApply]'s deck picker (same place in the row tags'
+ * "remove from cards" checklist icon occupies) rather than linking anywhere by itself.
+ */
+@Composable
+private fun TemplateSettingsRow(
+    templateSet: TemplateSet,
+    usedByDecks: List<String>,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit,
+    onApply: () -> Unit
+) {
+    val dimensions = LocalStudiareDimensions.current
+
+    // A plain Row, not ListItem — ListItem's own layout always top-aligns leading/trailing
+    // content against a two-line headline+supporting pairing like this one (matching the M3
+    // spec for list items), which is what kept these buttons pinned to the top no matter what
+    // alignment was set on the Row inside its trailing slot. Building the row directly is the
+    // only way to actually center them against the full two-line height.
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(dimensions.cornerRadiusMedium))
+            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+            // Less inset on the end than the start — see the matching Tags row for why.
+            .padding(start = dimensions.paddingMedium, top = dimensions.paddingSmall, end = dimensions.paddingSmall, bottom = dimensions.paddingSmall)
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(templateSet.name, style = MaterialTheme.typography.titleMedium)
+            Text(
+                if (usedByDecks.isEmpty()) getText(R.string.template_not_used_by_any_deck)
+                else pluralStringResource(R.plurals.delete_template_in_use, usedByDecks.size, usedByDecks.size, usedByDecks.joinToString(", ") {"\"$it\""}),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        Spacer(Modifier.width(dimensions.spacingSmall))
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            // Same place/icon as the Tags row's "remove from cards" checklist button —
+            // opens the power-user bulk add/remove picker (BulkCardSelectionDialog) instead.
+            TooltipFilledTonalIconButton(description = getText(R.string.apply), onClick = onApply) {
+                Icon(Icons.Default.Checklist, getText(R.string.apply))
+            }
+            TooltipFilledTonalIconButton(description = getText(R.string.edit), onClick = onEdit) {
+                Icon(Icons.Default.Edit, getText(R.string.edit))
+            }
+            TooltipFilledTonalIconButton(
+                description = getText(R.string.delete),
+                onClick = onDelete,
+                colors = IconButtonDefaults.filledTonalIconButtonColors(
+                    containerColor = MaterialTheme.colorScheme.errorContainer,
+                    contentColor = MaterialTheme.colorScheme.onErrorContainer
+                )
+            ) {
+                Icon(Icons.Default.Delete, getText(R.string.delete))
+            }
         }
     }
 }
@@ -1648,7 +1962,8 @@ private fun CustomizationCategoryContent(
                         Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(ToggleButtonDefaults.IconSize))
                     }
                 },
-                modifier = segmentedModifier.padding(bottom = dimensions.spacingMedium)
+                modifier = segmentedModifier.padding(bottom = dimensions.spacingMedium),
+                equalWidth = false
             )
         }
 
@@ -1676,7 +1991,8 @@ private fun CustomizationCategoryContent(
                 selected = spacingMode,
                 onSelected = { viewModel.setSpacingMode(it) },
                 labelFor = { mode -> spacings.first { it.second == mode }.first },
-                modifier = segmentedModifier
+                modifier = segmentedModifier,
+                equalWidth = false
             )
         }
 
@@ -1695,7 +2011,8 @@ private fun CustomizationCategoryContent(
                 selected = deckSetsDisplayMode,
                 onSelected = { viewModel.setDeckSetsDisplayMode(it) },
                 labelFor = { it.asString() },
-                modifier = segmentedModifier
+                modifier = segmentedModifier,
+                equalWidth = false
             )
         }
 
@@ -1712,7 +2029,8 @@ private fun CustomizationCategoryContent(
                     selected = treeLargeScreenLayout,
                     onSelected = { viewModel.setTreeLargeScreenLayout(it) },
                     labelFor = { if (it) getText(R.string.horizontal) else getText(R.string.vertical) },
-                    modifier = segmentedModifier
+                    modifier = segmentedModifier,
+                    equalWidth = false
                 )
             }
         }
@@ -1738,7 +2056,8 @@ private fun CustomizationCategoryContent(
                 selected = alwaysOpenBulkEditor,
                 onSelected = { viewModel.setAlwaysOpenBulkEditor(it) },
                 labelFor = { if (it) getText(R.string.bulk_editor) else getText(R.string.simple_editor) },
-                modifier = segmentedModifier
+                modifier = segmentedModifier,
+                equalWidth = false
             )
         }
     }

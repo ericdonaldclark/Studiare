@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -25,10 +26,15 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Remove
+import androidx.compose.material.icons.filled.Save
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -37,6 +43,7 @@ import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularWavyProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
@@ -49,7 +56,9 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -60,16 +69,24 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import net.ericclark.studiare.AnimatedDialog
+import net.ericclark.studiare.TooltipFilledTonalIconButton
+import net.ericclark.studiare.TooltipIconButton
 import net.ericclark.studiare.data.*
+import net.ericclark.studiare.screens.Dialogs.TextNormalizationDialog
 import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
 import kotlin.collections.forEach
 import net.ericclark.studiare.R
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
@@ -438,6 +455,9 @@ fun TagChip(
     colorHex: String,
     onDelete: (() -> Unit)? = null,
     onClick: (() -> Unit)? = null,
+    /** Non-interactive icon shown after the text when [onDelete] is null — used to mark the one
+     * chip currently open in [TagSelectionDialog]'s edit mode. */
+    trailingIcon: androidx.compose.ui.graphics.vector.ImageVector? = null,
     modifier: Modifier = Modifier
 ) {
     val dimensions = LocalStudiareDimensions.current
@@ -450,18 +470,25 @@ fun TagChip(
     }
 
     val chipInteractionSource = remember { MutableInteractionSource() }
+    val chipShape = RoundedCornerShape(dimensions.cornerRadiusMedium)
 
     Surface(
         color = tagColor,
-        shape = RoundedCornerShape(dimensions.cornerRadiusMedium), // Expressive Squircle
+        shape = chipShape, // Expressive Squircle
         modifier = modifier
             .padding(end = dimensions.spacingSmall)
+            // Explicit clip before the clickable below, so its ripple is bounded to the chip's
+            // rounded shape instead of the square it defaults to when the shape only comes from
+            // Surface's own (differently-ordered) internal clip.
+            .clip(chipShape)
             .pressSquish(chipInteractionSource, 0.9f)
             .then(if (onClick != null) Modifier.clickable(interactionSource = chipInteractionSource, indication = LocalIndication.current) { onClick() } else Modifier)
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.padding(horizontal = dimensions.paddingMedium, vertical = 6.dp)
+            modifier = Modifier
+                .padding(horizontal = dimensions.paddingMedium, vertical = 6.dp)
+                .animateContentSize(animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessHigh))
         ) {
             Text(
                 text = displayText,
@@ -470,25 +497,62 @@ fun TagChip(
                 fontWeight = FontWeight.Bold,
                 maxLines = 1
             )
-            if (onDelete != null) {
-                Spacer(Modifier.width(dimensions.spacingSmall))
-                val deleteInteractionSource = remember { MutableInteractionSource() }
-                Icon(
-                    imageVector = Icons.Default.Clear,
-                    contentDescription = getText(R.string.remove),
-                    tint = if (tagColor.luminance() > 0.5f) Color.Black else Color.White,
-                    modifier = Modifier
-                        .size(16.dp)
-                        .pressSquish(deleteInteractionSource, 0.8f)
-                        .clickable(
-                            interactionSource = deleteInteractionSource,
-                            indication = LocalIndication.current
-                        ) { onDelete() }
-                )
+            val trailingState = when {
+                onDelete != null -> TagChipTrailing.DELETE
+                trailingIcon != null -> TagChipTrailing.STATIC_ICON
+                else -> TagChipTrailing.NONE
+            }
+            val iconTint = if (tagColor.luminance() > 0.5f) Color.Black else Color.White
+            AnimatedContent(
+                targetState = trailingState,
+                transitionSpec = {
+                    val enterSpring = spring<Float>(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessHigh)
+                    val exitSpring = spring<Float>(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMedium)
+                    (fadeIn(animationSpec = enterSpring) + scaleIn(initialScale = 0.6f, animationSpec = enterSpring)) togetherWith
+                        (fadeOut(animationSpec = exitSpring) + scaleOut(targetScale = 0.6f, animationSpec = exitSpring))
+                },
+                label = "tagChipTrailing"
+            ) { state ->
+                when (state) {
+                    TagChipTrailing.DELETE -> {
+                        val deleteInteractionSource = remember { MutableInteractionSource() }
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Spacer(Modifier.width(dimensions.spacingSmall))
+                            Icon(
+                                imageVector = Icons.Default.Clear,
+                                contentDescription = getText(R.string.remove),
+                                tint = iconTint,
+                                modifier = Modifier
+                                    .size(16.dp)
+                                    .pressSquish(deleteInteractionSource, 0.8f)
+                                    .clickable(
+                                        interactionSource = deleteInteractionSource,
+                                        indication = LocalIndication.current
+                                    ) { onDelete?.invoke() }
+                            )
+                        }
+                    }
+                    TagChipTrailing.STATIC_ICON -> {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Spacer(Modifier.width(dimensions.spacingSmall))
+                            trailingIcon?.let {
+                                Icon(
+                                    imageVector = it,
+                                    contentDescription = null,
+                                    tint = iconTint,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+                        }
+                    }
+                    TagChipTrailing.NONE -> {}
+                }
             }
         }
     }
 }
+
+private enum class TagChipTrailing { NONE, DELETE, STATIC_ICON }
 
 // --- REUSABLE COMPONENT: CardTagRow ---
 @Composable
@@ -496,8 +560,12 @@ fun CardTagRow(
     cardTags: List<String>,
     allTags: List<TagDefinition>,
     currentDeckTags: Set<String>,
+    tagNormalization: TagNormalizationSettings,
     onUpdateTags: (Set<String>) -> Unit,
-    onCreateTag: (String, String) -> Unit
+    onCreateTag: (String, String) -> Unit,
+    onRenameTag: (TagDefinition, String) -> Unit,
+    onDeleteTag: (TagDefinition) -> Unit,
+    onSetTagNormalization: (TagNormalizationSettings) -> Unit
 ) {
     val dimensions = LocalStudiareDimensions.current
     var showAddDialog by remember { mutableStateOf(false) }
@@ -511,12 +579,16 @@ fun CardTagRow(
             currentlyOnCard = cardTags.toSet(),
             allTags = allTags,
             currentDeckTags = currentDeckTags,
+            tagNormalization = tagNormalization,
             onDismiss = { showAddDialog = false },
             onSave = { newTagSet ->
                 onUpdateTags(newTagSet)
                 showAddDialog = false
             },
-            onCreateTag = onCreateTag
+            onCreateTag = onCreateTag,
+            onRenameTag = onRenameTag,
+            onDeleteTag = onDeleteTag,
+            onSetTagNormalization = onSetTagNormalization
         )
     }
 
@@ -571,10 +643,15 @@ fun TagSelectionDialog(
     currentlyOnCard: Set<String>,
     allTags: List<TagDefinition>,
     currentDeckTags: Set<String>,
+    tagNormalization: TagNormalizationSettings,
     onDismiss: () -> Unit,
     onSave: (Set<String>) -> Unit,
-    onCreateTag: (String, String) -> Unit
+    onCreateTag: (String, String) -> Unit,
+    onRenameTag: (TagDefinition, String) -> Unit,
+    onDeleteTag: (TagDefinition) -> Unit,
+    onSetTagNormalization: (TagNormalizationSettings) -> Unit
 ) {
+    val context = LocalContext.current
     val dimensions = LocalStudiareDimensions.current
     val selectedTags = remember { mutableStateListOf(*currentlyOnCard.toTypedArray()) }
     val locallyCreatedTags = remember { mutableStateListOf<TagDefinition>() }
@@ -595,6 +672,30 @@ fun TagSelectionDialog(
         currentSet != currentlyOnCard
     }
 
+    // Edit mode (toggled by the header pencil) repurposes the tag list above the divider from
+    // apply/remove into "pick a tag to edit," and swaps the "create new tag" section below the
+    // divider for a TagEditorDialog-style rename/recolor/delete form for whichever tag was picked.
+    var editMode by remember { mutableStateOf(false) }
+    // The tag currently loaded into the editor, captured when picked rather than re-looked-up from
+    // combinedTags on every recomposition — allTags only catches up with a rename/delete after the
+    // Room flow round-trips, and re-deriving from it in the meantime briefly finds nothing, which
+    // was dropping the editor to its shorter empty-state placeholder and back (a visible resize).
+    var editingTagRef by remember { mutableStateOf<TagDefinition?>(null) }
+    var editDraftName by remember { mutableStateOf("") }
+    var editDraftColor by remember { mutableStateOf("") }
+    var editNameError by remember { mutableStateOf<String?>(null) }
+
+    fun exitEditMode() {
+        editMode = false
+        editingTagRef = null
+        editNameError = null
+    }
+
+    var showTagNormalizationDialog by remember { mutableStateOf(false) }
+
+    val tagSnackbarHostState = remember { androidx.compose.material3.SnackbarHostState() }
+    val coroutineScope = rememberCoroutineScope()
+
     AnimatedDialog(onDismissRequest = onDismiss, properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)) {
         Card(
             shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
@@ -603,12 +704,63 @@ fun TagSelectionDialog(
                 .heightIn(max = 700.dp),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
         ) {
+            Box {
             Column(modifier = Modifier.padding(dimensions.paddingLarge)) {
-                Text(
-                    text = getText(R.string.tags_manage),
-                    style = MaterialTheme.typography.headlineSmall,
-                    modifier = Modifier.padding(bottom = dimensions.spacingMedium)
-                )
+                Box(modifier = Modifier.fillMaxWidth().padding(bottom = dimensions.spacingMedium)) {
+                    Text(
+                        text = getText(R.string.tags_manage),
+                        style = MaterialTheme.typography.headlineSmall,
+                        modifier = Modifier.align(Alignment.Center)
+                    )
+                    // Wrapping Box, not the tooltip buttons' own `modifier` param, is what Box.align
+                    // actually sees — it only honors align() on its direct child, and that param is
+                    // applied two layers deeper inside TooltipBox/IconButton, so it was a no-op and
+                    // the button fell back to Box's default TopStart.
+                    Row(modifier = Modifier.align(Alignment.CenterEnd), verticalAlignment = Alignment.CenterVertically) {
+                        // Tag Text Normalization — template icon badged with the same "opens in a
+                        // dialog" OpenInNew indicator the Card Text Normalization button shows,
+                        // shrunk onto a badge since there's no room for label text here.
+                        TooltipIconButton(
+                            description = getText(R.string.tag_text_normalization),
+                            onClick = { showTagNormalizationDialog = true }
+                        ) {
+                            Icon(Icons.Default.Description, contentDescription = null)
+                        }
+                        if (editMode) {
+                            // Active: shown with its normal (non-highlighted) filled-tonal background
+                            // to read as "toggled on," not as an accent-colored call to action.
+                            TooltipFilledTonalIconButton(
+                                description = getText(R.string.edit),
+                                onClick = { exitEditMode() }
+                            ) {
+                                Icon(Icons.Default.Edit, getText(R.string.edit))
+                            }
+                        } else {
+                            // Inactive: bare icon, no button container behind it. Disabled when
+                            // there's nothing to edit at all — entering edit mode with zero tags
+                            // would have nothing to auto-select, which is exactly the shortened
+                            // placeholder state this dialog must never show.
+                            TooltipIconButton(
+                                description = getText(R.string.edit),
+                                enabled = combinedTags.isNotEmpty(),
+                                onClick = {
+                                    editMode = true
+                                    // Auto-select the first tag so the editor form fills the same
+                                    // space the apply/remove list did — no "pick a tag" empty state.
+                                    val firstTag = (thisDeckTags + otherDeckTags).firstOrNull()
+                                    editingTagRef = firstTag
+                                    if (firstTag != null) {
+                                        editDraftName = firstTag.name
+                                        editDraftColor = firstTag.color
+                                        editNameError = null
+                                    }
+                                }
+                            ) {
+                                Icon(Icons.Default.Edit, getText(R.string.edit))
+                            }
+                        }
+                    }
+                }
 
                 Column(
                     modifier = Modifier
@@ -617,14 +769,39 @@ fun TagSelectionDialog(
                 ) {
                     @Composable
                     fun TagItem(tag: TagDefinition) {
-                        val isSelected = tag.name in selectedTags
-                        TagChip(
-                            text = tag.name,
-                            colorHex = tag.color,
-                            onDelete = if (isSelected) { { selectedTags.remove(tag.name) } } else null,
-                            onClick = if (!isSelected) { { selectedTags.add(tag.name) } } else null,
-                            modifier = Modifier.padding(bottom = dimensions.spacingSmall)
-                        )
+                        if (editMode) {
+                            val isEditingThis = tag.name == editingTagRef?.name
+                            TagChip(
+                                text = tag.name,
+                                colorHex = tag.color,
+                                onClick = {
+                                    // Tapping the tag already open in the editor is a no-op — there
+                                    // is no "deselect" affordance that would leave the dialog with
+                                    // nothing loaded below the divider.
+                                    if (!isEditingThis) {
+                                        editingTagRef = tag
+                                        editDraftName = tag.name
+                                        editDraftColor = tag.color
+                                        editNameError = null
+                                    }
+                                },
+                                trailingIcon = if (isEditingThis) Icons.Default.Edit else null,
+                                modifier = Modifier.padding(bottom = dimensions.spacingSmall)
+                            )
+                        } else {
+                            val isSelected = tag.name in selectedTags
+                            TagChip(
+                                text = tag.name,
+                                colorHex = tag.color,
+                                onClick = {
+                                    if (isSelected) selectedTags.remove(tag.name) else selectedTags.add(tag.name)
+                                },
+                                // Just a visual marker now — the whole chip (not only this icon)
+                                // unapplies the tag, so it's non-interactive here.
+                                trailingIcon = if (isSelected) Icons.Default.Clear else null,
+                                modifier = Modifier.padding(bottom = dimensions.spacingSmall)
+                            )
+                        }
                     }
 
                     if (thisDeckTags.isNotEmpty()) {
@@ -673,100 +850,297 @@ fun TagSelectionDialog(
 
                 HorizontalDivider(modifier = Modifier.padding(vertical = dimensions.spacingMedium))
 
-                Text(
-                    getText(R.string.tag_create_new),
-                    style = MaterialTheme.typography.titleSmall,
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.padding(bottom = dimensions.spacingSmall)
-                )
+                if (editMode) {
+                    val editingTag = editingTagRef
+                    if (editingTag != null) {
+                        Text(
+                            getText(R.string.tag_edit),
+                            style = MaterialTheme.typography.titleSmall,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.padding(bottom = dimensions.spacingSmall)
+                        )
 
-                OutlinedTextField(
-                    value = newTagName,
-                    onValueChange = { newTagName = it },
-                    label = { Text(getText(R.string.tag_name)) },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
-                )
-
-                Spacer(Modifier.height(dimensions.spacingSmall))
-
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    OutlinedTextField(
-                        value = newTagColor,
-                        onValueChange = { newTagColor = it },
-                        label = { Text(getText(R.string.hex_color)) },
-                        modifier = Modifier.weight(1f),
-                        singleLine = true,
-                        shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
-                        trailingIcon = {
-                            Box(
-                                modifier = Modifier
-                                    .size(24.dp)
-                                    .clip(CircleShape)
-                                    .background(parseHexColor(newTagColor))
-                                    .border(1.dp, MaterialTheme.colorScheme.outline, CircleShape)
+                        OutlinedTextField(
+                            value = editDraftName,
+                            onValueChange = { editDraftName = it; editNameError = null },
+                            label = { Text(getText(R.string.tag_name)) },
+                            singleLine = true,
+                            isError = editNameError != null,
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
+                        )
+                        AnimatedVisibility(
+                            visible = editNameError != null,
+                            enter = slideInVertically() + fadeIn() + expandVertically(),
+                            exit = slideOutVertically() + fadeOut() + shrinkVertically()
+                        ) {
+                            Text(
+                                text = editNameError ?: "",
+                                color = MaterialTheme.colorScheme.error,
+                                style = MaterialTheme.typography.bodyMedium,
+                                modifier = Modifier.padding(start = dimensions.paddingMedium, top = 4.dp)
                             )
                         }
-                    )
-                }
 
-                Spacer(Modifier.height(dimensions.spacingSmall))
-                SimpleColorPicker(
-                    selectedColor = newTagColor,
-                    onColorSelected = { newTagColor = it }
-                )
+                        Spacer(Modifier.height(dimensions.spacingSmall))
 
-                Spacer(Modifier.height(dimensions.spacingMedium))
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    val createInteractionSource = remember { MutableInteractionSource() }
-                    Button(
-                        onClick = {
-                            if (isCreateEnabled) {
-                                val name = newTagName.trim()
-                                onCreateTag(name, newTagColor)
-                                locallyCreatedTags.add(TagDefinition(name = name, color = newTagColor))
-                                if (name !in selectedTags) {
-                                    selectedTags.add(name)
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            OutlinedTextField(
+                                value = editDraftColor,
+                                onValueChange = { editDraftColor = it },
+                                label = { Text(getText(R.string.hex_color)) },
+                                modifier = Modifier.weight(1f),
+                                singleLine = true,
+                                shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+                                trailingIcon = {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(24.dp)
+                                            .clip(CircleShape)
+                                            .background(parseHexColor(editDraftColor))
+                                            .border(1.dp, MaterialTheme.colorScheme.outline, CircleShape)
+                                    )
                                 }
-                                newTagName = ""
-                                newTagColor = "#0D47A1"
+                            )
+                        }
+
+                        Spacer(Modifier.height(dimensions.spacingSmall))
+                        SimpleColorPicker(
+                            selectedColor = editDraftColor,
+                            onColorSelected = { editDraftColor = it }
+                        )
+
+                        Spacer(Modifier.height(dimensions.spacingMedium))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.End,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            val cancelEditInteractionSource = remember { MutableInteractionSource() }
+                            TextButton(onClick = { exitEditMode() }, interactionSource = cancelEditInteractionSource, modifier = Modifier.pressSquish(cancelEditInteractionSource, 0.95f), shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(getText(R.string.cancel)) }
+                            Spacer(Modifier.width(dimensions.spacingSmall))
+
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                val deleteInteractionSource = remember { MutableInteractionSource() }
+                                Button(
+                                    onClick = {
+                                        val deletedTag = editingTag
+                                        val wasApplied = deletedTag.name in selectedTags
+                                        onDeleteTag(deletedTag)
+                                        selectedTags.remove(deletedTag.name)
+                                        val nextTag = (thisDeckTags + otherDeckTags).firstOrNull { it.name != deletedTag.name }
+                                        if (nextTag != null) {
+                                            editingTagRef = nextTag
+                                            editDraftName = nextTag.name
+                                            editDraftColor = nextTag.color
+                                        } else {
+                                            // Nothing left to edit — leave edit mode entirely rather
+                                            // than show the dialog with the empty placeholder.
+                                            exitEditMode()
+                                        }
+
+                                        coroutineScope.launch {
+                                            val result = tagSnackbarHostState.showSnackbar(
+                                                message = getText(context, R.string.tag_deleted),
+                                                actionLabel = getText(context, R.string.undo)
+                                            )
+                                            if (result == androidx.compose.material3.SnackbarResult.ActionPerformed) {
+                                                // Re-saving under its own unchanged name takes renameTag's
+                                                // short path straight to saveTagDefinition, clearing the
+                                                // isDeleted flag the soft-delete set — a true restore.
+                                                onRenameTag(deletedTag, deletedTag.name)
+                                                if (wasApplied) selectedTags.add(deletedTag.name)
+                                            }
+                                        }
+                                    },
+                                    interactionSource = deleteInteractionSource,
+                                    modifier = Modifier.pressSquish(deleteInteractionSource, 0.95f),
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = MaterialTheme.colorScheme.errorContainer,
+                                        contentColor = MaterialTheme.colorScheme.onErrorContainer
+                                    ),
+                                    shape = RoundedCornerShape(dimensions.cornerRadiusButton)
+                                ) {
+                                    Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(18.dp))
+                                    Spacer(Modifier.width(dimensions.spacingSmall))
+                                    Text(getText(R.string.delete))
+                                }
+
+                                Spacer(Modifier.width(dimensions.spacingSmall))
+
+                                val saveEditInteractionSource = remember { MutableInteractionSource() }
+                                Button(
+                                    onClick = {
+                                        val trimmedName = editDraftName.trim()
+                                        val isValidHex = try {
+                                            AndroidColor.parseColor(editDraftColor)
+                                            true
+                                        } catch (e: Exception) { false }
+
+                                        if (trimmedName.isEmpty()) {
+                                            editNameError = getText(context, R.string.tag_error_empty)
+                                        } else if (!isValidHex) {
+                                            editNameError = getText(context, R.string.tag_error_hex)
+                                        } else if (!trimmedName.equals(editingTag.name, ignoreCase = true) &&
+                                            combinedTags.any { it.name.equals(trimmedName, ignoreCase = true) }) {
+                                            editNameError = getText(context, R.string.tag_error_name)
+                                        } else {
+                                            val oldName = editingTag.name
+                                            val renamedTag = editingTag.copy(name = trimmedName, color = editDraftColor)
+                                            onRenameTag(renamedTag, oldName)
+                                            if (oldName != trimmedName && oldName in selectedTags) {
+                                                selectedTags.remove(oldName)
+                                                selectedTags.add(trimmedName)
+                                            }
+                                            // Stay on this tag (under its possibly-new name) instead
+                                            // of dropping back to the "select a tag" placeholder —
+                                            // tracked by our own captured reference, not a re-lookup
+                                            // in allTags, which hasn't caught up with the rename yet.
+                                            editingTagRef = renamedTag
+                                            editDraftName = trimmedName
+                                        }
+                                    },
+                                    interactionSource = saveEditInteractionSource,
+                                    modifier = Modifier.pressSquish(saveEditInteractionSource, 0.95f),
+                                    shape = RoundedCornerShape(dimensions.cornerRadiusButton)
+                                ) {
+                                    Icon(Icons.Default.Save, contentDescription = null, modifier = Modifier.size(18.dp))
+                                    Spacer(Modifier.width(dimensions.spacingSmall))
+                                    Text(getText(R.string.save))
+                                }
                             }
-                        },
-                        interactionSource = createInteractionSource,
-                        modifier = Modifier.pressSquish(createInteractionSource, 0.95f),
-                        enabled = isCreateEnabled,
-                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary),
-                        shape = RoundedCornerShape(dimensions.cornerRadiusButton)
-                    ) {
-                        Text(getText(R.string.create))
+                        }
+                    } else {
+                        Text(
+                            getText(R.string.tag_select_to_edit),
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontStyle = FontStyle.Italic,
+                            modifier = Modifier.padding(bottom = dimensions.spacingMedium)
+                        )
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                            val closeInteractionSource = remember { MutableInteractionSource() }
+                            TextButton(onClick = { exitEditMode() }, interactionSource = closeInteractionSource, modifier = Modifier.pressSquish(closeInteractionSource, 0.95f), shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(getText(R.string.cancel)) }
+                        }
+                    }
+                } else {
+                    Text(
+                        getText(R.string.tag_create_new),
+                        style = MaterialTheme.typography.titleSmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(bottom = dimensions.spacingSmall)
+                    )
+
+                    OutlinedTextField(
+                        value = newTagName,
+                        onValueChange = { newTagName = it },
+                        label = { Text(getText(R.string.tag_name)) },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
+                    )
+
+                    Spacer(Modifier.height(dimensions.spacingSmall))
+
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        OutlinedTextField(
+                            value = newTagColor,
+                            onValueChange = { newTagColor = it },
+                            label = { Text(getText(R.string.hex_color)) },
+                            modifier = Modifier.weight(1f),
+                            singleLine = true,
+                            shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+                            trailingIcon = {
+                                Box(
+                                    modifier = Modifier
+                                        .size(24.dp)
+                                        .clip(CircleShape)
+                                        .background(parseHexColor(newTagColor))
+                                        .border(1.dp, MaterialTheme.colorScheme.outline, CircleShape)
+                                )
+                            }
+                        )
                     }
 
-                    Row {
+                    Spacer(Modifier.height(dimensions.spacingSmall))
+                    SimpleColorPicker(
+                        selectedColor = newTagColor,
+                        onColorSelected = { newTagColor = it }
+                    )
+
+                    Spacer(Modifier.height(dimensions.spacingMedium))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
                         val cancelSelInteractionSource = remember { MutableInteractionSource() }
                         TextButton(onClick = onDismiss, interactionSource = cancelSelInteractionSource, modifier = Modifier.pressSquish(cancelSelInteractionSource, 0.95f), shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(getText(R.string.cancel)) }
-
                         Spacer(Modifier.width(dimensions.spacingSmall))
 
-                        val saveSelInteractionSource = remember { MutableInteractionSource() }
-                        Button(
-                            onClick = { onSave(selectedTags.toSet()) },
-                            interactionSource = saveSelInteractionSource,
-                            modifier = Modifier.pressSquish(saveSelInteractionSource, 0.95f),
-                            enabled = isSaveEnabled || selectedTags.isNotEmpty(),
-                            shape = RoundedCornerShape(dimensions.cornerRadiusButton)
-                        ) {
-                            Text(getText(R.string.save))
+                        Row {
+                            val createInteractionSource = remember { MutableInteractionSource() }
+                            Button(
+                                onClick = {
+                                    if (isCreateEnabled) {
+                                        val name = newTagName.trim()
+                                        onCreateTag(name, newTagColor)
+                                        locallyCreatedTags.add(TagDefinition(name = name, color = newTagColor))
+                                        if (name !in selectedTags) {
+                                            selectedTags.add(name)
+                                        }
+                                        newTagName = ""
+                                        newTagColor = "#0D47A1"
+                                    }
+                                },
+                                interactionSource = createInteractionSource,
+                                modifier = Modifier.pressSquish(createInteractionSource, 0.95f),
+                                enabled = isCreateEnabled,
+                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary),
+                                shape = RoundedCornerShape(dimensions.cornerRadiusButton)
+                            ) {
+                                Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                                Spacer(Modifier.width(dimensions.spacingSmall))
+                                Text(getText(R.string.create))
+                            }
+
+                            Spacer(Modifier.width(dimensions.spacingSmall))
+
+                            val saveSelInteractionSource = remember { MutableInteractionSource() }
+                            Button(
+                                onClick = { onSave(selectedTags.toSet()) },
+                                interactionSource = saveSelInteractionSource,
+                                modifier = Modifier.pressSquish(saveSelInteractionSource, 0.95f),
+                                enabled = isSaveEnabled || selectedTags.isNotEmpty(),
+                                shape = RoundedCornerShape(dimensions.cornerRadiusButton)
+                            ) {
+                                Icon(Icons.Default.Save, contentDescription = null, modifier = Modifier.size(18.dp))
+                                Spacer(Modifier.width(dimensions.spacingSmall))
+                                Text(getText(R.string.save))
+                            }
                         }
                     }
                 }
             }
+
+            androidx.compose.material3.SnackbarHost(tagSnackbarHostState, modifier = Modifier.align(Alignment.BottomCenter))
+            }
         }
+    }
+
+    if (showTagNormalizationDialog) {
+        TextNormalizationDialog(
+            initialType = tagNormalization.normalizationType,
+            initialCorrections = tagNormalization.textCorrections,
+            title = getText(R.string.tag_text_normalization),
+            subtitle = getText(R.string.tag_text_normalization_dialog_subtitle),
+            onDismiss = { showTagNormalizationDialog = false },
+            onConfirm = { newType, newCorrections ->
+                onSetTagNormalization(TagNormalizationSettings(newType, newCorrections))
+                showTagNormalizationDialog = false
+            }
+        )
     }
 }
 

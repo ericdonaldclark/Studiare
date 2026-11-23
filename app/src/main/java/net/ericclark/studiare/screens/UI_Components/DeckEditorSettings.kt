@@ -5,7 +5,9 @@ import net.ericclark.studiare.StudiareSwitch
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.Spacer
@@ -15,8 +17,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.verticalScroll
@@ -28,6 +30,7 @@ import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.launch
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -39,11 +42,10 @@ import androidx.compose.material3.MenuDefaults
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TextField
-import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -56,6 +58,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
+import net.ericclark.studiare.LocalWindowWidthSizeClass
 import net.ericclark.studiare.components.*
 import net.ericclark.studiare.DialogSection
 import java.text.SimpleDateFormat
@@ -73,7 +77,9 @@ import net.ericclark.studiare.R
 fun LanguageDropdown(
     languages: List<Pair<String, String>>,
     selectedCode: String,
-    onLanguageSelected: (String) -> Unit
+    onLanguageSelected: (String) -> Unit,
+    label: String? = null,
+    enabled: Boolean = true
 ) {
     val selected = languages.find { it.first == selectedCode }
         ?: (selectedCode to getText(R.string.unknown))
@@ -82,7 +88,9 @@ fun LanguageDropdown(
         selectedOption = selected,
         optionLabel = { it.second },
         onSelect = { onLanguageSelected(it.first) },
-        menuMaxHeight = 300.dp
+        menuMaxHeight = 300.dp,
+        label = label,
+        enabled = enabled
     )
 }
 
@@ -95,6 +103,24 @@ fun LanguageDropdown(
 private fun expressiveSwatchColors(): List<Color> {
     val scheme = MaterialTheme.colorScheme
     return listOf(scheme.primary, scheme.inversePrimary, scheme.secondary)
+}
+
+/**
+ * Alternates section-jump buttons between two of the theme's own tonal container roles —
+ * secondary and tertiary — each already paired with a matching "on" content color designed to
+ * read clearly on it. These roles are muted by Material3 design intent (unlike the vivid
+ * primary/error roles), so adjacent buttons land as distinct without any of them reading as a
+ * loud accent that would compete with the error-red "Remove"/"Clear" buttons elsewhere in these
+ * dialogs.
+ */
+@Composable
+private fun alternatingSectionColors(index: Int): Pair<Color, Color> {
+    val scheme = MaterialTheme.colorScheme
+    return if (index % 2 == 0) {
+        scheme.secondaryContainer to scheme.onSecondaryContainer
+    } else {
+        scheme.tertiaryContainer to scheme.onTertiaryContainer
+    }
 }
 
 /**
@@ -111,21 +137,27 @@ fun <T> ExpressiveDropdownMenuField(
     optionLabel: @Composable (T) -> String,
     onSelect: (T) -> Unit,
     modifier: Modifier = Modifier,
-    menuMaxHeight: Dp = 400.dp
+    menuMaxHeight: Dp = 400.dp,
+    /** Optional built-in field label, e.g. "Front"/"Back" for a language picker. Every other
+     * caller leaves this null, which keeps their dropdown exactly as it was. */
+    label: String? = null,
+    enabled: Boolean = true
 ) {
     var expanded by remember { mutableStateOf(false) }
     val swatchColors = expressiveSwatchColors()
     val dimensions = LocalStudiareDimensions.current
 
     ExposedDropdownMenuBox(
-        expanded = expanded,
-        onExpandedChange = { expanded = it },
+        expanded = expanded && enabled,
+        onExpandedChange = { if (enabled) expanded = it },
         modifier = modifier.fillMaxWidth()
     ) {
         OutlinedTextField(
             value = optionLabel(selectedOption),
             onValueChange = {},
             readOnly = true,
+            enabled = enabled,
+            label = label?.let { labelText -> { Text(labelText) } },
             trailingIcon = {
                 ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded)
             },
@@ -312,6 +344,26 @@ fun DeckInfoDialog(deckWithCards: DeckWithCards, onDismiss: () -> Unit) {
     }
 }
 
+/** Shown under a section disabled because its value is currently linked to the parent set/deck
+ * (see [net.ericclark.studiare.data.LinkageSettings] / [net.ericclark.studiare.components.DeckLinkageResolver])
+ * — editing it here would be silently overwritten the next time decks recombine, so the control
+ * itself is disabled instead, with this as the explanation and a shortcut to actually change it. */
+@Composable
+private fun LinkedFieldNotice(onOpenLinkageSettings: () -> Unit) {
+    val dimensions = LocalStudiareDimensions.current
+    Column {
+        Spacer(Modifier.height(dimensions.spacingSmall))
+        Text(
+            getText(R.string.linked_to_parent_deck_explainer),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        TextButton(onClick = onOpenLinkageSettings, contentPadding = PaddingValues(0.dp)) {
+            Text(getText(R.string.open_linkage_settings))
+        }
+    }
+}
+
 @Composable
 fun DeckSettingsDialog(
     initialDeckName: String,
@@ -321,9 +373,10 @@ fun DeckSettingsDialog(
     initialDefaultPromptSide: CardSide,
     initialFrontLanguage: String,
     initialBackLanguage: String,
+    initialTextCorrections: TextCorrectionSettings = TextCorrectionSettings(),
     isCreatingNewDeck: Boolean = false,
     onDismiss: () -> Unit,
-    onSave: (String, NormalizationType, DeckSortMode, Boolean, CardSide, String, String) -> Unit,
+    onSave: (String, NormalizationType, DeckSortMode, Boolean, CardSide, String, String, TextCorrectionSettings) -> Unit,
     onClearReviewData: () -> Unit,
     /** Carries this dialog's current (possibly-unsaved) draft values out before it's torn down to
      * open the Template Editor — otherwise, for a deck that hasn't been saved/created yet, nothing
@@ -337,9 +390,17 @@ fun DeckSettingsDialog(
         sortPinnedCardsFirst: Boolean,
         defaultPromptSide: CardSide,
         frontLanguage: String,
-        backLanguage: String
-    ) -> Unit = { _, _, _, _, _, _, _ -> },
+        backLanguage: String,
+        textCorrections: TextCorrectionSettings
+    ) -> Unit = { _, _, _, _, _, _, _, _ -> },
     canOpenTemplateEditor: Boolean = true,
+    // Same linkage gating as canOpenTemplateEditor, but for the Language and Card Text
+    // Normalization sections — both get silently overwritten by DeckLinkageResolver on a linked
+    // set, so editing them here would be a no-op. Non-null onOpenLinkageSettings (only passed for
+    // an actual child set) shows a shortcut under whichever of these three sections is disabled.
+    canEditLanguage: Boolean = true,
+    canEditNormalization: Boolean = true,
+    onOpenLinkageSettings: (() -> Unit)? = null,
     // Global (not per-deck) default-editor preference — same StateFlow/setter FlashcardViewModel
     // exposes to Settings' Customization > Editor section, shown here too as a shortcut so it
     // doesn't need its own trip to Settings.
@@ -358,7 +419,9 @@ fun DeckSettingsDialog(
     var defaultPromptSide by remember { mutableStateOf(initialDefaultPromptSide) }
     var frontLanguage by remember { mutableStateOf(initialFrontLanguage) }
     var backLanguage by remember { mutableStateOf(initialBackLanguage) }
+    var textCorrections by remember { mutableStateOf(initialTextCorrections) }
     var showClearConfirm by remember { mutableStateOf(false) }
+    var showTextNormalizationDialog by remember { mutableStateOf(false) }
 
     // Scrolls the main content area so a tapped section lands at the very top of the visible
     // area (not just "somewhere visible") — a plain BringIntoViewRequester only nudges a target
@@ -383,6 +446,27 @@ fun DeckSettingsDialog(
         sectionOffsets[key] = mainScrollState.value + (coordinates.positionInRoot().y - container.positionInRoot().y)
     }
 
+    // Each section-jump button alternates between two of the theme's muted container roles (see
+    // alternatingSectionColors) so they read as distinct destinations at a glance instead of a
+    // row of identical outlined buttons. On wider screens the same list is pinned in a left-hand
+    // column instead of scrolling away with the rest of the content, matching the
+    // "always-visible nav rail" pattern used elsewhere in the app for wide layouts (e.g.
+    // NavigationDrawerTree).
+    val navItems = remember {
+        listOf(
+            "deckName" to R.string.deck_name,
+            "cardOrder" to R.string.sort_card_order,
+            "promptSide" to R.string.default_prompt_side,
+            "language" to R.string.language_set,
+            "normalization" to R.string.case_normalization,
+            "templateEditor" to R.string.advanced_editor,
+            "defaultEditor" to R.string.default_deck_editor,
+            "reviewData" to R.string.review_data_section_title
+        )
+    }
+    val navColors = navItems.indices.map { alternatingSectionColors(it) }
+    val isWideScreen = LocalWindowWidthSizeClass.current != WindowWidthSizeClass.Compact
+
     // Moved from the old LanguageSelectionDialog
     val availableLanguages = remember {
         Locale.getAvailableLocales()
@@ -399,10 +483,15 @@ fun DeckSettingsDialog(
                 color = MaterialTheme.colorScheme.surfaceContainer,
                 tonalElevation = 6.dp
             ) {
-                Column(modifier = Modifier.padding(dimensions.paddingLarge).widthIn(min = 280.dp, max = 560.dp)) {
-                    Text(getText(R.string.review_data_clear_question), style = MaterialTheme.typography.headlineSmall)
+                Column(
+                    modifier = Modifier.padding(dimensions.paddingLarge).widthIn(min = 280.dp, max = 560.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Icon(Icons.Filled.Emergency, contentDescription = null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(32.dp))
                     Spacer(Modifier.height(dimensions.spacingSmall))
-                    Text(getText(R.string.review_data_clear_message))
+                    Text(getText(R.string.review_data_clear_question), style = MaterialTheme.typography.headlineSmall, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+                    Spacer(Modifier.height(dimensions.spacingSmall))
+                    Text(getText(R.string.review_data_clear_message), textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
                     Spacer(Modifier.height(dimensions.spacingLarge))
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                         TextButton(onClick = { showClearConfirm = false }, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(getText(R.string.cancel)) }
@@ -428,8 +517,10 @@ fun DeckSettingsDialog(
             // clipped by the screen before the cap is ever reached, which is the same underlying
             // problem as before, just at a different threshold. A fraction of the available space
             // (matching AdvancedDeckEditorDialog/RichTextEditorDialog's own sizing) scales with
-            // the actual screen instead.
-            modifier = Modifier.widthIn(min = 280.dp, max = 560.dp).fillMaxHeight(0.9f),
+            // the actual screen instead. On wide screens the cap is raised so the pinned nav
+            // rail (a third of this width — see the Row below) has room without squeezing the
+            // section content into something cramped.
+            modifier = Modifier.widthIn(min = 280.dp, max = if (isWideScreen) 700.dp else 560.dp).fillMaxHeight(0.9f),
             shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)
         ) {
@@ -438,16 +529,32 @@ fun DeckSettingsDialog(
                     .fillMaxSize()
                     .padding(dimensions.paddingLarge)
             ) {
-                Text(getText(R.string.deck_options), style = MaterialTheme.typography.headlineSmall, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+                Text(getText(R.string.deck_options), style = MaterialTheme.typography.headlineSmall, modifier = Modifier.fillMaxWidth())
                 Spacer(Modifier.height(dimensions.spacingSmall))
 
-                // Scrollable content area
-                Column(
-                    modifier = Modifier
-                        .weight(1f, fill = false) // Allows scrolling without forcing full screen height
-                        .verticalScroll(mainScrollState)
-                        .onGloballyPositioned { containerCoordinates[0] = it }
-                ) {
+                // Each section-jump button alternates between two theme container roles
+                // (navColors) so they read as distinct destinations rather than a row of
+                // identical outlined buttons. On a wide screen the whole nav list is pinned in a
+                // left-hand rail instead of scrolling away with the rest of the content; on a
+                // narrow screen it stays inline at the top of the scrollable content, scrolling
+                // horizontally since the section names don't all fit at once.
+                val sectionNavButton: @Composable (Int, Modifier) -> Unit = { index, buttonModifier ->
+                    val (key, labelRes) = navItems[index]
+                    val (bg, onBg) = navColors[index]
+                    Button(
+                        onClick = { jumpTo(key) },
+                        modifier = buttonModifier,
+                        shape = RoundedCornerShape(dimensions.cornerRadiusButton),
+                        colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+                            containerColor = bg,
+                            contentColor = onBg
+                        )
+                    ) {
+                        Text(getText(labelRes), style = MaterialTheme.typography.labelLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                }
+
+                val sectionsContent: @Composable () -> Unit = {
                     if (onRevertMerge != null) {
                         DialogSection(title = getText(R.string.revert_merge_section_title), contentTopSpacing = 0.dp, titleColor = MaterialTheme.colorScheme.primary) {
                             Text(
@@ -470,41 +577,6 @@ fun DeckSettingsDialog(
                         }
                     }
 
-                    // Section-jump row — scrolls with the rest of the content (not pinned), and
-                    // scrolls horizontally itself since the section names don't all fit at once.
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .horizontalScroll(rememberScrollState()),
-                        horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)
-                    ) {
-                        OutlinedButton(onClick = { jumpTo("deckName") }, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
-                            Text(getText(R.string.deck_name), style = MaterialTheme.typography.labelLarge)
-                        }
-                        OutlinedButton(onClick = { jumpTo("cardOrder") }, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
-                            Text(stringResource(R.string.sort_card_order), style = MaterialTheme.typography.labelLarge)
-                        }
-                        OutlinedButton(onClick = { jumpTo("promptSide") }, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
-                            Text(getText(R.string.default_prompt_side), style = MaterialTheme.typography.labelLarge)
-                        }
-                        OutlinedButton(onClick = { jumpTo("language") }, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
-                            Text(getText(R.string.language_set), style = MaterialTheme.typography.labelLarge)
-                        }
-                        OutlinedButton(onClick = { jumpTo("normalization") }, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
-                            Text(getText(R.string.case_normalization), style = MaterialTheme.typography.labelLarge)
-                        }
-                        OutlinedButton(onClick = { jumpTo("templateEditor") }, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
-                            Text(getText(R.string.advanced_editor), style = MaterialTheme.typography.labelLarge)
-                        }
-                        OutlinedButton(onClick = { jumpTo("defaultEditor") }, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
-                            Text(getText(R.string.select_global_default_deck_editor), style = MaterialTheme.typography.labelLarge)
-                        }
-                        OutlinedButton(onClick = { jumpTo("reviewData") }, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
-                            Text(getText(R.string.review_data_section_title), style = MaterialTheme.typography.labelLarge)
-                        }
-                    }
-                    Spacer(Modifier.height(dimensions.spacingSmall))
-
                     // Deck Name Section
                     Column(modifier = trackSection("deckName")) {
                     DialogSection(title = getText(R.string.deck_name), contentTopSpacing = 0.dp, titleColor = MaterialTheme.colorScheme.primary) {
@@ -514,18 +586,12 @@ fun DeckSettingsDialog(
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         Spacer(Modifier.height(dimensions.spacingSmall))
-                        TextField(
+                        OutlinedTextField(
                             value = deckName,
                             onValueChange = { deckName = it },
                             singleLine = true,
                             modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
-                            colors = TextFieldDefaults.colors(
-                                focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
-                                unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
-                                focusedIndicatorColor = Color.Transparent,
-                                unfocusedIndicatorColor = Color.Transparent
-                            )
+                            shape = RoundedCornerShape(dimensions.cornerRadiusMedium)
                         )
                     }
                     }
@@ -583,24 +649,23 @@ fun DeckSettingsDialog(
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
-                        Text(
-                            getText(R.string.language_front),
-                            style = MaterialTheme.typography.labelMedium
-                        )
                         LanguageDropdown(
                             languages = availableLanguages,
                             selectedCode = frontLanguage,
-                            onLanguageSelected = { frontLanguage = it }
-                        )
-                        Text(
-                            getText(R.string.language_back),
-                            style = MaterialTheme.typography.labelMedium
+                            onLanguageSelected = { frontLanguage = it },
+                            label = getText(R.string.language_front),
+                            enabled = canEditLanguage
                         )
                         LanguageDropdown(
                             languages = availableLanguages,
                             selectedCode = backLanguage,
-                            onLanguageSelected = { backLanguage = it }
+                            onLanguageSelected = { backLanguage = it },
+                            label = getText(R.string.language_back),
+                            enabled = canEditLanguage
                         )
+                        if (!canEditLanguage && onOpenLinkageSettings != null) {
+                            LinkedFieldNotice(onOpenLinkageSettings)
+                        }
                     }
                 }
                 }
@@ -614,13 +679,47 @@ fun DeckSettingsDialog(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Spacer(Modifier.height(dimensions.spacingSmall))
-                    ExpressiveDropdownMenuField(
-                        options = NormalizationType.entries,
-                        selectedOption = normalizationType,
-                        optionLabel = { it.asString() },
-                        onSelect = { normalizationType = it }
+                    Text(
+                        normalizationType.asString(),
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.primary
                     )
+                    Spacer(Modifier.height(dimensions.spacingSmall))
+                    FilledTonalButton(
+                        onClick = { showTextNormalizationDialog = true },
+                        enabled = canEditNormalization,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(dimensions.cornerRadiusButton)
+                    ) {
+                        // Text centered on the full button width — not just the remaining space
+                        // next to the icon — so the icon sits at the trailing edge without
+                        // pulling the label off-center. Matches the Template Editor button below.
+                        Box(modifier = Modifier.fillMaxWidth()) {
+                            Text(getText(R.string.case_normalization), modifier = Modifier.align(Alignment.Center))
+                            Icon(
+                                Icons.AutoMirrored.Filled.OpenInNew,
+                                contentDescription = null,
+                                modifier = Modifier.align(Alignment.CenterEnd)
+                            )
+                        }
+                    }
+                    if (!canEditNormalization && onOpenLinkageSettings != null) {
+                        LinkedFieldNotice(onOpenLinkageSettings)
+                    }
                 }
+                }
+
+                if (showTextNormalizationDialog) {
+                    net.ericclark.studiare.screens.Dialogs.TextNormalizationDialog(
+                        initialType = normalizationType,
+                        initialCorrections = textCorrections,
+                        onDismiss = { showTextNormalizationDialog = false },
+                        onConfirm = { newType, newCorrections ->
+                            normalizationType = newType
+                            textCorrections = newCorrections
+                            showTextNormalizationDialog = false
+                        }
+                    )
                 }
 
                 // Template Editor Section
@@ -632,7 +731,7 @@ fun DeckSettingsDialog(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Spacer(Modifier.height(dimensions.spacingSmall))
-                    OutlinedButton(
+                    FilledTonalButton(
                         // Not `onDismiss()` — for a brand-new deck that dismiss also abandons
                         // deck creation (pops the whole screen), which closed both dialogs with
                         // nothing saved. `onOpenTemplateEditor` is responsible for hiding this
@@ -641,21 +740,34 @@ fun DeckSettingsDialog(
                         onClick = {
                             onOpenTemplateEditor(
                                 deckName.trim(), normalizationType, sortType, sortPinnedCardsFirst,
-                                defaultPromptSide, frontLanguage, backLanguage
+                                defaultPromptSide, frontLanguage, backLanguage, textCorrections
                             )
                         },
                         enabled = canOpenTemplateEditor,
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                     ) {
-                        Text(getText(R.string.advanced_editor))
+                        // Text centered on the full button width — not just the remaining space
+                        // next to the icon — so the icon sits at the trailing edge without
+                        // pulling the label off-center.
+                        Box(modifier = Modifier.fillMaxWidth()) {
+                            Text(getText(R.string.advanced_editor), modifier = Modifier.align(Alignment.Center))
+                            Icon(
+                                Icons.AutoMirrored.Filled.OpenInNew,
+                                contentDescription = null,
+                                modifier = Modifier.align(Alignment.CenterEnd)
+                            )
+                        }
+                    }
+                    if (!canOpenTemplateEditor && onOpenLinkageSettings != null) {
+                        LinkedFieldNotice(onOpenLinkageSettings)
                     }
                 }
                 }
 
                 // Default Deck Editor Section (global, not per-deck)
                 Column(modifier = trackSection("defaultEditor")) {
-                DialogSection(title = getText(R.string.select_global_default_deck_editor), contentTopSpacing = 0.dp, titleColor = MaterialTheme.colorScheme.primary) {
+                DialogSection(title = getText(R.string.default_deck_editor), contentTopSpacing = 0.dp, titleColor = MaterialTheme.colorScheme.primary) {
                     Text(
                         getText(R.string.select_global_default_deck_editor_desc),
                         style = MaterialTheme.typography.bodyMedium,
@@ -693,19 +805,67 @@ fun DeckSettingsDialog(
                     }
                 }
                 }
-            }
+                }
+
+                if (isWideScreen) {
+                    Row(modifier = Modifier.weight(1f, fill = false)) {
+                        Column(
+                            modifier = Modifier
+                                .width(200.dp)
+                                .verticalScroll(rememberScrollState()),
+                            verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)
+                        ) {
+                            navItems.indices.forEach { index ->
+                                sectionNavButton(index, Modifier.fillMaxWidth())
+                            }
+                        }
+                        Spacer(Modifier.width(dimensions.spacingMedium))
+                        Column(
+                            modifier = Modifier
+                                .weight(1f)
+                                .verticalScroll(mainScrollState)
+                                .onGloballyPositioned { containerCoordinates[0] = it }
+                        ) {
+                            sectionsContent()
+                        }
+                    }
+                } else {
+                    Column(
+                        modifier = Modifier
+                            .weight(1f, fill = false) // Allows scrolling without forcing full screen height
+                            .verticalScroll(mainScrollState)
+                            .onGloballyPositioned { containerCoordinates[0] = it }
+                    ) {
+                        // Section-jump row — scrolls with the rest of the content (not pinned),
+                        // and scrolls horizontally itself since the section names don't all fit.
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)
+                        ) {
+                            navItems.indices.forEach { index ->
+                                sectionNavButton(index, Modifier)
+                            }
+                        }
+                        Spacer(Modifier.height(dimensions.spacingSmall))
+
+                        sectionsContent()
+                    }
+                }
                 Spacer(Modifier.height(dimensions.spacingMedium))
 
                 // Action Buttons
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
+                    horizontalArrangement = Arrangement.End,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     TextButton(onClick = onDismiss, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(getText(R.string.cancel)) }
+                    Spacer(Modifier.width(dimensions.spacingSmall))
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Button(
-                            onClick = { onSave(deckName.trim(), normalizationType, sortType, sortPinnedCardsFirst, defaultPromptSide, frontLanguage, backLanguage) },
+                            onClick = { onSave(deckName.trim(), normalizationType, sortType, sortPinnedCardsFirst, defaultPromptSide, frontLanguage, backLanguage, textCorrections) },
                             enabled = deckName.isNotBlank(),
                             shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                         ) {
@@ -741,7 +901,6 @@ fun LinkageSettingsDialog(
                 Text(
                     "Set Linkage Settings",
                     style = MaterialTheme.typography.headlineSmall,
-                    textAlign = TextAlign.Center,
                     modifier = Modifier.fillMaxWidth()
                 )
                 Spacer(Modifier.height(dimensions.spacingMedium))
@@ -775,14 +934,14 @@ fun LinkageSettingsDialog(
                         onToggle = { settings = settings.copy(linkCardData = it) }
                     )
                     LinkageToggleRow(
-                        label = "Link Field Config (Templates)",
+                        label = "Link Field Config (Language & Templates)",
                         isLinked = settings.linkFieldConfig,
                         onToggle = { settings = settings.copy(linkFieldConfig = it) }
                     )
                     LinkageToggleRow(
-                        label = "Link Card Order (Sorting)",
-                        isLinked = settings.linkCardOrder,
-                        onToggle = { settings = settings.copy(linkCardOrder = it) }
+                        label = "Link Normalization (Text Cleanup)",
+                        isLinked = settings.linkNormalization,
+                        onToggle = { settings = settings.copy(linkNormalization = it) }
                     )
                     LinkageToggleRow(
                         label = "Link Scoring (FSRS weights)",

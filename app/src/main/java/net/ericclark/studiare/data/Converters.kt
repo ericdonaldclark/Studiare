@@ -92,4 +92,7 @@ class Converters {
 
     @TypeConverter fun fromLinkageSettings(value: LinkageSettings?): String = gson.toJson(value ?: LinkageSettings())
     @TypeConverter fun toLinkageSettings(value: String?): LinkageSettings = gson.fromJson(value, object : TypeToken<LinkageSettings>() {}.type) ?: LinkageSettings()
+
+    @TypeConverter fun fromTextCorrectionSettings(value: TextCorrectionSettings?): String = gson.toJson(value ?: TextCorrectionSettings())
+    @TypeConverter fun toTextCorrectionSettings(value: String?): TextCorrectionSettings = gson.fromJson(value, object : TypeToken<TextCorrectionSettings>() {}.type) ?: TextCorrectionSettings()
 }

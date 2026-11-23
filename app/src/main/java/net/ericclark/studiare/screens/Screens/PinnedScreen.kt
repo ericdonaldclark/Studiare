@@ -61,6 +61,7 @@ import net.ericclark.studiare.components.getText
 import net.ericclark.studiare.data.*
 import net.ericclark.studiare.screens.Dialogs.CardEditDialog
 import net.ericclark.studiare.screens.Dialogs.CardEditDialogMode
+import net.ericclark.studiare.screens.Dialogs.ClearCardDataConfirmDialog
 import net.ericclark.studiare.screens.Dialogs.createStudySessionRoute
 import net.ericclark.studiare.screens.Dialogs.studyRouteFor
 import net.ericclark.studiare.screens.UI_Components.DeckListItem
@@ -106,6 +107,7 @@ fun PinnedScreen(navController: NavController, viewModel: FlashcardViewModel) {
     val pinnedCards by viewModel.pinnedCards.collectAsState()
     val activeSessions by viewModel.allActiveSessions.collectAsState()
     val allTagDefinitions by viewModel.tags.collectAsState()
+    val tagNormalization by viewModel.tagNormalization.collectAsState()
     val savedTemplateSets by viewModel.templateSets.collectAsState()
 
     val deckSortMode by viewModel.pinnedScreenDeckSortMode.collectAsState()
@@ -147,6 +149,7 @@ fun PinnedScreen(navController: NavController, viewModel: FlashcardViewModel) {
     var editingCard by remember { mutableStateOf<Card?>(null) }
     var showMoveDialogForCard by remember { mutableStateOf<Card?>(null) }
     var showUseTemplateDialogForCard by remember { mutableStateOf<Card?>(null) }
+    var showClearDataConfirmForCard by remember { mutableStateOf<Card?>(null) }
     var showRestartDialog by remember { mutableStateOf<ActiveSession?>(null) }
     var showDeleteSessionDialog by remember { mutableStateOf<ActiveSession?>(null) }
     var showDeleteDeckDialog by remember { mutableStateOf<DeckSummary?>(null) }
@@ -621,8 +624,17 @@ fun PinnedScreen(navController: NavController, viewModel: FlashcardViewModel) {
             totalCards = 1,
             allTags = allTagDefinitions,
             currentDeckTags = currentDeckTags,
+            tagNormalization = tagNormalization,
             onUpdateTags = { newTags -> editState.tags.value = newTags.toList() },
             onCreateTag = { name, color -> viewModel.saveTagDefinition(TagDefinition(name = name, color = color)) },
+            onRenameTag = { tag, oldName ->
+                viewModel.renameTag(tag, oldName)
+                if (tag.name != oldName && oldName in editState.tags.value) {
+                    editState.tags.value = editState.tags.value.map { if (it == oldName) tag.name else it }
+                }
+            },
+            onDeleteTag = { tag -> viewModel.deleteTagDefinition(tag) },
+            onSetTagNormalization = { viewModel.setTagNormalization(it) },
             mode = CardEditDialogMode.Edit(
                 onSave = {
                     deck?.let { viewModel.saveSingleCard(it, cardDataFromState(editState)) }
@@ -656,10 +668,25 @@ fun PinnedScreen(navController: NavController, viewModel: FlashcardViewModel) {
                 onUseTemplate = {
                     showUseTemplateDialogForCard = card
                     editingCard = null
+                },
+                onClearData = {
+                    showClearDataConfirmForCard = card
                 }
             ),
             onCancel = { editingCard = null },
-            normalizationType = deck?.deck?.normalizationType ?: NormalizationType.NONE
+            normalizationType = deck?.deck?.normalizationType ?: NormalizationType.NONE,
+            textCorrections = deck?.deck?.textCorrections ?: TextCorrectionSettings()
+        )
+    }
+
+    showClearDataConfirmForCard?.let { card ->
+        ClearCardDataConfirmDialog(
+            cardCount = 1,
+            onDismiss = { showClearDataConfirmForCard = null },
+            onConfirm = {
+                viewModel.clearCardReviewData(setOf(card.id))
+                showClearDataConfirmForCard = null
+            }
         )
     }
 

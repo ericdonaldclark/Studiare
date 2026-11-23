@@ -20,6 +20,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
@@ -28,7 +29,9 @@ import androidx.compose.material.icons.filled.DriveFileMove
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Label
+import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.PushPin
+import androidx.compose.material.icons.filled.RestartAlt
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SelectAll
 import androidx.compose.material.icons.filled.Settings
@@ -109,6 +112,7 @@ import net.ericclark.studiare.data.NoteField
 import net.ericclark.studiare.data.matchStatus
 import net.ericclark.studiare.data.NormalizationType
 import net.ericclark.studiare.data.TagDefinition
+import net.ericclark.studiare.data.TextCorrectionSettings
 import net.ericclark.studiare.data.asString
 import net.ericclark.studiare.data.toCardDataForSave
 import net.ericclark.studiare.data.toEditorState
@@ -117,6 +121,7 @@ import java.util.UUID
 import net.ericclark.studiare.screens.Dialogs.AdvancedDeckEditorDialog
 import net.ericclark.studiare.screens.Dialogs.CardEditDialog
 import net.ericclark.studiare.screens.Dialogs.CardEditDialogMode
+import net.ericclark.studiare.screens.Dialogs.ClearCardDataConfirmDialog
 import net.ericclark.studiare.screens.UI_Components.DeckInfoDialog
 import net.ericclark.studiare.screens.UI_Components.DeckSettingsDialog
 import net.ericclark.studiare.screens.UI_Components.FlowRow
@@ -174,6 +179,7 @@ fun SimpleEditorScreen(
     }
     val dimensions = LocalStudiareDimensions.current
     val allTags by viewModel.tags.collectAsState()
+    val tagNormalization by viewModel.tagNormalization.collectAsState()
     val savedTemplateSets by viewModel.templateSets.collectAsState()
     val alwaysOpenBulkEditor by viewModel.alwaysOpenBulkEditor.collectAsState()
     val allDecksState by viewModel.allDecks.observeAsState(emptyList())
@@ -185,6 +191,9 @@ fun SimpleEditorScreen(
     var showTagDialogForSelection by remember { mutableStateOf<Set<String>?>(null) }
     var showMoveDialogForSelection by remember { mutableStateOf<Set<String>?>(null) }
     var showUseTemplateDialogForSelection by remember { mutableStateOf<Set<String>?>(null) }
+    // Null hides the confirmation dialog; non-null is the captured id(s) to clear once confirmed —
+    // same capture-before-confirm shape as showMoveDialogForSelection/showUseTemplateDialogForSelection.
+    var showClearDataConfirmForSelection by remember { mutableStateOf<Set<String>?>(null) }
     // Set only when the Template Editor was opened via the Use Template dialog's own "Open
     // Template Editor" button — Cancel/Save there should return to that dialog, not Deck Options.
     var pendingUseTemplateIds by remember { mutableStateOf<Set<String>?>(null) }
@@ -194,6 +203,8 @@ fun SimpleEditorScreen(
     var showFilterOverlay by remember { mutableStateOf(false) }
     var showDeckInfo by remember { mutableStateOf(false) }
     var showDeckOptions by remember { mutableStateOf(false) }
+    val isChildSet = deckWithCards?.deck?.parentDeckId != null
+    var showLinkageDialog by remember { mutableStateOf(false) }
     var filterQuery by remember { mutableStateOf("") }
     val lazyGridState = rememberLazyGridState()
     // Restores position only if Bulk Editor's toggle button just handed one off for this deck
@@ -337,6 +348,14 @@ fun SimpleEditorScreen(
         viewModel.cloneCardsForSelection(deck, ids)
     }
 
+    /** Immediate, unstaged DB write — same "Clear Review Data" semantics as Deck Options'
+     * deck-wide version, just scoped to the already-confirmed card id(s). `deckWithCards` is a
+     * reactively observed Room query, so the grid/dialog reflects the reset the moment it lands. */
+    fun clearDataForSelection(ids: Set<String>) {
+        viewModel.clearCardReviewData(ids)
+        showClearDataConfirmForSelection = null
+    }
+
     fun moveCardsForSelectionToExisting(ids: Set<String>, toDeckId: String) {
         val deck = deckWithCards ?: return
         val cardsToMove = deck.cards.filter { it.id in ids }.map { it.toCardDataForSave() }
@@ -372,6 +391,11 @@ fun SimpleEditorScreen(
                     }
                 },
                 actions = {
+                    if (isChildSet) {
+                        TooltipIconButton(description = getText(R.string.linkage_settings), onClick = { showLinkageDialog = true }) {
+                            Icon(Icons.Default.Link, contentDescription = getText(R.string.linkage_settings))
+                        }
+                    }
                     FilledTonalButton(
                         onClick = ::goToBulkEditor,
                         contentPadding = PaddingValues(horizontal = 16.dp),
@@ -415,12 +439,21 @@ fun SimpleEditorScreen(
                                 id = "unknown",
                                 icon = Icons.Default.Close,
                                 label = getText(context, R.string.mark_as_not_known),
+                                iconContent = {
+                                    net.ericclark.studiare.components.MaterialSymbol(
+                                        codepoint = net.ericclark.studiare.components.MaterialSymbols.PRELIMINARY,
+                                        contentDescription = null,
+                                        fill = 0f,
+                                        size = 30.dp
+                                    )
+                                },
                                 onClick = { setKnownForSelection(selection.selected, false) }
                             ),
                             SelectionAction(
                                 id = "known",
                                 icon = Icons.Default.Check,
                                 label = getText(context, R.string.mark_as_known),
+                                iconContent = { Icon(Icons.Filled.CheckCircle, contentDescription = null) },
                                 onClick = { setKnownForSelection(selection.selected, true) }
                             ),
                             SelectionAction(
@@ -468,6 +501,16 @@ fun SimpleEditorScreen(
                                     editingCard = displayedCards.firstOrNull { it.id == targetId }
                                     selection.exit()
                                 }
+                            ),
+                            SelectionAction(
+                                id = "clearData",
+                                icon = Icons.Default.RestartAlt,
+                                label = getText(context, R.string.clear_data),
+                                isDestructive = true,
+                                // Doesn't exit selection — clearing data removes nothing, so
+                                // (unlike clone/move/delete) there's no reason to drop out of
+                                // multi-select; the confirmation dialog floats on top of it.
+                                onClick = { showClearDataConfirmForSelection = selection.selected }
                             ),
                             SelectionAction(
                                 id = "delete",
@@ -639,6 +682,14 @@ fun SimpleEditorScreen(
         }
     }
 
+    showClearDataConfirmForSelection?.let { ids ->
+        ClearCardDataConfirmDialog(
+            cardCount = ids.size,
+            onDismiss = { showClearDataConfirmForSelection = null },
+            onConfirm = { clearDataForSelection(ids) }
+        )
+    }
+
     showMoveDialogForSelection?.let { ids ->
         net.ericclark.studiare.screens.Dialogs.MoveCardsDialog(
             decks = allDecksState,
@@ -675,8 +726,17 @@ fun SimpleEditorScreen(
             totalCards = totalCards,
             allTags = allTags,
             currentDeckTags = currentDeckTags,
+            tagNormalization = tagNormalization,
             onUpdateTags = { newTags -> editState.tags.value = newTags.toList() },
             onCreateTag = { name, color -> viewModel.saveTagDefinition(TagDefinition(name = name, color = color)) },
+            onRenameTag = { tag, oldName ->
+                viewModel.renameTag(tag, oldName)
+                if (tag.name != oldName && oldName in editState.tags.value) {
+                    editState.tags.value = editState.tags.value.map { if (it == oldName) tag.name else it }
+                }
+            },
+            onDeleteTag = { tag -> viewModel.deleteTagDefinition(tag) },
+            onSetTagNormalization = { viewModel.setTagNormalization(it) },
             mode = CardEditDialogMode.Edit(
                 onSave = {
                     deckWithCards?.let { viewModel.saveSingleCard(it, cardDataFrom(editState)) }
@@ -694,10 +754,14 @@ fun SimpleEditorScreen(
                 onUseTemplate = {
                     showUseTemplateDialogForSelection = setOf(card.id)
                     editingCard = null
+                },
+                onClearData = {
+                    showClearDataConfirmForSelection = setOf(card.id)
                 }
             ),
             onCancel = { editingCard = null },
-            normalizationType = deckWithCards?.deck?.normalizationType ?: NormalizationType.NONE
+            normalizationType = deckWithCards?.deck?.normalizationType ?: NormalizationType.NONE,
+            textCorrections = deckWithCards?.deck?.textCorrections ?: TextCorrectionSettings()
         )
     }
 
@@ -709,8 +773,17 @@ fun SimpleEditorScreen(
             totalCards = totalCards,
             allTags = allTags,
             currentDeckTags = currentDeckTags,
+            tagNormalization = tagNormalization,
             onUpdateTags = { newTags -> state.tags.value = newTags.toList() },
             onCreateTag = { name, color -> viewModel.saveTagDefinition(TagDefinition(name = name, color = color)) },
+            onRenameTag = { tag, oldName ->
+                viewModel.renameTag(tag, oldName)
+                if (tag.name != oldName && oldName in state.tags.value) {
+                    state.tags.value = state.tags.value.map { if (it == oldName) tag.name else it }
+                }
+            },
+            onDeleteTag = { tag -> viewModel.deleteTagDefinition(tag) },
+            onSetTagNormalization = { viewModel.setTagNormalization(it) },
             mode = CardEditDialogMode.Create(
                 onAdd = {
                     deckWithCards?.let { viewModel.saveSingleCard(it, cardDataFrom(state)) }
@@ -722,7 +795,8 @@ fun SimpleEditorScreen(
                 }
             ),
             onCancel = { createCardState = null },
-            normalizationType = deckWithCards?.deck?.normalizationType ?: NormalizationType.NONE
+            normalizationType = deckWithCards?.deck?.normalizationType ?: NormalizationType.NONE,
+            textCorrections = deckWithCards?.deck?.textCorrections ?: TextCorrectionSettings()
         )
     }
 
@@ -785,6 +859,20 @@ fun SimpleEditorScreen(
         DeckInfoDialog(deckWithCards = deckWithCards, onDismiss = { showDeckInfo = false })
     }
 
+    // Simple Editor has no deck-level batch save (every card edit already persists immediately
+    // via saveSingleCard), so unlike Bulk Editor's deferred-to-Save linkageSettings, this applies
+    // straight away.
+    if (showLinkageDialog && deckWithCards != null) {
+        net.ericclark.studiare.screens.UI_Components.LinkageSettingsDialog(
+            currentSettings = deckWithCards.deck.linkageSettings,
+            onDismiss = { showLinkageDialog = false },
+            onSave = { newSettings ->
+                viewModel.updateLinkageSettings(deckWithCards.deck.id, newSettings)
+                showLinkageDialog = false
+            }
+        )
+    }
+
     if (showDeckOptions && deckWithCards != null) {
         DeckSettingsDialog(
             initialDeckName = deckWithCards.deck.name,
@@ -794,18 +882,25 @@ fun SimpleEditorScreen(
             initialDefaultPromptSide = deckWithCards.deck.defaultPromptSide,
             initialFrontLanguage = deckWithCards.deck.frontLanguage,
             initialBackLanguage = deckWithCards.deck.backLanguage,
+            initialTextCorrections = deckWithCards.deck.textCorrections,
             onDismiss = { showDeckOptions = false },
-            onSave = { newName, newNorm, newSort, newPinnedFirst, newPromptSide, newFrontLang, newBackLang ->
-                viewModel.updateDeckOptions(deckWithCards, newName, newNorm, newSort, newPinnedFirst, newPromptSide, newFrontLang, newBackLang)
+            onSave = { newName, newNorm, newSort, newPinnedFirst, newPromptSide, newFrontLang, newBackLang, newCorrections ->
+                viewModel.updateDeckOptions(deckWithCards, newName, newNorm, newSort, newPinnedFirst, newPromptSide, newFrontLang, newBackLang, newCorrections)
                 showDeckOptions = false
             },
-            onOpenTemplateEditor = { _, _, _, _, _, _, _ ->
+            onOpenTemplateEditor = { _, _, _, _, _, _, _, _ ->
                 // Nothing to carry over here — this dialog always reflects the deck's actually
                 // persisted name/options (it has no separate in-progress "creating a new deck"
                 // draft of its own), so reopening it already shows the right values either way.
                 showDeckOptions = false
                 showTemplateEditor = true
             },
+            canOpenTemplateEditor = !(isChildSet && deckWithCards.deck.linkageSettings.linkFieldConfig),
+            canEditLanguage = !(isChildSet && deckWithCards.deck.linkageSettings.linkFieldConfig),
+            canEditNormalization = !(isChildSet && deckWithCards.deck.linkageSettings.linkNormalization),
+            onOpenLinkageSettings = if (isChildSet) {
+                { showDeckOptions = false; showLinkageDialog = true }
+            } else null,
             onClearReviewData = {
                 viewModel.clearDeckReviewData(deckWithCards.deck.id)
                 showDeckOptions = false
@@ -893,7 +988,7 @@ internal fun CardTile(
                     if (card.isKnown) {
                         androidx.compose.foundation.layout.Spacer(Modifier.width(dimensions.spacingSmall))
                         Icon(
-                            imageVector = Icons.Filled.Check,
+                            imageVector = Icons.Filled.CheckCircle,
                             contentDescription = getText(R.string.mark_as_not_known),
                             tint = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(20.dp)

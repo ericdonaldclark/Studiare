@@ -15,6 +15,7 @@ import net.ericclark.studiare.data.CrosswordWord
 import kotlinx.coroutines.flow.distinctUntilChanged
 import net.ericclark.studiare.data.*
 import net.ericclark.studiare.screens.Screens.CreateStudySessionScreen
+import com.google.gson.Gson
 
 private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "settings")
 
@@ -99,6 +100,7 @@ class PreferenceManager(context: Context) {
         val HAS_SEEN_TUTORIAL = booleanPreferencesKey("has_seen_tutorial")
         val LAST_STUDY_CATEGORY = stringPreferencesKey("last_study_category")
         val SORT_TAGS_BY_DATE_CREATED = booleanPreferencesKey("sort_tags_by_date_created")
+        val SORT_TEMPLATES_BY_DATE_CREATED = booleanPreferencesKey("sort_templates_by_date_created")
         val SHORTCUTS_CURRENT_SCREEN_ONLY = booleanPreferencesKey("shortcuts_current_screen_only")
         val SHOW_SHORTCUTS_BUTTON = booleanPreferencesKey("show_shortcuts_button")
         val SHOW_SIZE_OVERLAY = booleanPreferencesKey("show_size_overlay")
@@ -136,6 +138,8 @@ class PreferenceManager(context: Context) {
         val DECK_SORT_MODE = intPreferencesKey("deck_sort_mode")
         val DECK_SET_COUNTS_SNAPSHOT = stringPreferencesKey("deck_set_counts_snapshot")
         val MODE_DEFAULT_SETTINGS = stringPreferencesKey("mode_default_settings")
+        val DEFAULT_DECK_OPTIONS = stringPreferencesKey("default_deck_options")
+        val TAG_NORMALIZATION = stringPreferencesKey("tag_normalization")
         val SELECTED_COLLECTION_ID = stringPreferencesKey("selected_collection_id")
         val DECK_VIEW_MODE = intPreferencesKey("deck_view_mode")
 
@@ -212,6 +216,7 @@ class PreferenceManager(context: Context) {
     val hasSeenTutorialFlow: Flow<Boolean> = dataStore.data.map { it[HAS_SEEN_TUTORIAL] ?: false }.distinctUntilChanged()
     val lastStudyCategoryFlow: Flow<String?> = dataStore.data.map { it[LAST_STUDY_CATEGORY] }.distinctUntilChanged()
     val sortTagsByDateCreatedFlow: Flow<Boolean> = dataStore.data.map { it[SORT_TAGS_BY_DATE_CREATED] ?: false }.distinctUntilChanged()
+    val sortTemplatesByDateCreatedFlow: Flow<Boolean> = dataStore.data.map { it[SORT_TEMPLATES_BY_DATE_CREATED] ?: false }.distinctUntilChanged()
     val shortcutsCurrentScreenOnlyFlow: Flow<Boolean> = dataStore.data.map { it[SHORTCUTS_CURRENT_SCREEN_ONLY] ?: true }.distinctUntilChanged()
     val showShortcutsButtonFlow: Flow<Boolean> = dataStore.data.map { it[SHOW_SHORTCUTS_BUTTON] ?: true }.distinctUntilChanged()
     val showSizeOverlayFlow: Flow<Boolean> = dataStore.data.map { it[SHOW_SIZE_OVERLAY] ?: false }.distinctUntilChanged()
@@ -506,6 +511,34 @@ class PreferenceManager(context: Context) {
         }
     }
 
+    // Settings → Deck Options' "All future decks"/"All current and future decks" choice — see
+    // DeckOptionsCategoryContent. Null means "no override", so DeckEditorScreen's new-deck state
+    // initializers fall back to their own hardcoded literals, same as before this setting existed.
+    val defaultDeckOptionsFlow: Flow<DefaultDeckOptions?> = dataStore.data.map { preferences ->
+        val jsonString = preferences[DEFAULT_DECK_OPTIONS]
+        if (jsonString.isNullOrEmpty()) null else runCatching { Gson().fromJson(jsonString, DefaultDeckOptions::class.java) }.getOrNull()
+    }.distinctUntilChanged()
+
+    suspend fun setDefaultDeckOptions(options: DefaultDeckOptions?) {
+        dataStore.edit { preferences ->
+            if (options == null) preferences.remove(DEFAULT_DECK_OPTIONS) else preferences[DEFAULT_DECK_OPTIONS] = Gson().toJson(options)
+        }
+    }
+
+    // Settings → Tags' "Tag Text Normalization" — one global rule set applied to every tag name
+    // on create/rename (tag names are already required to be globally unique, so there's no
+    // per-deck scope to split this across). Unlike defaultDeckOptionsFlow, there's no "unset"
+    // state to fall back from — this always has a value, defaulting to NormalizationType.NONE.
+    val tagNormalizationFlow: Flow<TagNormalizationSettings> = dataStore.data.map { preferences ->
+        val jsonString = preferences[TAG_NORMALIZATION]
+        if (jsonString.isNullOrEmpty()) TagNormalizationSettings()
+        else runCatching { Gson().fromJson(jsonString, TagNormalizationSettings::class.java) }.getOrDefault(TagNormalizationSettings())
+    }.distinctUntilChanged()
+
+    suspend fun setTagNormalization(settings: TagNormalizationSettings) {
+        dataStore.edit { preferences -> preferences[TAG_NORMALIZATION] = Gson().toJson(settings) }
+    }
+
     suspend fun setThemeMode(mode: Int) {
         dataStore.edit { settings ->
             settings[THEME_MODE] = mode
@@ -541,6 +574,7 @@ class PreferenceManager(context: Context) {
     suspend fun setHasSeenTutorial(seen: Boolean) { dataStore.edit { it[HAS_SEEN_TUTORIAL] = seen } }
     suspend fun setLastStudyCategory(name: String) { dataStore.edit { it[LAST_STUDY_CATEGORY] = name } }
     suspend fun setSortTagsByDateCreated(enabled: Boolean) { dataStore.edit { it[SORT_TAGS_BY_DATE_CREATED] = enabled } }
+    suspend fun setSortTemplatesByDateCreated(enabled: Boolean) { dataStore.edit { it[SORT_TEMPLATES_BY_DATE_CREATED] = enabled } }
     suspend fun setShortcutsCurrentScreenOnly(enabled: Boolean) { dataStore.edit { it[SHORTCUTS_CURRENT_SCREEN_ONLY] = enabled } }
     suspend fun setShowShortcutsButton(enabled: Boolean) { dataStore.edit { it[SHOW_SHORTCUTS_BUTTON] = enabled } }
     suspend fun setShowSizeOverlay(enabled: Boolean) { dataStore.edit { it[SHOW_SIZE_OVERLAY] = enabled } }
@@ -641,6 +675,7 @@ class PreferenceManager(context: Context) {
         PINNED_SCREEN_SECTION_ORDER.name to PinnedSectionType.toStoredString(PinnedSectionType.DEFAULT_ORDER),
         HAS_SEEN_TUTORIAL.name to "false",
         SORT_TAGS_BY_DATE_CREATED.name to "false",
+        SORT_TEMPLATES_BY_DATE_CREATED.name to "false",
         SHORTCUTS_CURRENT_SCREEN_ONLY.name to "true",
         SHOW_SHORTCUTS_BUTTON.name to "true",
         SHOW_SIZE_OVERLAY.name to "false",

@@ -796,6 +796,7 @@ fun SelectionModeDialogSection(
                             OutlinedTextField(
                                 value = state.timeValue.toString(),
                                 onValueChange = { actions.onTimeValueChange(it.toIntOrNull() ?: 1) },
+                                label = { Text(getText(R.string.amount)) },
                                 modifier = Modifier.width(60.dp),
                                 singleLine = true,
                                 shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
@@ -938,12 +939,16 @@ fun SelectionModeDialogSection(
                                 net.ericclark.studiare.components.TagChip(
                                     text = tagName,
                                     colorHex = colorHex,
-                                    onDelete = if (isSelected) {
-                                        { actions.onTagsChange(state.selectedTags - tagName) }
-                                    } else null,
-                                    onClick = if (!isSelected) {
-                                        { actions.onTagsChange(state.selectedTags + tagName) }
-                                    } else null
+                                    onClick = {
+                                        if (isSelected) {
+                                            actions.onTagsChange(state.selectedTags - tagName)
+                                        } else {
+                                            actions.onTagsChange(state.selectedTags + tagName)
+                                        }
+                                    },
+                                    // Just a visual marker — the whole chip, not only this icon,
+                                    // unapplies the tag — matching TagSelectionDialog's behavior.
+                                    trailingIcon = if (isSelected) Icons.Default.Clear else null
                                 )
                             }
                         }

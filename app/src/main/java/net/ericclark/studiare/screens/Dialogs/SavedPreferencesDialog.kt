@@ -14,12 +14,16 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material3.AlertDialog
+import androidx.compose.material.icons.filled.Emergency
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -38,6 +42,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
@@ -171,19 +176,35 @@ fun SavedPreferencesDialog(viewModel: FlashcardViewModel, onDismiss: () -> Unit)
     }
 
     if (confirmResetAll) {
-        AlertDialog(
-            onDismissRequest = { confirmResetAll = false },
-            text = { Text(getText(R.string.pref_reset_all_confirm)) },
-            confirmButton = {
-                TextButton(onClick = {
-                    viewModel.resetAllPreferences()
-                    confirmResetAll = false
-                }) { Text(getText(R.string.pref_reset_all)) }
-            },
-            dismissButton = {
-                TextButton(onClick = { confirmResetAll = false }) { Text(getText(R.string.cancel)) }
+        val dimensions = net.ericclark.studiare.ui.theme.LocalStudiareDimensions.current
+        net.ericclark.studiare.AnimatedDialog(onDismissRequest = { confirmResetAll = false }) {
+            Surface(
+                shape = androidx.compose.foundation.shape.RoundedCornerShape(dimensions.cornerRadiusMedium),
+                color = MaterialTheme.colorScheme.surfaceContainer,
+                tonalElevation = 6.dp
+            ) {
+                Column(
+                    modifier = Modifier.padding(dimensions.paddingLarge).widthIn(min = 280.dp, max = 560.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Icon(Icons.Filled.Emergency, contentDescription = null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(32.dp))
+                    Spacer(Modifier.height(dimensions.spacingSmall))
+                    Text(getText(R.string.pref_reset_all_confirm), textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+                    Spacer(Modifier.height(dimensions.spacingLarge))
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                        TextButton(onClick = { confirmResetAll = false }) { Text(getText(R.string.cancel)) }
+                        Spacer(Modifier.width(dimensions.spacingSmall))
+                        Button(
+                            onClick = {
+                                viewModel.resetAllPreferences()
+                                confirmResetAll = false
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                        ) { Text(getText(R.string.pref_reset_all)) }
+                    }
+                }
             }
-        )
+        }
     }
 
     editing?.let { entry ->
@@ -212,17 +233,21 @@ private fun PreferenceEditDialog(
     var text by remember { mutableStateOf(entry.value ?: "") }
     val valid = isValidPreferenceText(entry.type, text)
     val isNumber = entry.type in setOf("Int", "Long", "Float", "Double")
+    val dimensions = net.ericclark.studiare.ui.theme.LocalStudiareDimensions.current
 
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(entry.name, fontFamily = FontFamily.Monospace) },
-        text = {
-            Column {
-                Text(entry.type, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Spacer(Modifier.height(8.dp))
+    net.ericclark.studiare.AnimatedDialog(onDismissRequest = onDismiss) {
+        Surface(
+            shape = androidx.compose.foundation.shape.RoundedCornerShape(dimensions.cornerRadiusMedium),
+            color = MaterialTheme.colorScheme.surfaceContainer,
+            tonalElevation = 6.dp
+        ) {
+            Column(modifier = Modifier.padding(dimensions.paddingLarge).widthIn(min = 280.dp, max = 560.dp)) {
+                Text(entry.name, style = MaterialTheme.typography.headlineSmall, fontFamily = FontFamily.Monospace)
+                Spacer(Modifier.height(dimensions.spacingMedium))
                 OutlinedTextField(
                     value = text,
                     onValueChange = { text = it },
+                    label = { Text(entry.type) },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = !entry.type.startsWith("Set"),
                     isError = !valid,
@@ -233,16 +258,15 @@ private fun PreferenceEditDialog(
                     } else null,
                     placeholder = entry.defaultValue?.let { default -> { Text(getText(R.string.pref_default_value).format(default)) } }
                 )
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = { onSave(text) }, enabled = valid) { Text(getText(R.string.save)) }
-        },
-        dismissButton = {
-            Row {
-                TextButton(onClick = onReset) { Text(getText(R.string.pref_reset_default)) }
-                TextButton(onClick = onDismiss) { Text(getText(R.string.cancel)) }
+                Spacer(Modifier.height(dimensions.spacingLarge))
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                    TextButton(onClick = onReset) { Text(getText(R.string.pref_reset_default)) }
+                    Spacer(Modifier.width(dimensions.spacingSmall))
+                    TextButton(onClick = onDismiss) { Text(getText(R.string.cancel)) }
+                    Spacer(Modifier.width(dimensions.spacingSmall))
+                    TextButton(onClick = { onSave(text) }, enabled = valid) { Text(getText(R.string.save)) }
+                }
             }
         }
-    )
+    }
 }

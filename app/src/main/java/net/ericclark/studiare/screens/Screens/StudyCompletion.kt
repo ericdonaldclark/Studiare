@@ -562,6 +562,7 @@ private fun CompletionTopContent(
                         OutlinedTextField(
                             value = name,
                             onValueChange = onNameChange,
+                            label = { Text(getText(R.string.name)) },
                             placeholder = { Text(defaultName) },
                             singleLine = true,
                             modifier = Modifier.fillMaxWidth()
@@ -864,6 +865,7 @@ fun EditCardDialog(
 
     // Collect all tags to pass to the picker
     val allTags by viewModel.tags.collectAsState()
+    val tagNormalization by viewModel.tagNormalization.collectAsState()
 
     // Determine tags in the current deck for "Quick Select" (Context aware)
     val studyState = viewModel.studyState
@@ -1043,10 +1045,19 @@ fun EditCardDialog(
                     cardTags = tags,
                     allTags = allTags,
                     currentDeckTags = currentDeckTags,
+                    tagNormalization = tagNormalization,
                     onUpdateTags = { newTags -> tags = newTags.toList() },
                     onCreateTag = { name, color ->
                         viewModel.saveTagDefinition(TagDefinition(name = name, color = color))
-                    }
+                    },
+                    onRenameTag = { tag, oldName ->
+                        viewModel.renameTag(tag, oldName)
+                        if (tag.name != oldName && oldName in tags) {
+                            tags = tags.map { if (it == oldName) tag.name else it }
+                        }
+                    },
+                    onDeleteTag = { tag -> viewModel.deleteTagDefinition(tag) },
+                    onSetTagNormalization = { viewModel.setTagNormalization(it) }
                 )
 
                 Spacer(Modifier.height(dimensions.spacingSmall))

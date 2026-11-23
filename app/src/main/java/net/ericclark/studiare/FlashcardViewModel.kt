@@ -166,6 +166,8 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
             userIdProvider = { authAndSyncManager.userId.value },
             getLocalDecks = { localDecks },
             getLocalCards = { localCards },
+            getLocalTags = { tags.value },
+            getLocalTemplateSets = { templateSets.value },
             onProcessingChanged = { isProcessing = it },
             onOverwriteConfirmationChanged = { _overwriteConfirmation.value = it },
             getOverwriteConfirmation = { _overwriteConfirmation.value },
@@ -173,6 +175,8 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
             // Redirect saves to Room DAOs
             saveDeckToFirestore = { deck -> deckDao.insertOrUpdate(deck.copy(isPendingSync = true)) },
             saveCardToFirestore = { card -> cardDao.insertOrUpdate(card.copy(isPendingSync = true)) },
+            saveTagsLocally = { tagsToSave -> tagDao.insertOrUpdateAll(tagsToSave.map { it.copy(isPendingSync = true) }) },
+            saveTemplateSetsLocally = { templateSetsToSave -> templateSetDao.insertOrUpdateAll(templateSetsToSave.map { it.copy(isPendingSync = true) }) },
             onError = { importError = it }
         )
     }
@@ -198,6 +202,10 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
     val presets: StateFlow<List<SessionPreset>> = sessionPresetDao.getAllActiveSessionPresets()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    val defaultDeckOptions: StateFlow<DefaultDeckOptions?> = preferenceManager.defaultDeckOptionsFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+    val tagNormalization: StateFlow<TagNormalizationSettings> = preferenceManager.tagNormalizationFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), TagNormalizationSettings())
 
     // --- Delegated State Flows (Audio) ---
     val audioFeedback: StateFlow<String?> get() = audioServiceManager.audioFeedback
@@ -523,6 +531,34 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
+    // ── Settings screen navigation ────────────────────────────────────────────
+    // Held here (not as rememberSaveable inside SettingsScreen) so it survives the Settings
+    // NavBackStackEntry being destroyed and recreated when you leave via another dock tab and
+    // come back — the dock's Settings icon also reads isAtSettingsRoot/isInSettingsSection off
+    // this same state to drive its selected/filled-in-path behavior, mirroring Home's paneStack.
+    private val _settingsOpenCategoryId = MutableStateFlow<String?>(null)
+    val settingsOpenCategoryId: StateFlow<String?> = _settingsOpenCategoryId
+    fun setSettingsOpenCategoryId(id: String?) { _settingsOpenCategoryId.value = id }
+
+    private val _settingsSelectedWideCategoryIndex = MutableStateFlow(0)
+    val settingsSelectedWideCategoryIndex: StateFlow<Int> = _settingsSelectedWideCategoryIndex
+    fun setSettingsSelectedWideCategoryIndex(index: Int) { _settingsSelectedWideCategoryIndex.value = index }
+
+    private val _settingsOpenAppToolsSubCategoryId = MutableStateFlow<String?>(null)
+    val settingsOpenAppToolsSubCategoryId: StateFlow<String?> = _settingsOpenAppToolsSubCategoryId
+    fun setSettingsOpenAppToolsSubCategoryId(id: String?) { _settingsOpenAppToolsSubCategoryId.value = id }
+
+    // Root = category list showing (narrow) or no app-tools subcategory drilled into (either
+    // layout) — wide layout always has some category selected in its detail pane, so it has no
+    // "nothing open" state at the top level the way narrow's category list does.
+    fun isSettingsAtRoot(isWideLayout: Boolean): Boolean =
+        _settingsOpenAppToolsSubCategoryId.value == null && (isWideLayout || _settingsOpenCategoryId.value == null)
+
+    fun resetSettingsToRoot() {
+        _settingsOpenCategoryId.value = null
+        _settingsOpenAppToolsSubCategoryId.value = null
+    }
+
     // ── Back-compat shims ─────────────────────────────────────────────────────
     // Old call sites (DecksScreen, SetsScreen, StudyScreens, NavigationDrawer)
     // call setCurrentDeckId/setCurrentSetId directly — keep those signatures
@@ -626,6 +662,8 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         .map { name -> StudyCategory.entries.firstOrNull { it.name == name } ?: StudyCategory.LEARN }
         .stateIn(viewModelScope, SharingStarted.Eagerly, StudyCategory.LEARN)
     val sortTagsByDateCreated: StateFlow<Boolean> = preferenceManager.sortTagsByDateCreatedFlow
+        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
+    val sortTemplatesByDateCreated: StateFlow<Boolean> = preferenceManager.sortTemplatesByDateCreatedFlow
         .stateIn(viewModelScope, SharingStarted.Eagerly, false)
     val shortcutsCurrentScreenOnly: StateFlow<Boolean> = preferenceManager.shortcutsCurrentScreenOnlyFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
@@ -1276,7 +1314,8 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
             saveDeckWithCards(
                 result.deckId, result.deckName, distinctCards, result.normalizationType, result.sortType,
                 result.parentDeckId, null, result.frontLanguage, result.backLanguage,
-                result.description, result.dailyNewCardLimit, result.dailyReviewLimit
+                result.description, result.dailyNewCardLimit, result.dailyReviewLimit,
+                textCorrections = result.textCorrections
             )
         }
         processNextInImportQueue()
@@ -1287,7 +1326,8 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
             saveDeckWithCards(
                 result.deckId, result.deckName, result.cardsToSave, result.normalizationType, result.sortType,
                 result.parentDeckId, null, result.frontLanguage, result.backLanguage,
-                result.description, result.dailyNewCardLimit, result.dailyReviewLimit
+                result.description, result.dailyNewCardLimit, result.dailyReviewLimit,
+                textCorrections = result.textCorrections
             )
         }
         processNextInImportQueue()
@@ -1705,6 +1745,7 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
     private fun markTutorialSeen() { viewModelScope.launch { preferenceManager.setHasSeenTutorial(true) } }
     fun setLastStudyCategory(category: StudyCategory) { viewModelScope.launch { preferenceManager.setLastStudyCategory(category.name) } }
     fun setSortTagsByDateCreated(enabled: Boolean) { viewModelScope.launch { preferenceManager.setSortTagsByDateCreated(enabled) } }
+    fun setSortTemplatesByDateCreated(enabled: Boolean) { viewModelScope.launch { preferenceManager.setSortTemplatesByDateCreated(enabled) } }
     /** A one-shot routing decision at click-time, not reactive UI — reads `.value` directly rather than via `collectAsState()`. */
     fun deckEditRoute(deckId: String): String = if (alwaysOpenBulkEditor.value) "deckEditor?deckId=$deckId" else "simpleEditor?deckId=$deckId"
     fun setShortcutsCurrentScreenOnly(enabled: Boolean) { viewModelScope.launch { preferenceManager.setShortcutsCurrentScreenOnly(enabled) } }
@@ -1730,7 +1771,8 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         checkForDuplicatesInEditor(
             deck.deck.id, deck.deck.name, cardsToSave, deck.deck.normalizationType, deck.deck.deckSortMode,
             deck.deck.parentDeckId, deck.deck.frontLanguage, deck.deck.backLanguage, deck.deck.description,
-            deck.deck.dailyNewCardLimit, deck.deck.dailyReviewLimit, deck.deck.frontNoteTemplates, deck.deck.backNoteTemplates
+            deck.deck.dailyNewCardLimit, deck.deck.dailyReviewLimit, deck.deck.frontNoteTemplates, deck.deck.backNoteTemplates,
+            textCorrections = deck.deck.textCorrections
         )
     }
 
@@ -1750,7 +1792,8 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         checkForDuplicatesInEditor(
             deck.deck.id, deck.deck.name, cardsToSave, deck.deck.normalizationType, deck.deck.deckSortMode,
             deck.deck.parentDeckId, deck.deck.frontLanguage, deck.deck.backLanguage, deck.deck.description,
-            deck.deck.dailyNewCardLimit, deck.deck.dailyReviewLimit, deck.deck.frontNoteTemplates, deck.deck.backNoteTemplates
+            deck.deck.dailyNewCardLimit, deck.deck.dailyReviewLimit, deck.deck.frontNoteTemplates, deck.deck.backNoteTemplates,
+            textCorrections = deck.deck.textCorrections
         )
     }
 
@@ -1773,7 +1816,8 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         checkForDuplicatesInEditor(
             deck.deck.id, deck.deck.name, cardsToSave, deck.deck.normalizationType, deck.deck.deckSortMode,
             deck.deck.parentDeckId, deck.deck.frontLanguage, deck.deck.backLanguage, deck.deck.description,
-            deck.deck.dailyNewCardLimit, deck.deck.dailyReviewLimit, deck.deck.frontNoteTemplates, deck.deck.backNoteTemplates
+            deck.deck.dailyNewCardLimit, deck.deck.dailyReviewLimit, deck.deck.frontNoteTemplates, deck.deck.backNoteTemplates,
+            textCorrections = deck.deck.textCorrections
         )
     }
 
@@ -1794,13 +1838,45 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
             val allCards = localCards
             val movedIds = cardsToMove.map { it.id }
             val now = System.currentTimeMillis()
+
+            // Deck id -> cardIds to add/remove, accumulated (not applied directly) so a deck that's
+            // touched from two directions at once — e.g. a parent shared by both the from- and
+            // to-set, or moving directly into/out of a set's own parent — only gets written once,
+            // with the net effect, instead of one write clobbering the other.
+            val additions = mutableMapOf<String, MutableSet<String>>()
+            val removals = mutableMapOf<String, MutableSet<String>>()
+            fun addTo(deckId: String, ids: List<String>) = additions.getOrPut(deckId) { mutableSetOf() }.addAll(ids)
+            fun removeFrom(deckId: String, ids: List<String>) = removals.getOrPut(deckId) { mutableSetOf() }.addAll(ids)
+
+            if (fromDeckId != toDeckId) {
+                removeFrom(fromDeckId, movedIds)
+                addTo(toDeckId, movedIds)
+
+                // Mirror saveDeckWithCards' parent-sync for a direct single-deck edit — a move is a
+                // delete from one deck plus an add to another, so it needs the same
+                // syncCardDeletions/syncCardAdditions propagation to each side's own parent (if it
+                // has one and is linked that way), or the parent is left referencing a card its set
+                // no longer has, or missing one it just gained.
+                fromDeck?.let { from ->
+                    if (from.parentDeckId != null && from.linkageSettings.syncCardDeletions) {
+                        removeFrom(from.parentDeckId, movedIds)
+                    }
+                }
+                if (toDeck.parentDeckId != null && toDeck.linkageSettings.syncCardAdditions) {
+                    addTo(toDeck.parentDeckId, movedIds)
+                }
+            }
+
             database.withTransaction {
                 cardsToMove.forEach { data ->
                     cardDao.insertOrUpdate(data.toMovedCard(ownerDeckId = toDeckId, existing = allCards.find { it.id == data.id }))
                 }
-                if (fromDeckId != toDeckId) {
-                    fromDeck?.let { deckDao.insertOrUpdate(it.copy(cardIds = it.cardIds - movedIds.toSet(), updatedAt = now, isPendingSync = true)) }
-                    deckDao.insertOrUpdate(toDeck.copy(cardIds = (toDeck.cardIds + movedIds).distinct(), updatedAt = now, isPendingSync = true))
+                (additions.keys + removals.keys).forEach { deckId ->
+                    val deck = localDecks.find { it.id == deckId } ?: return@forEach
+                    val newCardIds = (deck.cardIds + additions[deckId].orEmpty()).distinct() - removals[deckId].orEmpty()
+                    if (newCardIds != deck.cardIds) {
+                        deckDao.insertOrUpdate(deck.copy(cardIds = newCardIds, updatedAt = now, isPendingSync = true))
+                    }
                 }
             }
         }
@@ -1827,6 +1903,7 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
                 normalizationType = fromDeck?.normalizationType ?: NormalizationType.NONE,
                 frontLanguage = fromDeck?.frontLanguage ?: java.util.Locale.getDefault().language,
                 backLanguage = fromDeck?.backLanguage ?: java.util.Locale.getDefault().language,
+                textCorrections = fromDeck?.textCorrections ?: TextCorrectionSettings(),
                 isPendingSync = true
             )
             database.withTransaction {
@@ -1834,7 +1911,19 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
                     cardDao.insertOrUpdate(data.toMovedCard(ownerDeckId = newId, existing = allCards.find { it.id == data.id }))
                 }
                 deckDao.insertOrUpdate(newDeck)
-                fromDeck?.let { deckDao.insertOrUpdate(it.copy(cardIds = it.cardIds - movedIds.toSet(), updatedAt = now, isPendingSync = true)) }
+                fromDeck?.let { from ->
+                    deckDao.insertOrUpdate(from.copy(cardIds = from.cardIds - movedIds.toSet(), updatedAt = now, isPendingSync = true))
+                    // Mirror saveDeckWithCards' parent-sync — see moveCardsToDeck's comment. The new
+                    // deck itself is never linked (it was just created), so only this side applies.
+                    if (from.parentDeckId != null && from.linkageSettings.syncCardDeletions) {
+                        localDecks.find { it.id == from.parentDeckId }?.let { parent ->
+                            val newParentCardIds = parent.cardIds - movedIds.toSet()
+                            if (newParentCardIds != parent.cardIds) {
+                                deckDao.insertOrUpdate(parent.copy(cardIds = newParentCardIds, updatedAt = now, isPendingSync = true))
+                            }
+                        }
+                    }
+                }
             }
             withContext(Dispatchers.Main) { onCreated(newId) }
         }
@@ -1846,7 +1935,8 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         checkForDuplicatesInEditor(
             deck.deck.id, deck.deck.name, cardsToSave, deck.deck.normalizationType, deck.deck.deckSortMode,
             deck.deck.parentDeckId, deck.deck.frontLanguage, deck.deck.backLanguage, deck.deck.description,
-            deck.deck.dailyNewCardLimit, deck.deck.dailyReviewLimit, deck.deck.frontNoteTemplates, deck.deck.backNoteTemplates
+            deck.deck.dailyNewCardLimit, deck.deck.dailyReviewLimit, deck.deck.frontNoteTemplates, deck.deck.backNoteTemplates,
+            textCorrections = deck.deck.textCorrections
         )
     }
 
@@ -1855,7 +1945,8 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         checkForDuplicatesInEditor(
             deck.deck.id, deck.deck.name, cardsToSave, deck.deck.normalizationType, mode,
             deck.deck.parentDeckId, deck.deck.frontLanguage, deck.deck.backLanguage, deck.deck.description,
-            deck.deck.dailyNewCardLimit, deck.deck.dailyReviewLimit, deck.deck.frontNoteTemplates, deck.deck.backNoteTemplates
+            deck.deck.dailyNewCardLimit, deck.deck.dailyReviewLimit, deck.deck.frontNoteTemplates, deck.deck.backNoteTemplates,
+            textCorrections = deck.deck.textCorrections
         )
     }
 
@@ -1870,15 +1961,124 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         sortPinnedCardsFirst: Boolean,
         defaultPromptSide: CardSide,
         frontLanguage: String,
-        backLanguage: String
+        backLanguage: String,
+        textCorrections: TextCorrectionSettings = deck.deck.textCorrections
     ) {
         val cardsToSave = deck.cards.map { it.toCardDataForSave() }
         checkForDuplicatesInEditor(
             deck.deck.id, newName, cardsToSave, normalizationType, sortMode,
             deck.deck.parentDeckId, frontLanguage, backLanguage, deck.deck.description,
             deck.deck.dailyNewCardLimit, deck.deck.dailyReviewLimit, deck.deck.frontNoteTemplates, deck.deck.backNoteTemplates,
-            defaultPromptSide, sortPinnedCardsFirst
+            defaultPromptSide, sortPinnedCardsFirst, textCorrections = textCorrections
         )
+    }
+
+    /** Settings → Deck Options' "All future decks"/"All current and future decks" choice. */
+    fun setDefaultDeckOptions(options: DefaultDeckOptions?) {
+        viewModelScope.launch { preferenceManager.setDefaultDeckOptions(options) }
+    }
+
+    /** Settings → Tags' "Tag Text Normalization" rule set. */
+    fun setTagNormalization(settings: TagNormalizationSettings) {
+        viewModelScope.launch { preferenceManager.setTagNormalization(settings) }
+    }
+
+    /** Applies the current [tagNormalization] rules to a tag name exactly as
+     * [applyDeckOptionsToDecks] applies card normalization — corrections (whitespace/punctuation
+     * cleanup) first, then the case rule. Used by [saveTagDefinition]/[renameTag] so every tag
+     * create/rename path in the app normalizes the same way, without each call site repeating it. */
+    private fun normalizeTagName(name: String): String {
+        val settings = tagNormalization.value
+        return normalizeText(settings.normalizationType, applyTextCorrections(settings.textCorrections, name))
+    }
+
+    /** Result of [applyDeckOptionsToDecks] — [deckCount]/[cardCount] drive the confirmation/
+     * snackbar copy, while [snapshotDecks]/[snapshotCards] (the pre-apply rows, held only in
+     * memory) are handed back to [undoDeckOptionsApply] if the user taps Undo. */
+    data class DeckOptionsApplyResult(
+        val deckCount: Int,
+        val cardCount: Int,
+        val snapshotDecks: List<Deck>,
+        val snapshotCards: List<Card>
+    )
+
+    /** Settings → Deck Options' bulk-apply: pushes [options] onto every deck named by [deckIds]
+     * (or every current deck, if null) in one go. Unlike [updateDeckOptions]/[saveDeckWithCards],
+     * this never goes through the single-deck duplicate-check pipeline — it operates directly on
+     * each target deck's already-saved rows, so a Settings-wide sweep across many decks can't
+     * trigger a per-deck duplicate-resolution dialog. Mirrors that same pipeline's normalization
+     * step though: when [options]' normalization/corrections actually differ from a deck's
+     * current ones, that deck's existing cards are re-normalized immediately (not deferred to the
+     * next edit), same as [net.ericclark.studiare.screens.Screens.DeckEditorScreen]'s own
+     * applyNormalization does when you change it there. */
+    fun applyDeckOptionsToDecks(
+        deckIds: Set<String>?,
+        options: DefaultDeckOptions,
+        fields: Set<DeckOptionField> = DeckOptionField.ALL,
+        onProgress: (Boolean) -> Unit,
+        onComplete: (DeckOptionsApplyResult) -> Unit
+    ) {
+        onProgress(true)
+        viewModelScope.launch(Dispatchers.IO) {
+            val targets = if (deckIds == null) localDecks else localDecks.filter { it.id in deckIds }
+            val now = System.currentTimeMillis()
+
+            // Only Normalization actually touches card text — and only for a deck whose merged
+            // (fields-filtered) normalization/corrections end up different from what it already has.
+            val normalizationChangedDecks = if (DeckOptionField.NORMALIZATION !in fields) emptyList() else targets.filter {
+                it.normalizationType != options.normalizationType || it.textCorrections != options.textCorrections
+            }
+            val targetCardIds = normalizationChangedDecks.flatMap { it.cardIds }.toSet()
+            val snapshotCards = localCards.filter { it.id in targetCardIds }
+
+            fun normalizeOne(text: String) = normalizeText(options.normalizationType, applyTextCorrections(options.textCorrections, text))
+            fun normalizeNotes(notes: List<NoteField>) = notes.map {
+                if (it.type == MediaType.PLAIN_TEXT) it.copy(content = normalizeOne(it.content)) else it
+            }
+
+            val updatedDecks = targets.map { deck ->
+                deck.copy(
+                    deckSortMode = if (DeckOptionField.CARD_ORDER in fields) options.deckSortMode else deck.deckSortMode,
+                    defaultPromptSide = if (DeckOptionField.PROMPT_SIDE in fields) options.defaultPromptSide else deck.defaultPromptSide,
+                    frontLanguage = if (DeckOptionField.LANGUAGE in fields) options.frontLanguage else deck.frontLanguage,
+                    backLanguage = if (DeckOptionField.LANGUAGE in fields) options.backLanguage else deck.backLanguage,
+                    normalizationType = if (DeckOptionField.NORMALIZATION in fields) options.normalizationType else deck.normalizationType,
+                    textCorrections = if (DeckOptionField.NORMALIZATION in fields) options.textCorrections else deck.textCorrections,
+                    updatedAt = now,
+                    isPendingSync = true
+                )
+            }
+            val updatedCards = snapshotCards.map { card ->
+                card.copy(
+                    front = normalizeOne(card.front),
+                    back = normalizeOne(card.back),
+                    frontNotes = normalizeNotes(card.frontNotes),
+                    backNotes = normalizeNotes(card.backNotes),
+                    updatedAt = now,
+                    isPendingSync = true
+                )
+            }
+
+            database.withTransaction {
+                deckDao.insertOrUpdateAll(updatedDecks)
+                if (updatedCards.isNotEmpty()) cardDao.insertOrUpdateAll(updatedCards)
+            }
+
+            withContext(Dispatchers.Main) {
+                onProgress(false)
+                onComplete(DeckOptionsApplyResult(updatedDecks.size, updatedCards.size, targets, snapshotCards))
+            }
+        }
+    }
+
+    /** Undoes [applyDeckOptionsToDecks], restoring exactly the rows it snapshotted beforehand. */
+    fun undoDeckOptionsApply(snapshotDecks: List<Deck>, snapshotCards: List<Card>) {
+        viewModelScope.launch(Dispatchers.IO) {
+            database.withTransaction {
+                deckDao.insertOrUpdateAll(snapshotDecks)
+                if (snapshotCards.isNotEmpty()) cardDao.insertOrUpdateAll(snapshotCards)
+            }
+        }
     }
 
     /**
@@ -1912,7 +2112,7 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
             deck.deck.id, deck.deck.name, cardsToSave, deck.deck.normalizationType, deck.deck.deckSortMode,
             deck.deck.parentDeckId, deck.deck.frontLanguage, deck.deck.backLanguage, deck.deck.description,
             deck.deck.dailyNewCardLimit, deck.deck.dailyReviewLimit, newFront, newBack,
-            seedNewCardsFromTemplate = true, activeTemplateSetId = templateSetId
+            seedNewCardsFromTemplate = true, activeTemplateSetId = templateSetId, textCorrections = deck.deck.textCorrections
         )
     }
 
@@ -1936,7 +2136,8 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         activeTemplateSetId: String? = null,
         // See DuplicateCheckResult.clearActiveTemplateSetId — pass true when `activeTemplateSetId`
         // above is this save's definitive value (even null), not "unspecified, keep existing."
-        clearActiveTemplateSetId: Boolean = false
+        clearActiveTemplateSetId: Boolean = false,
+        textCorrections: TextCorrectionSettings = TextCorrectionSettings()
     ) {
         val duplicates = cards.groupBy { it.front.normalizeForDuplicateCheck() to it.back.normalizeForDuplicateCheck() }
             .filter { it.value.size > 1 }
@@ -1949,23 +2150,31 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
                 duplicates, deckId, deckName, cards, normalizationType, sortType, parentDeckId,
                 frontLanguage, backLanguage, description, dailyNewCardLimit, dailyReviewLimit,
                 frontNoteTemplates, backNoteTemplates, defaultPromptSide, sortPinnedCardsFirst,
-                seedNewCardsFromTemplate, activeTemplateSetId, clearActiveTemplateSetId
+                seedNewCardsFromTemplate, activeTemplateSetId, clearActiveTemplateSetId, textCorrections
             )
         } else {
             saveDeckWithCards(
                 deckId, deckName, cards, normalizationType, sortType, parentDeckId, null,
                 frontLanguage, backLanguage, description, dailyNewCardLimit, dailyReviewLimit,
                 frontNoteTemplates, backNoteTemplates, defaultPromptSide, sortPinnedCardsFirst,
-                seedNewCardsFromTemplate, activeTemplateSetId, clearActiveTemplateSetId
+                seedNewCardsFromTemplate, activeTemplateSetId, clearActiveTemplateSetId,
+                textCorrections = textCorrections
             )
         }
     }
 
     fun clearDeckReviewData(deckId: String) {
         val deck = localDecks.find { it.id == deckId } ?: return
-        val cardIds = deck.cardIds
-        val cardsToReset = localCards.filter { it.id in cardIds }
+        clearReviewDataForCards(deck.cardIds.toSet())
+    }
 
+    /** Same reset [clearDeckReviewData] applies deck-wide, but scoped to just the given cards —
+     * backs the per-card/multi-select "Clear Data" action in both deck editors' card overflow
+     * menus, which should only ever touch the card(s) it was invoked on. */
+    fun clearCardReviewData(cardIds: Set<String>) = clearReviewDataForCards(cardIds)
+
+    private fun clearReviewDataForCards(cardIds: Set<String>) {
+        val cardsToReset = localCards.filter { it.id in cardIds }
         if (cardsToReset.isEmpty()) return
 
         viewModelScope.launch(Dispatchers.IO) {
@@ -2014,14 +2223,14 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
             result.normalizationType, result.sortType, result.parentDeckId, null, result.frontLanguage, result.backLanguage,
             result.description, result.dailyNewCardLimit, result.dailyReviewLimit, result.frontNoteTemplates, result.backNoteTemplates,
             result.defaultPromptSide, result.sortPinnedCardsFirst, result.seedNewCardsFromTemplate, result.activeTemplateSetId,
-            result.clearActiveTemplateSetId) }; dismissEditorDuplicateWarning() }
+            result.clearActiveTemplateSetId, result.textCorrections) }; dismissEditorDuplicateWarning() }
     fun saveEditorIgnoringDuplicates() { _editorDuplicateResult.value?.let { result ->
         saveDeckWithCards(result.deckId, result.deckName, result.cardsToSave,
             result.normalizationType, result.sortType, result.parentDeckId,
             null, result.frontLanguage, result.backLanguage,
             result.description, result.dailyNewCardLimit, result.dailyReviewLimit, result.frontNoteTemplates, result.backNoteTemplates,
             result.defaultPromptSide, result.sortPinnedCardsFirst, result.seedNewCardsFromTemplate, result.activeTemplateSetId,
-            result.clearActiveTemplateSetId) }; dismissEditorDuplicateWarning() }
+            result.clearActiveTemplateSetId, result.textCorrections) }; dismissEditorDuplicateWarning() }
 
     private fun saveDeckWithCards(
         deckId: String?,
@@ -2042,7 +2251,8 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         sortPinnedCardsFirst: Boolean? = null,
         seedNewCardsFromTemplate: Boolean? = null,
         activeTemplateSetId: String? = null,
-        clearActiveTemplateSetId: Boolean = false
+        clearActiveTemplateSetId: Boolean = false,
+        textCorrections: TextCorrectionSettings = TextCorrectionSettings()
     ) {
         viewModelScope.launch(Dispatchers.IO) {
             val id = deckId ?: UUID.randomUUID().toString()
@@ -2054,14 +2264,15 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
             // is explicitly saved, see updateDeckOptions) is what makes it also cover newly added
             // or edited cards, not just a deck's already-existing ones. normalizeText is
             // idempotent for every NormalizationType, so re-applying it to untouched cards on
-            // every save is harmless.
+            // every save is harmless. Corrections run first (they're idempotent too), then casing.
+            fun normalizeOne(text: String) = normalizeText(normalizationType, applyTextCorrections(textCorrections, text))
             fun normalizeNotes(notes: List<NoteField>) = notes.map {
-                if (it.type == MediaType.PLAIN_TEXT) it.copy(content = normalizeText(normalizationType, it.content)) else it
+                if (it.type == MediaType.PLAIN_TEXT) it.copy(content = normalizeOne(it.content)) else it
             }
             val normalizedCardsToSave = cardsToSave.map {
                 it.copy(
-                    front = normalizeText(normalizationType, it.front),
-                    back = normalizeText(normalizationType, it.back),
+                    front = normalizeOne(it.front),
+                    back = normalizeOne(it.back),
                     frontNotes = normalizeNotes(it.frontNotes),
                     backNotes = normalizeNotes(it.backNotes)
                 )
@@ -2090,6 +2301,7 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
                 dailyReviewLimit = dailyReviewLimit,
                 seedNewCardsFromTemplate = seedNewCardsFromTemplate ?: existingDeck?.seedNewCardsFromTemplate ?: false,
                 activeTemplateSetId = if (clearActiveTemplateSetId) activeTemplateSetId else (activeTemplateSetId ?: existingDeck?.activeTemplateSetId),
+                textCorrections = textCorrections,
                 isPendingSync = true
             )
 
@@ -2616,7 +2828,13 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
 
     // --- Tag Operations (Delegated to Room) ---
     fun saveTagDefinition(tag: TagDefinition) {
-        viewModelScope.launch(Dispatchers.IO) { tagDao.insertOrUpdate(tag.copy(isPendingSync = true)) }
+        val normalizedName = normalizeTagName(tag.name)
+        // Normalization can turn two distinct typed names into the same string (e.g. "Spanish"
+        // and "spanish" both normalizing to "Spanish") even though the caller's own duplicate-name
+        // check already passed against the raw, pre-normalization name — skip rather than insert
+        // a second TagDefinition row the rest of the app assumes can't exist.
+        if (tags.value.any { it.id != tag.id && it.name == normalizedName }) return
+        viewModelScope.launch(Dispatchers.IO) { tagDao.insertOrUpdate(tag.copy(name = normalizedName, isPendingSync = true)) }
     }
 
     fun deleteTagDefinition(tag: TagDefinition) {
@@ -2680,20 +2898,89 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
+    /** Links+seeds the given decks to this shared [TemplateSet] — same "Apply to New" semantics
+     * `AdvancedDeckEditorDialog`'s own split button uses for whichever one deck it's open on, just
+     * across however many decks were picked here (Settings' global Templates list has no single
+     * "current deck" to default to). Never touches any card's existing fields — only each deck's
+     * own link/seed-shape, exactly like [removeDeckTemplate] only ever touches one deck's link. */
+    fun applyTemplateToDecks(templateSet: TemplateSet, deckIds: Set<String>) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val targets = localDecks.filter { it.id in deckIds }
+            if (targets.isEmpty()) return@launch
+            val now = System.currentTimeMillis()
+            deckDao.insertOrUpdateAll(targets.map {
+                it.copy(
+                    activeTemplateSetId = templateSet.id,
+                    frontNoteTemplates = templateSet.frontFields,
+                    backNoteTemplates = templateSet.backFields,
+                    seedNewCardsFromTemplate = true,
+                    updatedAt = now,
+                    isPendingSync = true
+                )
+            })
+        }
+    }
+
+    /** Card-level counterpart to [applyTemplateToDecks] — backs Settings' power-user bulk
+     * picker's "add" side for templates. A field counts as already present if a card already has
+     * one of the same name+type (matching [TemplateMatchStatus]'s own notion of "same field"), in
+     * which case it's left untouched rather than duplicated; this mirrors the per-card merge
+     * `DeckEditorScreen`'s own "Apply to All" sweep does to a deck's cards, just written straight
+     * to the DB for cards picked from a dialog with no open editor behind it. */
+    fun addTemplateFieldsToCards(templateSet: TemplateSet, cardIds: Collection<String>) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val cardsToUpdate = localCards.filter { it.id in cardIds }.mapNotNull { card ->
+                val currentFrontKeys = card.frontNotes.map { it.name to it.type }
+                val currentBackKeys = card.backNotes.map { it.name to it.type }
+                val missingFront = templateSet.frontFields.filter { (it.name to it.type) !in currentFrontKeys }.map { it.copy(content = "") }
+                val missingBack = templateSet.backFields.filter { (it.name to it.type) !in currentBackKeys }.map { it.copy(content = "") }
+                if (missingFront.isEmpty() && missingBack.isEmpty()) null
+                else card.copy(
+                    frontNotes = card.frontNotes + missingFront,
+                    backNotes = card.backNotes + missingBack,
+                    updatedAt = System.currentTimeMillis(),
+                    isPendingSync = true
+                )
+            }
+            if (cardsToUpdate.isNotEmpty()) cardDao.insertOrUpdateAll(cardsToUpdate)
+        }
+    }
+
+    /** [addTemplateFieldsToCards]'s inverse — strips exactly the fields (matched by name+type)
+     * [templateSet] defines from each card. Never touches a field the card has that the template
+     * doesn't define, even if its name happens to collide after the card was edited independently. */
+    fun removeTemplateFieldsFromCards(templateSet: TemplateSet, cardIds: Collection<String>) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val templateFrontKeys = templateSet.frontFields.map { it.name to it.type }.toSet()
+            val templateBackKeys = templateSet.backFields.map { it.name to it.type }.toSet()
+            val cardsToUpdate = localCards.filter { it.id in cardIds }.mapNotNull { card ->
+                val newFront = card.frontNotes.filterNot { (it.name to it.type) in templateFrontKeys }
+                val newBack = card.backNotes.filterNot { (it.name to it.type) in templateBackKeys }
+                if (newFront.size == card.frontNotes.size && newBack.size == card.backNotes.size) null
+                else card.copy(frontNotes = newFront, backNotes = newBack, updatedAt = System.currentTimeMillis(), isPendingSync = true)
+            }
+            if (cardsToUpdate.isNotEmpty()) cardDao.insertOrUpdateAll(cardsToUpdate)
+        }
+    }
+
     fun renameTag(tag: TagDefinition, oldName: String) {
-        if (tag.name.trim() == oldName) {
-            saveTagDefinition(tag)
+        val normalizedName = normalizeTagName(tag.name.trim())
+        if (normalizedName == oldName) {
+            saveTagDefinition(tag.copy(name = normalizedName))
             return
         }
+        // See the matching guard in saveTagDefinition — normalization can collapse this rename
+        // onto another tag's existing name.
+        if (tags.value.any { it.id != tag.id && it.name == normalizedName }) return
 
         viewModelScope.launch(Dispatchers.IO) {
             // 1. Save the renamed tag to Room
-            tagDao.insertOrUpdate(tag.copy(isPendingSync = true))
+            tagDao.insertOrUpdate(tag.copy(name = normalizedName, isPendingSync = true))
 
             // 2. Update any cards that had the old tag name
             val cardsToUpdate = localCards.filter { it.tags.contains(oldName) }.map { card ->
                 card.copy(
-                    tags = card.tags.map { if (it == oldName) tag.name.trim() else it },
+                    tags = card.tags.map { if (it == oldName) normalizedName else it },
                     updatedAt = System.currentTimeMillis(),
                     isPendingSync = true
                 )
@@ -2708,6 +2995,17 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         viewModelScope.launch(Dispatchers.IO) {
             val cardsToUpdate = localCards.filter { it.id in cardIds }.map { card ->
                 card.copy(tags = card.tags - tagName, updatedAt = System.currentTimeMillis(), isPendingSync = true)
+            }
+            if (cardsToUpdate.isNotEmpty()) cardDao.insertOrUpdateAll(cardsToUpdate)
+        }
+    }
+
+    /** [removeTagFromCards]'s counterpart — backs Settings' power-user bulk picker's "add"
+     * side. Skips any card that already has the tag rather than writing a no-op update. */
+    fun addTagToCards(tagName: String, cardIds: Collection<String>) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val cardsToUpdate = localCards.filter { it.id in cardIds && tagName !in it.tags }.map { card ->
+                card.copy(tags = card.tags + tagName, updatedAt = System.currentTimeMillis(), isPendingSync = true)
             }
             if (cardsToUpdate.isNotEmpty()) cardDao.insertOrUpdateAll(cardsToUpdate)
         }
@@ -2736,7 +3034,15 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
                     )
                 }
 
-                // 2. Deck-Level Snapshot: Metadata
+                // 2. Deck-Level Snapshot: Normalization
+                if (set.linkageSettings.linkNormalization && !newSettings.linkNormalization) {
+                    updatedSet = updatedSet.copy(
+                        normalizationType = parent.normalizationType,
+                        textCorrections = parent.textCorrections
+                    )
+                }
+
+                // 3. Deck-Level Snapshot: Metadata
                 if (set.linkageSettings.linkMetadata && !newSettings.linkMetadata) {
                     updatedSet = updatedSet.copy(
                         createdAt = parent.createdAt,
@@ -2744,7 +3050,7 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
                     )
                 }
 
-                // 3. Deck-Level Snapshot: Scoring (Missed this previously!)
+                // 4. Deck-Level Snapshot: Scoring (Missed this previously!)
                 if (set.linkageSettings.linkScoring && !newSettings.linkScoring) {
                     updatedSet = updatedSet.copy(
                         fsrsEnabled = parent.fsrsEnabled,

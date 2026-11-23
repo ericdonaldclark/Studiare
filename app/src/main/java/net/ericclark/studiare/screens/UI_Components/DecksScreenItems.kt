@@ -10,23 +10,37 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.ripple
 import androidx.compose.material.icons.rounded.PushPin
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.layout.AlignmentLine
+import androidx.compose.ui.layout.FirstBaseline
+import androidx.compose.ui.layout.LastBaseline
+import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.Hyphens
+import androidx.compose.ui.text.style.LineBreak
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import kotlin.math.roundToInt
 import java.util.*
 import net.ericclark.studiare.*
 import net.ericclark.studiare.R
@@ -77,6 +91,34 @@ fun DeckListItem(
     val isCardFocused by cardInteractionSource.collectIsFocusedAsState()
     val cardBorderColor =
         if (isCardFocused) MaterialTheme.colorScheme.primary else Color.Transparent
+
+    val density = LocalDensity.current
+    val textMeasurer = androidx.compose.ui.text.rememberTextMeasurer()
+    val mediumStyle = MaterialTheme.typography.headlineMedium.copy(hyphens = Hyphens.Auto, lineBreak = LineBreak.Paragraph)
+    val smallStyle = MaterialTheme.typography.headlineSmall.copy(hyphens = Hyphens.Auto, lineBreak = LineBreak.Paragraph)
+    var nameHeightPx by remember { mutableFloatStateOf(0f) }
+    fun onNameTextLayout(result: androidx.compose.ui.text.TextLayoutResult) {
+        nameHeightPx = result.size.height.toFloat()
+    }
+    // The reference — "the card size this tile already has today" — is Headline Small's own
+    // 3-line height (2 * its line height; see the Playground's doc comment for the full
+    // derivation of why 2x, not 3x, is the right reference), computed analytically from font
+    // metrics so it tracks the device's font-size/accessibility settings the same way real
+    // rendering does, rather than a hardcoded pixel value.
+    val smallBaselineHeightPx = with(density) {
+        2f * MaterialTheme.typography.headlineSmall.lineHeight.toPx()
+    }
+    val extraVsSmallBaselineDp = with(density) { (nameHeightPx - smallBaselineHeightPx).toDp() }
+    val basePaddingV = dimensions.paddingMedium.coerceAtLeast(dimensions.cornerRadiusMedium)
+    // This tile only ever shows the combined pill (no "Production Row" alternative — that was a
+    // Playground-only comparison option), so there's exactly one slack budget to drain. Unlike an
+    // earlier version of this logic, any deficit beyond that slack is NOT taken out of the card's
+    // own padding — at Compact spacing, paddingLarge/spacingSmall shrink far more than the name's
+    // extra height does, which drove paddingV to 0 and broke top/bottom padding while horizontal
+    // padding (basePaddingV, untouched by this math) stayed normal (confirmed on-device). The
+    // tile is allowed to grow taller instead in that case, rather than sacrificing padding.
+    val combinedPillSlack = dimensions.paddingLarge + dimensions.spacingSmall
+    val gap = (combinedPillSlack - extraVsSmallBaselineDp).coerceAtLeast(0.dp)
 
     SelectableTileOverlay(selected = selected, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(dimensions.cornerRadiusMedium)) {
     ElevatedCard(
@@ -130,14 +172,36 @@ fun DeckListItem(
     ) {
         // At small (Compact) padding, the fixed corner radius crowds the name/count into the
         // top-left corner; keep at least as much clearance as the corner itself needs.
-        Column(modifier = Modifier.padding(dimensions.paddingMedium.coerceAtLeast(dimensions.cornerRadiusMedium))) {
+        Column(modifier = Modifier.padding(basePaddingV)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.Top
             ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    val titleText = displayName ?: deck.deck.name
+                val titleText = displayName ?: deck.deck.name
+                // weight(1f) goes on this outer Box, not on TooltipBox/TextWithOverflowTooltip's
+                // own modifier param: Material3's TooltipBox wraps its modifier two layout levels
+                // deep inside an unmodified Box (BasicTooltipBox's `Box { ... WrappedAnchor(
+                // modifier = modifier) ... }`), so Row never sees the weight ParentData on its
+                // direct child and treats it as unweighted — which let the name's own internal
+                // fillMaxWidth() silently claim the whole row, squeezing the pill/chip beside it
+                // down to nothing (confirmed on-device before this fix).
+                BoxWithConstraints(modifier = Modifier.weight(1f).padding(end = dimensions.spacingSmall)) {
+                    // Decide Medium-vs-Small up front by measuring against this box's own resolved
+                    // width, instead of rendering Medium first and only downgrading to Small after
+                    // onTextLayout reports overflow — that two-pass retry was visibly flashing
+                    // (render at the larger size, then resize/rewrap down to Small a frame or two
+                    // later) whenever a long title didn't fit Medium, confirmed on-device.
+                    val maxWidthPx = with(density) { maxWidth.roundToPx() }
+                    val nameStyle = remember(titleText, maxWidthPx, mediumStyle, smallStyle) {
+                        val mediumFits = !textMeasurer.measure(
+                            text = titleText,
+                            style = mediumStyle,
+                            maxLines = 3,
+                            constraints = Constraints(maxWidth = maxWidthPx)
+                        ).hasVisualOverflow
+                        if (mediumFits) mediumStyle else smallStyle
+                    }
                     if (fullPathTooltip != null) {
                         // Generations were skipped in titleText (e.g. "Nouns...Set 1") — always
                         // show the full path on tooltip, not just when the (already-shortened)
@@ -152,22 +216,67 @@ fun DeckListItem(
                         ) {
                             Text(
                                 text = titleText,
-                                style = MaterialTheme.typography.headlineSmall,
+                                style = nameStyle,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onSurface,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
+                                minLines = 3,
+                                maxLines = 3,
+                                overflow = TextOverflow.Ellipsis,
+                                onTextLayout = ::onNameTextLayout
                             )
                         }
                     } else {
                         TextWithOverflowTooltip(
                             text = titleText,
-                            style = MaterialTheme.typography.headlineSmall,
+                            style = nameStyle,
                             fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface
+                            color = MaterialTheme.colorScheme.onSurface,
+                            minLines = 3,
+                            maxLines = 3,
+                            onTextLayout = ::onNameTextLayout
                         )
                     }
-                    Spacer(Modifier.height(4.dp))
+                }
+
+                if (showManageSetsButton) {
+                    // Combined pressable pill: tapping anywhere (the Sets line, the Cards line,
+                    // or the icon) opens Manage Sets — one control instead of a separate chip +
+                    // button, matching the UI Playground's "Combined Pill" deck tile design.
+                    Surface(
+                        onClick = onManageSets,
+                        shape = RoundedCornerShape(8.dp),
+                        color = MaterialTheme.colorScheme.secondaryContainer
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.AccountTree,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(Modifier.width(6.dp))
+                            Column(horizontalAlignment = Alignment.Start) {
+                                Text(
+                                    stringResource(R.string.sets_count_simple, setsCount),
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSecondaryContainer
+                                )
+                                Text(
+                                    pluralStringResource(R.plurals.cards_count, deck.totalCards, deck.totalCards),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.8f)
+                                )
+                            }
+                        }
+                    }
+                } else {
+                    // No manage-sets caller currently passes showManageSetsButton = false, but
+                    // keep the card count visible (as before) if one ever does — just not
+                    // clickable, since there's no Manage Sets destination to open here.
                     SuggestionChip(
                         onClick = { },
                         label = { Text(pluralStringResource(R.plurals.cards_count, deck.totalCards, deck.totalCards)) },
@@ -178,35 +287,14 @@ fun DeckListItem(
                         border = null
                     )
                 }
-
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    if (showManageSetsButton) {
-                        // Changed to display number of sets
-                        val manageInteractionSource = remember { MutableInteractionSource() }
-                        TextButton(
-                            onClick = onManageSets,
-                            interactionSource = manageInteractionSource,
-                            modifier = Modifier.pressSquish(manageInteractionSource),
-                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
-                            shape = RoundedCornerShape(dimensions.cornerRadiusButton)
-                        ) {
-                            Icon(
-                                Icons.Default.AccountTree,
-                                getText(R.string.manage_sets),
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(18.dp)
-                            )
-                            Spacer(Modifier.width(8.dp))
-                            Text(
-                                stringResource(R.string.sets_count_simple, setsCount),
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                        }
-                    }
-                }
             }
 
-            Spacer(Modifier.height(dimensions.paddingLarge))
+            // Matches the Playground's two-spacer sequence exactly: a fixed small gap, then the
+            // computed compensation gap. Missing this fixed one (ported separately from `gap`
+            // below) was exactly a dimensions.spacingSmall-sized height shortfall versus the
+            // Playground reference, confirmed on-device.
+            Spacer(Modifier.height(dimensions.spacingSmall))
+            Spacer(Modifier.height(gap))
 
             // One line: the Study button never wraps. The flexible spacer on the left is what gives way on a
             // narrow tile, so the space before the edit icon shrinks first.
@@ -311,7 +399,10 @@ fun SetListItem(
     deck: DeckSummary,
     dimensions: StudiareDimensions,
     onStudy: (String?) -> Unit,
-    onOpenSets: () -> Unit = {},
+    onEdit: () -> Unit = {},
+    onDelete: () -> Unit = {},
+    onManageSets: () -> Unit = {},
+    onTogglePin: (() -> Unit)? = null,
     activeSession: ActiveSession? = null,
     onResumeSession: (ActiveSession) -> Unit = {},
     onRestartSession: (ActiveSession) -> Unit = {},
@@ -324,6 +415,7 @@ fun SetListItem(
     val interactionSource = remember { MutableInteractionSource() }
     val isFocused by interactionSource.collectIsFocusedAsState()
     val borderColor = if (isFocused) MaterialTheme.colorScheme.primary else Color.Transparent
+    var showOverflow by remember { mutableStateOf(false) }
 
     SelectableTileOverlay(selected = selected, shape = RoundedCornerShape(dimensions.cornerRadiusMedium)) {
     Card(
@@ -343,7 +435,13 @@ fun SetListItem(
                 interactionSource = interactionSource,
                 indication = LocalIndication.current,
                 onLongClick = onLongClick
-            ) { if (selectionMode) onToggleSelect() else onOpenSets() },
+            ) {
+                // Tapping elsewhere in the tile opens this set's Study Hub, same as tapping the
+                // split button's main action — it no longer jumps to the PARENT deck's set
+                // manager (that was never this set's own manager to begin with). Drilling into
+                // this set's own sets is now only reachable via the overflow menu's "Manage".
+                if (selectionMode) onToggleSelect() else onStudy(null)
+            },
         shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainer
@@ -354,17 +452,138 @@ fun SetListItem(
                 // Same corner-clearance floor as DeckListItem, above.
                 .padding(dimensions.paddingMedium.coerceAtLeast(dimensions.cornerRadiusMedium))
         ) {
-            TextWithOverflowTooltip(
-                text = deck.deck.name,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold
-            )
-            Spacer(Modifier.height(4.dp))
-            Text(
-                pluralStringResource(R.plurals.cards_count_lowercase, deck.totalCards, deck.totalCards),
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            // Top-right corner, same as DeckListItem's Manage Sets button — not next to the
+            // Study button below, which has no room to spare on this tile's fixed setTileWidth.
+            //
+            // The overflow trigger is a plain Icon with an explicit 24dp clickable/ripple box, NOT
+            // TooltipIconButton/IconButton — Material3's IconButton enforces an internal minimum
+            // 48dp interactive size no matter what size modifier you give it, and the card count
+            // below it was being placed relative to that button's un-shifted, oversized reserved
+            // slot — leaving a visible gap between the overflow dots and the count once the name
+            // could wrap to 2 lines (confirmed on-device: fine for a 1-line name by coincidence,
+            // visibly wrong for a 2-line one). This exact fix — ported from the UI Playground's
+            // set tile experiment, which hit and solved this same problem first — replaces the
+            // whole pixel-measured offset mechanism: with no hidden minimum size to correct for,
+            // plain Alignment.Top placement puts the glyph exactly where it's placed, and the card
+            // count just follows it directly in normal Column flow, snug underneath, with no
+            // measurement or offset modifier needed at all.
+            val overflowInteractionSource = remember { MutableInteractionSource() }
+
+            // A custom Layout instead of Row/Column: two earlier attempts at this (matching the
+            // count's own layout-box bottom to the name's layout-box bottom via
+            // fillMaxHeight()+SpaceBetween, then hand-computing a spacer from
+            // TextLayoutResult.getLineBottom() on both texts) were both confirmed wrong on-device —
+            // box edges and estimated line-bottoms don't reliably track the actual glyph positions.
+            // This uses Compose's own AlignmentLine mechanism instead (the same one Row's
+            // alignByBaseline/alignBy use under the hood): each Text placeable exposes its true
+            // baseline position via placeable[LastBaseline]/[FirstBaseline], computed by the text
+            // layout engine itself rather than estimated by hand, so the count's single line is
+            // placed with its baseline exactly on the name's last (second) line's baseline.
+            Layout(
+                modifier = Modifier.fillMaxWidth(),
+                content = {
+                    // 0: name — allowed to wrap to 2 lines (minLines = maxLines = 2), matching the
+                    // UI Playground's set tile experiment.
+                    TextWithOverflowTooltip(
+                        text = deck.deck.name,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        minLines = 2,
+                        maxLines = 2
+                    )
+
+                    // 1: overflow trigger — a plain Icon with an explicit 24dp clickable/ripple box,
+                    // NOT TooltipIconButton/IconButton (Material3's IconButton enforces an internal
+                    // minimum 48dp interactive size no matter what size modifier you give it, which
+                    // broke this exact alignment earlier in this file's history).
+                    Box {
+                        Icon(
+                            Icons.Default.MoreVert,
+                            contentDescription = getText(R.string.options_more),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier
+                                .size(24.dp)
+                                .clip(CircleShape)
+                                .clickable(
+                                    interactionSource = overflowInteractionSource,
+                                    indication = ripple(bounded = false, radius = 20.dp),
+                                    onClickLabel = getText(R.string.options_more)
+                                ) { showOverflow = true }
+                        )
+                        DropdownMenu(expanded = showOverflow, onDismissRequest = { showOverflow = false }) {
+                            DropdownMenuItem(
+                                text = { Text(getText(R.string.edit)) },
+                                leadingIcon = { Icon(Icons.Default.Edit, contentDescription = null) },
+                                onClick = { showOverflow = false; onEdit() }
+                            )
+                            if (onTogglePin != null) {
+                                val pinned = deck.deck.isPinned
+                                DropdownMenuItem(
+                                    text = { Text(getText(if (pinned) R.string.unpin_set else R.string.pin_set)) },
+                                    leadingIcon = {
+                                        Icon(
+                                            Icons.Rounded.PushPin,
+                                            contentDescription = null,
+                                            tint = if (pinned) MaterialTheme.colorScheme.primary else LocalContentColor.current
+                                        )
+                                    },
+                                    onClick = { showOverflow = false; onTogglePin() }
+                                )
+                            }
+                            DropdownMenuItem(
+                                text = { Text(getText(R.string.delete), color = MaterialTheme.colorScheme.error) },
+                                leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
+                                onClick = { showOverflow = false; onDelete() }
+                            )
+                            DropdownMenuItem(
+                                text = { Text(getText(R.string.manage_sets)) },
+                                // This set's OWN manager (its children), not the parent deck's —
+                                // see onManageSets' doc comment on the composable's callers.
+                                leadingIcon = { Icon(Icons.Default.AccountTree, contentDescription = null) },
+                                onClick = { showOverflow = false; onManageSets() }
+                            )
+                        }
+                    }
+
+                    // 2: card count — positioned in the measure block below by baseline alignment
+                    // against the name's last line, not by a guessed/computed offset.
+                    Text(
+                        pluralStringResource(R.plurals.cards_count_lowercase, deck.totalCards, deck.totalCards),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            ) { measurables, constraints ->
+                val (nameMeasurable, iconMeasurable, countMeasurable) = measurables
+
+                // Icon and count are measured first, at their own natural size (loose min), since
+                // the name gets whatever width is left over after them (same split the old
+                // weight(1f) Row gave the name).
+                val looseConstraints = constraints.copy(minWidth = 0, minHeight = 0)
+                val iconPlaceable = iconMeasurable.measure(looseConstraints)
+                val countPlaceable = countMeasurable.measure(looseConstraints)
+                val rightColumnWidth = maxOf(iconPlaceable.width, countPlaceable.width)
+                val nameWidth = (constraints.maxWidth - rightColumnWidth).coerceAtLeast(0)
+                val namePlaceable = nameMeasurable.measure(constraints.copy(minWidth = nameWidth, maxWidth = nameWidth))
+
+                val nameBaseline = namePlaceable[LastBaseline]
+                val countBaseline = countPlaceable[FirstBaseline]
+                val countY = if (nameBaseline != AlignmentLine.Unspecified && countBaseline != AlignmentLine.Unspecified) {
+                    // Never let the count creep up over the icon, however short the name turns
+                    // out to be (e.g. a short name that doesn't actually wrap, where the 2-line
+                    // reserved box is mostly blank) — the icon's own height is the floor.
+                    (nameBaseline - countBaseline).coerceAtLeast(iconPlaceable.height)
+                } else {
+                    iconPlaceable.height
+                }
+
+                val totalHeight = maxOf(namePlaceable.height, countY + countPlaceable.height)
+                layout(constraints.maxWidth, totalHeight) {
+                    namePlaceable.placeRelative(0, 0)
+                    iconPlaceable.placeRelative(constraints.maxWidth - iconPlaceable.width, 0)
+                    countPlaceable.placeRelative(constraints.maxWidth - countPlaceable.width, countY)
+                }
+            }
 
             // Same fixed gap DeckListItem uses between its content block and the button row.
             Spacer(Modifier.height(dimensions.paddingLarge))
@@ -373,7 +592,6 @@ fun SetListItem(
                 modifier = Modifier.fillMaxWidth(),
                 contentAlignment = Alignment.Center
             ) {
-                // REPLACED: Normal Button with the new Split Button
                 StudySplitButton(
                     onStudyMain = { onStudy(null) },
                     onResumeSession = activeSession?.let { session -> { onResumeSession(session) } },
@@ -382,38 +600,6 @@ fun SetListItem(
                     enabled = deck.totalCards > 0
                 )
             }
-
-            // This Box fills the rest of the height, floating the button perfectly in the middle
-            /*
-            Box(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center
-            ) {
-                val studyInteractionSource = remember { MutableInteractionSource() }
-                val isStudyPressed by studyInteractionSource.collectIsPressedAsState()
-                val studyScale by animateFloatAsState(
-                    targetValue = if (isStudyPressed) 0.95f else 1f,
-                    animationSpec = spring(
-                        dampingRatio = Spring.DampingRatioMediumBouncy,
-                        stiffness = Spring.StiffnessMedium
-                    ),
-                    label = "studySquish"
-                )
-
-                Button(
-                    onClick = onStudy,
-                    interactionSource = studyInteractionSource,
-                    enabled = deck.cards.isNotEmpty(),
-                    modifier = Modifier.scale(studyScale),
-                    contentPadding = PaddingValues(horizontal = 24.dp, vertical = 12.dp),
-                    shape = RoundedCornerShape(dimensions.cornerRadiusButton)
-                ) {
-                    Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(8.dp))
-                    Text(getText(R.string.study))
-                }
-            }
-            */
         }
     }
     }

@@ -35,6 +35,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.background
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.layout.SubcomposeLayout
+import androidx.compose.ui.unit.Constraints
+import kotlin.math.roundToInt
 import net.ericclark.studiare.*
 import net.ericclark.studiare.components.ColorSwatch
 import net.ericclark.studiare.components.SimpleColorPicker
@@ -337,6 +340,16 @@ internal fun <T> TypedChipGrid(
  * @param contentPadding overrides each button's content padding — e.g. for an icon-only group
  *   that needs to be narrow enough to sit in a top app bar's navigation-icon slot. `null` (the
  *   default) keeps every existing call site's current sizing (`ToggleButton`'s own default).
+ * @param equalWidth when true (the default — every existing call site), each button gets an
+ *   equal share of the row via `Modifier.weight(1f)`. When false, each button is sized in
+ *   proportion to its own content (label, plus the checkmark/icon when selected) instead of all
+ *   being forced equal — but the group as a whole still fills [modifier]'s width exactly, same as
+ *   the equal-width layout: every button's natural (content-driven) width is scaled up by the same
+ *   factor so the widths still sum to the available width, just unevenly distributed instead of
+ *   split equally.
+ * @param perButtonModifier applied to every button in addition to its sizing modifier (weight or
+ *   computed width) — e.g. `Modifier.focusProperties { canFocus = false }` to keep a toolbar
+ *   group from stealing focus from whatever text field it's editing.
  */
 @Composable
 internal fun <T> ConnectedButtonGroup(
@@ -347,42 +360,94 @@ internal fun <T> ConnectedButtonGroup(
     labelFor: (@Composable (T) -> String)? = null,
     iconFor: (@Composable (T, Boolean) -> Unit)? = null,
     contentPadding: PaddingValues? = null,
+    equalWidth: Boolean = true,
+    perButtonModifier: Modifier = Modifier,
 ) {
-    Row(
-        modifier = modifier,
-        horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween)
-    ) {
-        items.forEachIndexed { index, item ->
-            val checked = item == selected
-            ToggleButton(
-                checked = checked,
-                onCheckedChange = { onSelected(item) },
-                modifier = Modifier
-                    .weight(1f)
-                    .semantics { role = Role.RadioButton },
-                shapes = when (index) {
-                    0 -> ButtonGroupDefaults.connectedLeadingButtonShapes()
-                    items.lastIndex -> ButtonGroupDefaults.connectedTrailingButtonShapes()
-                    else -> ButtonGroupDefaults.connectedMiddleButtonShapes()
-                },
-                contentPadding = contentPadding ?: ButtonDefaults.contentPaddingFor(ButtonDefaults.MinHeight)
-            ) {
-                when {
-                    // Only reserve the icon slot while checked — an unchecked button has no icon
-                    // at all here (same as the default-checkmark branch below), so its label sits
-                    // alone and centers correctly, matching every other ConnectedButtonGroup.
-                    checked && iconFor != null && labelFor != null -> {
-                        Box(Modifier.size(ToggleButtonDefaults.IconSize)) { iconFor(item, checked) }
-                        Spacer(Modifier.size(ToggleButtonDefaults.IconSpacing))
-                    }
-                    iconFor != null -> iconFor(item, checked)
-                    checked -> {
-                        Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(ToggleButtonDefaults.IconSize))
-                        Spacer(Modifier.size(ToggleButtonDefaults.IconSpacing))
-                    }
+    @Composable
+    fun ButtonContent(index: Int, item: T, checked: Boolean, buttonModifier: Modifier) {
+        ToggleButton(
+            checked = checked,
+            onCheckedChange = { onSelected(item) },
+            modifier = buttonModifier.then(perButtonModifier).semantics { role = Role.RadioButton },
+            shapes = when (index) {
+                0 -> ButtonGroupDefaults.connectedLeadingButtonShapes()
+                items.lastIndex -> ButtonGroupDefaults.connectedTrailingButtonShapes()
+                else -> ButtonGroupDefaults.connectedMiddleButtonShapes()
+            },
+            contentPadding = contentPadding ?: ButtonDefaults.contentPaddingFor(ButtonDefaults.MinHeight)
+        ) {
+            when {
+                // Only reserve the icon slot while checked — an unchecked button has no icon
+                // at all here (same as the default-checkmark branch below), so its label sits
+                // alone and centers correctly, matching every other ConnectedButtonGroup.
+                checked && iconFor != null && labelFor != null -> {
+                    Box(Modifier.size(ToggleButtonDefaults.IconSize)) { iconFor(item, checked) }
+                    Spacer(Modifier.size(ToggleButtonDefaults.IconSpacing))
                 }
-                if (labelFor != null) {
-                    Text(labelFor(item), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                iconFor != null -> iconFor(item, checked)
+                checked -> {
+                    Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(ToggleButtonDefaults.IconSize))
+                    Spacer(Modifier.size(ToggleButtonDefaults.IconSpacing))
+                }
+            }
+            if (labelFor != null) {
+                Text(labelFor(item), maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+        }
+    }
+
+    if (equalWidth) {
+        Row(
+            modifier = modifier,
+            horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween)
+        ) {
+            items.forEachIndexed { index, item ->
+                ButtonContent(index, item, item == selected, Modifier.weight(1f))
+            }
+        }
+    } else {
+        // Two subcompose passes per button: the first ("measure-N") composes each button just to
+        // read its own natural (unconstrained) width, never placed or drawn; the second
+        // ("place-N") recomposes it at the exact width this pass computed, which is then placed.
+        // A single Measurable can't be `measure()`d twice in one layout pass, so a fresh slot per
+        // pass is the standard SubcomposeLayout pattern for "size to content, but scaled to fill."
+        SubcomposeLayout(modifier = modifier) { constraints ->
+            val spacingPx = ButtonGroupDefaults.ConnectedSpaceBetween.roundToPx()
+            val totalSpacing = spacingPx * (items.size - 1).coerceAtLeast(0)
+            val looseConstraints = Constraints(maxHeight = constraints.maxHeight)
+            val naturalWidths = items.mapIndexed { index, item ->
+                subcompose("measure-$index") {
+                    ButtonContent(index, item, item == selected, Modifier)
+                }.first().measure(looseConstraints).width
+            }
+            val availableForButtons = (constraints.maxWidth - totalSpacing).coerceAtLeast(0)
+            val sumNatural = naturalWidths.sum()
+            val scale = if (sumNatural > 0) availableForButtons.toFloat() / sumNatural else 1f
+            val targetWidths = naturalWidths.map { (it * scale).roundToInt().coerceAtLeast(0) }.toMutableList()
+            if (targetWidths.isNotEmpty()) {
+                // Rounding each width independently can leave the total a pixel or two off the
+                // exact available width; put the whole remainder on the last button rather than
+                // let the group's total width drift from what equalWidth would have filled.
+                val diff = availableForButtons - targetWidths.sum()
+                targetWidths[targetWidths.lastIndex] = (targetWidths.last() + diff).coerceAtLeast(0)
+            }
+            val placeables = items.mapIndexed { index, item ->
+                subcompose("place-$index") {
+                    ButtonContent(index, item, item == selected, Modifier)
+                }.first().measure(
+                    Constraints(
+                        minWidth = targetWidths[index],
+                        maxWidth = targetWidths[index],
+                        maxHeight = constraints.maxHeight
+                    )
+                )
+            }
+            val height = placeables.maxOfOrNull { it.height } ?: 0
+            layout(constraints.maxWidth, height) {
+                var x = 0
+                placeables.forEach { placeable ->
+                    placeable.placeRelative(x, 0)
+                    x += placeable.width + spacingPx
                 }
             }
         }
