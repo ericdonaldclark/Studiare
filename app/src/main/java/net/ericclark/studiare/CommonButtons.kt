@@ -122,6 +122,8 @@ fun TextWithOverflowTooltip(
     style: androidx.compose.ui.text.TextStyle = LocalTextStyle.current,
     color: Color = Color.Unspecified,
     fontWeight: androidx.compose.ui.text.font.FontWeight? = null,
+    minLines: Int = 1,
+    maxLines: Int = 1,
     onTextLayout: (androidx.compose.ui.text.TextLayoutResult) -> Unit = {}
 ) {
     var isOverflowing by remember(text) { mutableStateOf(false) }
@@ -156,7 +158,8 @@ fun TextWithOverflowTooltip(
             style = style,
             fontWeight = fontWeight,
             color = color,
-            maxLines = 1,
+            minLines = minLines,
+            maxLines = maxLines,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier
                 .fillMaxWidth()

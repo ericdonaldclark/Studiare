@@ -10,9 +10,11 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.ripple
 import androidx.compose.material.icons.rounded.PushPin
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -24,9 +26,17 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.layout.AlignmentLine
+import androidx.compose.ui.layout.FirstBaseline
+import androidx.compose.ui.layout.LastBaseline
+import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.Hyphens
+import androidx.compose.ui.text.style.LineBreak
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
@@ -82,6 +92,43 @@ fun DeckListItem(
     val cardBorderColor =
         if (isCardFocused) MaterialTheme.colorScheme.primary else Color.Transparent
 
+    val density = LocalDensity.current
+    val titleTextForStyleReset = displayName ?: deck.deck.name
+    // Headline Medium is preferred; if the name would still be ellipsized at 3 lines in Headline
+    // Medium, drop to Headline Small instead (which may still truncate — there's no smaller
+    // fallback). Keyed on the title text so a changed/renamed deck always retries Medium rather
+    // than staying stuck on a previous downgrade — verified in the UI Playground's "Combined
+    // Pill" deck tile experiment before porting here.
+    var useMediumIfItFits by remember(titleTextForStyleReset) { mutableStateOf(true) }
+    val nameStyle = (if (useMediumIfItFits) MaterialTheme.typography.headlineMedium else MaterialTheme.typography.headlineSmall)
+        .copy(hyphens = Hyphens.Auto, lineBreak = LineBreak.Paragraph)
+    var nameHeightPx by remember { mutableFloatStateOf(0f) }
+    fun onNameTextLayout(result: androidx.compose.ui.text.TextLayoutResult) {
+        nameHeightPx = result.size.height.toFloat()
+        if (useMediumIfItFits && result.hasVisualOverflow) {
+            useMediumIfItFits = false
+        }
+    }
+    // The reference — "the card size this tile already has today" — is Headline Small's own
+    // 3-line height (2 * its line height; see the Playground's doc comment for the full
+    // derivation of why 2x, not 3x, is the right reference), computed analytically from font
+    // metrics so it tracks the device's font-size/accessibility settings the same way real
+    // rendering does, rather than a hardcoded pixel value.
+    val smallBaselineHeightPx = with(density) {
+        2f * MaterialTheme.typography.headlineSmall.lineHeight.toPx()
+    }
+    val extraVsSmallBaselineDp = with(density) { (nameHeightPx - smallBaselineHeightPx).toDp() }
+    val basePaddingV = dimensions.paddingMedium.coerceAtLeast(dimensions.cornerRadiusMedium)
+    // This tile only ever shows the combined pill (no "Production Row" alternative — that was a
+    // Playground-only comparison option), so there's exactly one slack budget to drain. Unlike an
+    // earlier version of this logic, any deficit beyond that slack is NOT taken out of the card's
+    // own padding — at Compact spacing, paddingLarge/spacingSmall shrink far more than the name's
+    // extra height does, which drove paddingV to 0 and broke top/bottom padding while horizontal
+    // padding (basePaddingV, untouched by this math) stayed normal (confirmed on-device). The
+    // tile is allowed to grow taller instead in that case, rather than sacrificing padding.
+    val combinedPillSlack = dimensions.paddingLarge + dimensions.spacingSmall
+    val gap = (combinedPillSlack - extraVsSmallBaselineDp).coerceAtLeast(0.dp)
+
     SelectableTileOverlay(selected = selected, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(dimensions.cornerRadiusMedium)) {
     ElevatedCard(
         elevation = CardDefaults.elevatedCardElevation(
@@ -134,19 +181,21 @@ fun DeckListItem(
     ) {
         // At small (Compact) padding, the fixed corner radius crowds the name/count into the
         // top-left corner; keep at least as much clearance as the corner itself needs.
-        Column(modifier = Modifier.padding(dimensions.paddingMedium.coerceAtLeast(dimensions.cornerRadiusMedium))) {
-            // alignByBaseline (not a Row-level verticalAlignment) lines up the Manage Sets button
-            // with the name's own baseline specifically, regardless of what's below it (the chip)
-            // — a plain Alignment.Bottom would instead align with the bottom of this whole Column
-            // (name+chip), and a weight+Bottom combination here previously blew up this Row's
-            // measured height for reasons that weren't worth chasing further; alignByBaseline is
-            // the standard, well-supported Compose tool for "align with this one line of text."
+        Column(modifier = Modifier.padding(basePaddingV)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Top
             ) {
-                Column(modifier = Modifier.weight(1f).alignByBaseline()) {
-                    val titleText = displayName ?: deck.deck.name
+                val titleText = displayName ?: deck.deck.name
+                // weight(1f) goes on this outer Box, not on TooltipBox/TextWithOverflowTooltip's
+                // own modifier param: Material3's TooltipBox wraps its modifier two layout levels
+                // deep inside an unmodified Box (BasicTooltipBox's `Box { ... WrappedAnchor(
+                // modifier = modifier) ... }`), so Row never sees the weight ParentData on its
+                // direct child and treats it as unweighted — which let the name's own internal
+                // fillMaxWidth() silently claim the whole row, squeezing the pill/chip beside it
+                // down to nothing (confirmed on-device before this fix).
+                Box(modifier = Modifier.weight(1f).padding(end = dimensions.spacingSmall)) {
                     if (fullPathTooltip != null) {
                         // Generations were skipped in titleText (e.g. "Nouns...Set 1") — always
                         // show the full path on tooltip, not just when the (already-shortened)
@@ -161,22 +210,67 @@ fun DeckListItem(
                         ) {
                             Text(
                                 text = titleText,
-                                style = MaterialTheme.typography.headlineSmall,
+                                style = nameStyle,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onSurface,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
+                                minLines = 3,
+                                maxLines = 3,
+                                overflow = TextOverflow.Ellipsis,
+                                onTextLayout = ::onNameTextLayout
                             )
                         }
                     } else {
                         TextWithOverflowTooltip(
                             text = titleText,
-                            style = MaterialTheme.typography.headlineSmall,
+                            style = nameStyle,
                             fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface
+                            color = MaterialTheme.colorScheme.onSurface,
+                            minLines = 3,
+                            maxLines = 3,
+                            onTextLayout = ::onNameTextLayout
                         )
                     }
-                    Spacer(Modifier.height(4.dp))
+                }
+
+                if (showManageSetsButton) {
+                    // Combined pressable pill: tapping anywhere (the Sets line, the Cards line,
+                    // or the icon) opens Manage Sets — one control instead of a separate chip +
+                    // button, matching the UI Playground's "Combined Pill" deck tile design.
+                    Surface(
+                        onClick = onManageSets,
+                        shape = RoundedCornerShape(8.dp),
+                        color = MaterialTheme.colorScheme.secondaryContainer
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.AccountTree,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(Modifier.width(6.dp))
+                            Column(horizontalAlignment = Alignment.Start) {
+                                Text(
+                                    stringResource(R.string.sets_count_simple, setsCount),
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSecondaryContainer
+                                )
+                                Text(
+                                    pluralStringResource(R.plurals.cards_count, deck.totalCards, deck.totalCards),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.8f)
+                                )
+                            }
+                        }
+                    }
+                } else {
+                    // No manage-sets caller currently passes showManageSetsButton = false, but
+                    // keep the card count visible (as before) if one ever does — just not
+                    // clickable, since there's no Manage Sets destination to open here.
                     SuggestionChip(
                         onClick = { },
                         label = { Text(pluralStringResource(R.plurals.cards_count, deck.totalCards, deck.totalCards)) },
@@ -187,33 +281,14 @@ fun DeckListItem(
                         border = null
                     )
                 }
-
-                if (showManageSetsButton) {
-                    // Changed to display number of sets
-                    val manageInteractionSource = remember { MutableInteractionSource() }
-                    TextButton(
-                        onClick = onManageSets,
-                        interactionSource = manageInteractionSource,
-                        modifier = Modifier.alignByBaseline().pressSquish(manageInteractionSource),
-                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
-                        shape = RoundedCornerShape(dimensions.cornerRadiusButton)
-                    ) {
-                        Icon(
-                            Icons.Default.AccountTree,
-                            getText(R.string.manage_sets),
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(18.dp)
-                        )
-                        Spacer(Modifier.width(8.dp))
-                        Text(
-                            stringResource(R.string.sets_count_simple, setsCount),
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                    }
-                }
             }
 
-            Spacer(Modifier.height(dimensions.paddingLarge))
+            // Matches the Playground's two-spacer sequence exactly: a fixed small gap, then the
+            // computed compensation gap. Missing this fixed one (ported separately from `gap`
+            // below) was exactly a dimensions.spacingSmall-sized height shortfall versus the
+            // Playground reference, confirmed on-device.
+            Spacer(Modifier.height(dimensions.spacingSmall))
+            Spacer(Modifier.height(gap))
 
             // One line: the Study button never wraps. The flexible spacer on the left is what gives way on a
             // narrow tile, so the space before the edit icon shrinks first.
@@ -374,116 +449,133 @@ fun SetListItem(
             // Top-right corner, same as DeckListItem's Manage Sets button — not next to the
             // Study button below, which has no room to spare on this tile's fixed setTileWidth.
             //
-            // Baseline alignment (alignByBaseline) turned out unreliable here: Material's type
-            // styles carry line-height padding above/below the actual glyphs, so a font's
-            // "baseline" isn't the same point as the text's visual bottom — and a bare Icon has no
-            // baseline at all to approximate it with, unlike DeckListItem's Manage Sets button
-            // (real Text inside, so baseline alignment happened to land close enough there).
-            // Instead: measure the name's REAL rendered line-bottom via onTextLayout, measure the
-            // button's own actual height via onSizeChanged, and offset the button by the exact
-            // difference — exact pixel math from real measurements, not a font-metric guess, and
-            // it never touches the button's own size/touch target.
-            var nameLineBottomPx by remember { mutableStateOf(0f) }
-            var overflowButtonHeightPx by remember { mutableStateOf(0f) }
-            // The icon isn't drawn at the bottom of its own touch-target box — IconButton centers
-            // it within that (larger) box — so matching the box's bottom to the text's line-bottom
-            // left the icon glyph itself floating well above the text. This measures the icon's
-            // own rendered size too, so the offset below targets where the GLYPH ends up, not the
-            // invisible touch-target bounds around it.
-            var overflowIconHeightPx by remember { mutableStateOf(0f) }
-            // Same story horizontally: the icon sits centered inside its touch-target box
-            // left-to-right too, leaving more empty space between it and the tile's right edge
-            // than the name has on the left. Shifting the box right by half the box/icon width
-            // difference brings the icon's own right edge flush with where the (unshifted) box's
-            // right edge already lines up against the Column's matching left padding.
-            var overflowButtonWidthPx by remember { mutableStateOf(0f) }
-            var overflowIconWidthPx by remember { mutableStateOf(0f) }
+            // The overflow trigger is a plain Icon with an explicit 24dp clickable/ripple box, NOT
+            // TooltipIconButton/IconButton — Material3's IconButton enforces an internal minimum
+            // 48dp interactive size no matter what size modifier you give it, and the card count
+            // below it was being placed relative to that button's un-shifted, oversized reserved
+            // slot — leaving a visible gap between the overflow dots and the count once the name
+            // could wrap to 2 lines (confirmed on-device: fine for a 1-line name by coincidence,
+            // visibly wrong for a 2-line one). This exact fix — ported from the UI Playground's
+            // set tile experiment, which hit and solved this same problem first — replaces the
+            // whole pixel-measured offset mechanism: with no hidden minimum size to correct for,
+            // plain Alignment.Top placement puts the glyph exactly where it's placed, and the card
+            // count just follows it directly in normal Column flow, snug underneath, with no
+            // measurement or offset modifier needed at all.
+            val overflowInteractionSource = remember { MutableInteractionSource() }
 
-            Row(
+            // A custom Layout instead of Row/Column: two earlier attempts at this (matching the
+            // count's own layout-box bottom to the name's layout-box bottom via
+            // fillMaxHeight()+SpaceBetween, then hand-computing a spacer from
+            // TextLayoutResult.getLineBottom() on both texts) were both confirmed wrong on-device —
+            // box edges and estimated line-bottoms don't reliably track the actual glyph positions.
+            // This uses Compose's own AlignmentLine mechanism instead (the same one Row's
+            // alignByBaseline/alignBy use under the hood): each Text placeable exposes its true
+            // baseline position via placeable[LastBaseline]/[FirstBaseline], computed by the text
+            // layout engine itself rather than estimated by hand, so the count's single line is
+            // placed with its baseline exactly on the name's last (second) line's baseline.
+            Layout(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
+                content = {
+                    // 0: name — allowed to wrap to 2 lines (minLines = maxLines = 2), matching the
+                    // UI Playground's set tile experiment.
                     TextWithOverflowTooltip(
                         text = deck.deck.name,
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.SemiBold,
-                        onTextLayout = { nameLineBottomPx = it.getLineBottom(0) }
+                        minLines = 2,
+                        maxLines = 2
                     )
-                    Spacer(Modifier.height(4.dp))
+
+                    // 1: overflow trigger — a plain Icon with an explicit 24dp clickable/ripple box,
+                    // NOT TooltipIconButton/IconButton (Material3's IconButton enforces an internal
+                    // minimum 48dp interactive size no matter what size modifier you give it, which
+                    // broke this exact alignment earlier in this file's history).
+                    Box {
+                        Icon(
+                            Icons.Default.MoreVert,
+                            contentDescription = getText(R.string.options_more),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier
+                                .size(24.dp)
+                                .clip(CircleShape)
+                                .clickable(
+                                    interactionSource = overflowInteractionSource,
+                                    indication = ripple(bounded = false, radius = 20.dp),
+                                    onClickLabel = getText(R.string.options_more)
+                                ) { showOverflow = true }
+                        )
+                        DropdownMenu(expanded = showOverflow, onDismissRequest = { showOverflow = false }) {
+                            DropdownMenuItem(
+                                text = { Text(getText(R.string.edit)) },
+                                leadingIcon = { Icon(Icons.Default.Edit, contentDescription = null) },
+                                onClick = { showOverflow = false; onEdit() }
+                            )
+                            if (onTogglePin != null) {
+                                val pinned = deck.deck.isPinned
+                                DropdownMenuItem(
+                                    text = { Text(getText(if (pinned) R.string.unpin_set else R.string.pin_set)) },
+                                    leadingIcon = {
+                                        Icon(
+                                            Icons.Rounded.PushPin,
+                                            contentDescription = null,
+                                            tint = if (pinned) MaterialTheme.colorScheme.primary else LocalContentColor.current
+                                        )
+                                    },
+                                    onClick = { showOverflow = false; onTogglePin() }
+                                )
+                            }
+                            DropdownMenuItem(
+                                text = { Text(getText(R.string.delete), color = MaterialTheme.colorScheme.error) },
+                                leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
+                                onClick = { showOverflow = false; onDelete() }
+                            )
+                            DropdownMenuItem(
+                                text = { Text(getText(R.string.manage_sets)) },
+                                // This set's OWN manager (its children), not the parent deck's —
+                                // see onManageSets' doc comment on the composable's callers.
+                                leadingIcon = { Icon(Icons.Default.AccountTree, contentDescription = null) },
+                                onClick = { showOverflow = false; onManageSets() }
+                            )
+                        }
+                    }
+
+                    // 2: card count — positioned in the measure block below by baseline alignment
+                    // against the name's last line, not by a guessed/computed offset.
                     Text(
                         pluralStringResource(R.plurals.cards_count_lowercase, deck.totalCards, deck.totalCards),
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
+            ) { measurables, constraints ->
+                val (nameMeasurable, iconMeasurable, countMeasurable) = measurables
 
-                // Edit/Pin/Delete/Manage, collapsed into one overflow button — DeckListItem shows
-                // these as separate bare icons, but the set tile's fixed setTileWidth has no room
-                // for four more icons.
-                Box(
-                    modifier = Modifier
-                        .onSizeChanged {
-                            overflowButtonHeightPx = it.height.toFloat()
-                            overflowButtonWidthPx = it.width.toFloat()
-                        }
-                        .offset {
-                            // The icon glyph sits centered inside the touch-target box, i.e. at
-                            // boxTop + (boxHeight + iconHeight) / 2 once placed — solve for the
-                            // boxTop (this offset, since the Row places it at relative 0 by
-                            // default) that puts that point exactly at the name's line-bottom.
-                            val targetY = nameLineBottomPx - (overflowButtonHeightPx + overflowIconHeightPx) / 2f
-                            val targetX = (overflowButtonWidthPx - overflowIconWidthPx) / 2f
-                            IntOffset(targetX.roundToInt(), targetY.roundToInt())
-                        }
-                ) {
-                    TooltipIconButton(
-                        description = getText(R.string.options_more),
-                        onClick = { showOverflow = true }
-                    ) {
-                        Icon(
-                            Icons.Default.MoreVert,
-                            contentDescription = getText(R.string.options_more),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.onSizeChanged {
-                                overflowIconHeightPx = it.height.toFloat()
-                                overflowIconWidthPx = it.width.toFloat()
-                            }
-                        )
-                    }
-                    DropdownMenu(expanded = showOverflow, onDismissRequest = { showOverflow = false }) {
-                        DropdownMenuItem(
-                            text = { Text(getText(R.string.edit)) },
-                            leadingIcon = { Icon(Icons.Default.Edit, contentDescription = null) },
-                            onClick = { showOverflow = false; onEdit() }
-                        )
-                        if (onTogglePin != null) {
-                            val pinned = deck.deck.isPinned
-                            DropdownMenuItem(
-                                text = { Text(getText(if (pinned) R.string.unpin_set else R.string.pin_set)) },
-                                leadingIcon = {
-                                    Icon(
-                                        Icons.Rounded.PushPin,
-                                        contentDescription = null,
-                                        tint = if (pinned) MaterialTheme.colorScheme.primary else LocalContentColor.current
-                                    )
-                                },
-                                onClick = { showOverflow = false; onTogglePin() }
-                            )
-                        }
-                        DropdownMenuItem(
-                            text = { Text(getText(R.string.delete), color = MaterialTheme.colorScheme.error) },
-                            leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
-                            onClick = { showOverflow = false; onDelete() }
-                        )
-                        DropdownMenuItem(
-                            text = { Text(getText(R.string.manage_sets)) },
-                            // This set's OWN manager (its children), not the parent deck's — see
-                            // onManageSets' doc comment on the composable's callers.
-                            leadingIcon = { Icon(Icons.Default.AccountTree, contentDescription = null) },
-                            onClick = { showOverflow = false; onManageSets() }
-                        )
-                    }
+                // Icon and count are measured first, at their own natural size (loose min), since
+                // the name gets whatever width is left over after them (same split the old
+                // weight(1f) Row gave the name).
+                val looseConstraints = constraints.copy(minWidth = 0, minHeight = 0)
+                val iconPlaceable = iconMeasurable.measure(looseConstraints)
+                val countPlaceable = countMeasurable.measure(looseConstraints)
+                val rightColumnWidth = maxOf(iconPlaceable.width, countPlaceable.width)
+                val nameWidth = (constraints.maxWidth - rightColumnWidth).coerceAtLeast(0)
+                val namePlaceable = nameMeasurable.measure(constraints.copy(minWidth = nameWidth, maxWidth = nameWidth))
+
+                val nameBaseline = namePlaceable[LastBaseline]
+                val countBaseline = countPlaceable[FirstBaseline]
+                val countY = if (nameBaseline != AlignmentLine.Unspecified && countBaseline != AlignmentLine.Unspecified) {
+                    // Never let the count creep up over the icon, however short the name turns
+                    // out to be (e.g. a short name that doesn't actually wrap, where the 2-line
+                    // reserved box is mostly blank) — the icon's own height is the floor.
+                    (nameBaseline - countBaseline).coerceAtLeast(iconPlaceable.height)
+                } else {
+                    iconPlaceable.height
+                }
+
+                val totalHeight = maxOf(namePlaceable.height, countY + countPlaceable.height)
+                layout(constraints.maxWidth, totalHeight) {
+                    namePlaceable.placeRelative(0, 0)
+                    iconPlaceable.placeRelative(constraints.maxWidth - iconPlaceable.width, 0)
+                    countPlaceable.placeRelative(constraints.maxWidth - countPlaceable.width, countY)
                 }
             }
 

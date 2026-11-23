@@ -237,7 +237,8 @@ internal fun SessionSortDialog(
                             selected = presetPosition,
                             onSelected = { presetPosition = it },
                             labelFor = { it.asString() },
-                            modifier = Modifier.fillMaxWidth()
+                            modifier = Modifier.fillMaxWidth(),
+                            equalWidth = false
                         )
                     }
                     DialogSection(title = getText(R.string.sort_section_custom_category_order), titleColor = sectionTitleColor, titleFontWeight = sectionTitleWeight) {

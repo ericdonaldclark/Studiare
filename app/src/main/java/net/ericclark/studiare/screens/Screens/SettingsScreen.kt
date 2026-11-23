@@ -1962,7 +1962,8 @@ private fun CustomizationCategoryContent(
                         Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(ToggleButtonDefaults.IconSize))
                     }
                 },
-                modifier = segmentedModifier.padding(bottom = dimensions.spacingMedium)
+                modifier = segmentedModifier.padding(bottom = dimensions.spacingMedium),
+                equalWidth = false
             )
         }
 
@@ -1990,7 +1991,8 @@ private fun CustomizationCategoryContent(
                 selected = spacingMode,
                 onSelected = { viewModel.setSpacingMode(it) },
                 labelFor = { mode -> spacings.first { it.second == mode }.first },
-                modifier = segmentedModifier
+                modifier = segmentedModifier,
+                equalWidth = false
             )
         }
 
@@ -2009,7 +2011,8 @@ private fun CustomizationCategoryContent(
                 selected = deckSetsDisplayMode,
                 onSelected = { viewModel.setDeckSetsDisplayMode(it) },
                 labelFor = { it.asString() },
-                modifier = segmentedModifier
+                modifier = segmentedModifier,
+                equalWidth = false
             )
         }
 
@@ -2026,7 +2029,8 @@ private fun CustomizationCategoryContent(
                     selected = treeLargeScreenLayout,
                     onSelected = { viewModel.setTreeLargeScreenLayout(it) },
                     labelFor = { if (it) getText(R.string.horizontal) else getText(R.string.vertical) },
-                    modifier = segmentedModifier
+                    modifier = segmentedModifier,
+                    equalWidth = false
                 )
             }
         }
@@ -2052,7 +2056,8 @@ private fun CustomizationCategoryContent(
                 selected = alwaysOpenBulkEditor,
                 onSelected = { viewModel.setAlwaysOpenBulkEditor(it) },
                 labelFor = { if (it) getText(R.string.bulk_editor) else getText(R.string.simple_editor) },
-                modifier = segmentedModifier
+                modifier = segmentedModifier,
+                equalWidth = false
             )
         }
     }

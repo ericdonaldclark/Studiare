@@ -29,14 +29,12 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonGroupDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.ToggleButton
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
@@ -491,21 +489,17 @@ fun RichTextEditorDialog(
                                 TextAlign.Center to Icons.Default.FormatAlignCenter,
                                 TextAlign.Right to Icons.Default.FormatAlignRight
                             )
-                            Row(horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween)) {
-                                alignOptions.forEachIndexed { index, (align, icon) ->
-                                    ToggleButton(
-                                        checked = currentAlign == align,
-                                        onCheckedChange = { state.toggleParagraphStyle(ParagraphStyle(textAlign = align)); nudgeRedraw() },
-                                        shapes = when (index) {
-                                            0 -> ButtonGroupDefaults.connectedLeadingButtonShapes()
-                                            alignOptions.lastIndex -> ButtonGroupDefaults.connectedTrailingButtonShapes()
-                                            else -> ButtonGroupDefaults.connectedMiddleButtonShapes()
-                                        },
-                                        contentPadding = PaddingValues(horizontal = 12.dp),
-                                        modifier = Modifier.focusProperties { canFocus = false }
-                                    ) { Icon(icon, contentDescription = null) }
-                                }
-                            }
+                            net.ericclark.studiare.screens.UI_Components.ConnectedButtonGroup(
+                                items = alignOptions.map { it.first },
+                                selected = currentAlign,
+                                onSelected = { align -> state.toggleParagraphStyle(ParagraphStyle(textAlign = align)); nudgeRedraw() },
+                                iconFor = { align, _ ->
+                                    Icon(alignOptions.first { it.first == align }.second, contentDescription = null)
+                                },
+                                contentPadding = PaddingValues(horizontal = 12.dp),
+                                equalWidth = false,
+                                perButtonModifier = Modifier.focusProperties { canFocus = false }
+                            )
 
                             RichTextToggleButton(
                                 description = "Bulleted list",

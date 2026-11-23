@@ -377,7 +377,8 @@ fun TopSliderDialogSection(
         labelFor = { it },
         modifier = Modifier
             .fillMaxWidth()
-            .padding(4.dp)
+            .padding(4.dp),
+        equalWidth = options.size <= 2
     )
 }
 

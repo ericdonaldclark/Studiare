@@ -5,18 +5,31 @@ import net.ericclark.studiare.R
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.draw.clip
+import androidx.compose.material3.ripple
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.rounded.PushPin
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.Hyphens
+import androidx.compose.ui.text.style.LineBreak
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import kotlinx.coroutines.CoroutineScope
@@ -40,7 +53,8 @@ private enum class PlaygroundExperiment(val label: String) {
     SESSION_TILE("Session Tile"),
     SESSION_PRESET_CARD("Preset Card"),
     COMPLETION_SCREEN("Completion Screen"),
-    TEXT_NORMALIZATION("Text Normalization")
+    TEXT_NORMALIZATION("Text Normalization"),
+    DECK_TILE_REDESIGN("Deck Tile Redesign")
 }
 
 @Composable
@@ -66,7 +80,7 @@ fun UiPlaygroundScreen(navController: NavController, viewModel: FlashcardViewMod
         Column(modifier = Modifier.fillMaxSize().padding(padding)) {
             if (PlaygroundExperiment.entries.size > 1) {
                 Box(modifier = Modifier.padding(horizontal = dimensions.paddingLarge, vertical = dimensions.paddingSmall)) {
-                    TypedChipGrid(
+                    TypedChipRow(
                         items = PlaygroundExperiment.entries,
                         selected = experiment,
                         labelFor = { it.label },
@@ -79,6 +93,7 @@ fun UiPlaygroundScreen(navController: NavController, viewModel: FlashcardViewMod
                 PlaygroundExperiment.SESSION_PRESET_CARD -> SessionPresetCardPlayground()
                 PlaygroundExperiment.COMPLETION_SCREEN -> StudyCompletionPlayground()
                 PlaygroundExperiment.TEXT_NORMALIZATION -> TextNormalizationPlayground()
+                PlaygroundExperiment.DECK_TILE_REDESIGN -> DeckTileRedesignPlayground()
             }
         }
     }
@@ -599,6 +614,510 @@ private fun TextNormalizationPlayground() {
             onDismiss = { showDialog = false },
             onConfirm = { newType, newCorrections -> currentType = newType; currentCorrections = newCorrections; showDialog = false }
         )
+    }
+}
+
+/**
+ * Deck tile redesign exploration — "Proposal C" from the deck/set tile grid work: the deck name
+ * gets up to 2 lines instead of single-line ellipsis, and the top-right "N Sets"/"N Cards" pair
+ * is combined into one stack, with the Sets line given a pressable-looking filled pill (answering
+ * "how do we make it obvious that's tappable" — a plain colored-text label reads as just
+ * information, the way the card-count label already does; a filled tonal pill reads as a button
+ * the same way it does everywhere else in this app).
+ *
+ * [DeckTileProposalC] below is a deliberate FORK of [DeckListItem] (DecksScreenItems.kt), not a
+ * shared component or a wrapper around it — the real deck tile is untouched by this experiment,
+ * on purpose, so this copy can be torn up freely. If a direction here gets picked, port it into
+ * DeckListItem by hand; don't start importing this from real screens.
+ */
+@Composable
+private fun DeckTileRedesignPlayground() {
+    val dimensions = LocalStudiareDimensions.current
+    val snackbarHostState = remember { SnackbarHostState() }
+    val coroutineScope = rememberCoroutineScope()
+    fun toast(message: String) {
+        coroutineScope.launch {
+            snackbarHostState.currentSnackbarData?.dismiss()
+            snackbarHostState.showSnackbar(message, duration = SnackbarDuration.Short)
+        }
+    }
+
+    var deckName by remember { mutableStateOf("Advanced Conversational Spanish Vocabulary") }
+    var cardCountText by remember { mutableStateOf("212") }
+    var setsCountText by remember { mutableStateOf("6") }
+    var isPinned by remember { mutableStateOf(false) }
+    var deckNameFontOption by remember { mutableStateOf(DeckNameFontOption.HEADLINE_SMALL) }
+    var deckCountLayout by remember { mutableStateOf(DeckCardCountLayout.COMBINED_PILL) }
+    val cardCount = cardCountText.toIntOrNull() ?: 0
+    val setsCount = setsCountText.toIntOrNull() ?: 0
+
+    var setName by remember { mutableStateOf("Irregular Preterite Verbs — Part Two") }
+    var setCardCountText by remember { mutableStateOf("34") }
+    var setIsPinned by remember { mutableStateOf(false) }
+    val setCardCount = setCardCountText.toIntOrNull() ?: 0
+
+    val sheetState = rememberStandardBottomSheetState(skipHiddenState = false)
+    val scaffoldState = rememberBottomSheetScaffoldState(bottomSheetState = sheetState)
+
+    BottomSheetScaffold(
+        scaffoldState = scaffoldState,
+        containerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
+        snackbarHost = { SnackbarHost(snackbarHostState) },
+        sheetPeekHeight = PlaygroundSheetPeekHeight,
+        sheetContent = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = PlaygroundSheetMaxHeight)
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = dimensions.paddingLarge)
+                    .padding(bottom = dimensions.paddingLarge),
+                verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)
+            ) {
+                PlaygroundSectionLabel("Deck Tile — Proposal C (combined Sets/Cards, pressable pill)")
+                Text(
+                    "Try a long name below to see the 2-line wrap, and tap the \"Sets\" pill — it's now a real filled chip, not just colored text.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                Spacer(Modifier.height(dimensions.spacingSmall))
+                PlaygroundSectionLabel("Names & Counts")
+                OutlinedTextField(value = deckName, onValueChange = { deckName = it }, label = { Text("Deck name") }, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(value = cardCountText, onValueChange = { cardCountText = it }, label = { Text("Card count") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+                OutlinedTextField(value = setsCountText, onValueChange = { setsCountText = it }, label = { Text("Sets count") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+                SettingSwitchItem("Pinned", "Pin icon tint", isPinned) { isPinned = it }
+
+                Spacer(Modifier.height(dimensions.spacingSmall))
+                PlaygroundSectionLabel("Deck Name Font Size")
+                TypedChipRow(
+                    items = DeckNameFontOption.entries,
+                    selected = deckNameFontOption,
+                    labelFor = { it.label },
+                    onSelected = { deckNameFontOption = it }
+                )
+
+                Spacer(Modifier.height(dimensions.spacingSmall))
+                PlaygroundSectionLabel("Card Count / Manage Sets Position")
+                Text(
+                    "Production row: name gets a permanent 2nd line, Manage Sets moves down into a row with the card count — the gap above the Study button shrinks to keep the card's total height the same as decksscreen today.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                TypedChipRow(
+                    items = DeckCardCountLayout.entries,
+                    selected = deckCountLayout,
+                    labelFor = { it.label },
+                    onSelected = { deckCountLayout = it }
+                )
+
+                Spacer(Modifier.height(dimensions.spacingSmall))
+                PlaygroundSectionLabel("Set Tile — card count moved under overflow, 2-line name")
+                OutlinedTextField(value = setName, onValueChange = { setName = it }, label = { Text("Set name") }, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(value = setCardCountText, onValueChange = { setCardCountText = it }, label = { Text("Set card count") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+                SettingSwitchItem("Pinned", "Pin icon tint", setIsPinned) { setIsPinned = it }
+            }
+        }
+    ) { _ ->
+        Box(modifier = Modifier.fillMaxSize()) {
+            Surface(color = MaterialTheme.colorScheme.surfaceDim, modifier = Modifier.fillMaxSize()) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .verticalScroll(rememberScrollState())
+                        .padding(dimensions.paddingLarge),
+                    verticalArrangement = Arrangement.spacedBy(dimensions.paddingLarge)
+                ) {
+                    DeckTileProposalC(
+                        name = deckName,
+                        cardCount = cardCount,
+                        setsCount = setsCount,
+                        isPinned = isPinned,
+                        fontOption = deckNameFontOption,
+                        countLayout = deckCountLayout,
+                        onEdit = { toast("Edit tapped") },
+                        onTogglePin = { isPinned = !isPinned },
+                        onDelete = { toast("Delete tapped") },
+                        onManageSets = { toast("Manage Sets tapped") },
+                        onStudy = { toast("Study tapped") }
+                    )
+                    SetTileProposalC(
+                        name = setName,
+                        cardCount = setCardCount,
+                        isPinned = setIsPinned,
+                        onEdit = { toast("Edit tapped") },
+                        onTogglePin = { setIsPinned = !setIsPinned },
+                        onDelete = { toast("Delete tapped") },
+                        onManageSets = { toast("Manage Sets tapped") },
+                        onStudy = { toast("Study tapped") }
+                    )
+                }
+            }
+            PlaygroundRevealSheetFab(sheetState, coroutineScope)
+        }
+    }
+}
+
+private enum class DeckNameFontOption(val label: String, val style: @Composable () -> TextStyle) {
+    HEADLINE_SMALL("Headline Small", { MaterialTheme.typography.headlineSmall }),
+    HEADLINE_MEDIUM("Headline Medium", { MaterialTheme.typography.headlineMedium })
+}
+
+private enum class DeckCardCountLayout(val label: String) {
+    COMBINED_PILL("Combined pill (current)"),
+    PRODUCTION_ROW("Production row (name 2 lines, count+manage below)")
+}
+
+@Composable
+private fun DeckTileProposalC(
+    name: String,
+    cardCount: Int,
+    setsCount: Int,
+    isPinned: Boolean,
+    fontOption: DeckNameFontOption,
+    countLayout: DeckCardCountLayout,
+    onEdit: () -> Unit,
+    onTogglePin: () -> Unit,
+    onDelete: () -> Unit,
+    onManageSets: () -> Unit,
+    onStudy: () -> Unit
+) {
+    val dimensions = LocalStudiareDimensions.current
+    val density = LocalDensity.current
+
+    // Headline Medium is the preferred size; if the name would still be ellipsized at 3 lines in
+    // Headline Medium, drop to Headline Small instead (which may still truncate — that's fine,
+    // there's no smaller fallback). Only applies when the user picked Headline Medium in the
+    // sheet — picking Headline Small still forces it unconditionally, same as before. Resets
+    // whenever fontOption itself changes, so switching back to Headline Medium always retries it
+    // rather than staying stuck on a previous downgrade.
+    var useMediumIfItFits by remember(fontOption) { mutableStateOf(fontOption == DeckNameFontOption.HEADLINE_MEDIUM) }
+    val renderMedium = fontOption == DeckNameFontOption.HEADLINE_MEDIUM && useMediumIfItFits
+    val nameStyle = (if (renderMedium) DeckNameFontOption.HEADLINE_MEDIUM.style() else DeckNameFontOption.HEADLINE_SMALL.style())
+        .copy(hyphens = Hyphens.Auto, lineBreak = LineBreak.Paragraph)
+
+    // Both layout options below share this exact same scaffold — name row (always 3 lines), small
+    // gap, a controls row, reduced gap — so they come out the same total height BY CONSTRUCTION,
+    // not by two separate formulas trying to land on the same number (which is what kept
+    // producing mismatched heights before). Only what's rendered inside the controls row differs
+    // between the two options.
+    var nameHeightPx by remember { mutableFloatStateOf(0f) }
+    fun onNameTextLayout(result: androidx.compose.ui.text.TextLayoutResult) {
+        nameHeightPx = result.size.height.toFloat()
+        if (renderMedium && result.hasVisualOverflow) {
+            useMediumIfItFits = false
+        }
+    }
+    // The real reference — "the card size we currently have using Headline Small" — is this
+    // style's OWN 3-line height (2 * its line height, the already-verified-matching baseline),
+    // not an assumption that the rendered style is small. Computed analytically from font
+    // metrics (not measured) so it doesn't depend on which style is actually on screen, and it
+    // correctly scales with the device's font-size/accessibility settings the same way real
+    // rendering does.
+    val smallBaselineHeightPx = with(density) {
+        2f * DeckNameFontOption.HEADLINE_SMALL.style().lineHeight.toPx()
+    }
+    // How much taller the name block is right now than that Headline Small baseline — zero when
+    // actually rendering Headline Small (3-line small height minus 2-line small height is exactly
+    // one small line, which is what the gaps below were already tuned to cancel), and larger when
+    // Headline Medium is in use, since its lines are taller.
+    val extraVsSmallBaselineDp = with(density) { (nameHeightPx - smallBaselineHeightPx).toDp() }
+    val basePaddingV = dimensions.paddingMedium.coerceAtLeast(dimensions.cornerRadiusMedium)
+    // Each layout's own internal gap(s) below can absorb only so much extra height before
+    // flooring at 0dp — Combined Pill's one gap starts with paddingLarge+spacingSmall of slack,
+    // Production Row's only real slack is its smaller post-name gap (its main gap has none, even
+    // at the Headline Small baseline). Headline Medium's taller lines can exceed either budget
+    // (confirmed on-device: Combined Pill alone overshot by 16px with Headline Medium), so
+    // whatever's left after each branch's own gap floors at 0 comes out of the card's own
+    // top/bottom padding instead, split evenly — same technique, just no longer Production-Row-only.
+    val branchSlack = when (countLayout) {
+        DeckCardCountLayout.COMBINED_PILL -> dimensions.paddingLarge + dimensions.spacingSmall
+        DeckCardCountLayout.PRODUCTION_ROW -> dimensions.spacingSmall
+    }
+    val remainingDeficit = (extraVsSmallBaselineDp - branchSlack).coerceAtLeast(0.dp)
+    val paddingV = (basePaddingV - remainingDeficit / 2).coerceAtLeast(0.dp)
+
+    ElevatedCard(
+        elevation = CardDefaults.elevatedCardElevation(defaultElevation = dimensions.cardElevation, pressedElevation = 8.dp),
+        shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+        colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(modifier = Modifier.padding(horizontal = basePaddingV, vertical = paddingV)) {
+            if (countLayout == DeckCardCountLayout.COMBINED_PILL) {
+                // Pill sits beside the name in the SAME row, same spot production's Manage Sets
+                // button uses — name gets weight(1f) so the pill has room, same as production's
+                // name+chip Column vs Manage Sets TextButton split. Measured on-device: the
+                // pill's own height (118px) is shorter than the 2-line name (156px), so this row's
+                // height is governed by the name either way — putting the pill beside it instead
+                // of below it does not add any extra card height.
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.Top
+                ) {
+                    Text(
+                        name,
+                        style = nameStyle,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        minLines = 3,
+                        maxLines = 3,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f).padding(end = dimensions.spacingSmall),
+                        onTextLayout = ::onNameTextLayout
+                    )
+                    Surface(
+                        onClick = onManageSets,
+                        shape = RoundedCornerShape(8.dp),
+                        color = MaterialTheme.colorScheme.secondaryContainer
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.AccountTree,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(Modifier.width(6.dp))
+                            Column(horizontalAlignment = Alignment.Start) {
+                                Text(
+                                    "$setsCount Sets",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSecondaryContainer
+                                )
+                                Text(
+                                    "$cardCount Cards",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.8f)
+                                )
+                            }
+                        }
+                    }
+                }
+
+                Spacer(Modifier.height(dimensions.spacingSmall))
+            } else {
+                Text(
+                    name,
+                    style = nameStyle,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    minLines = 3,
+                    maxLines = 3,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.fillMaxWidth(),
+                    onTextLayout = ::onNameTextLayout
+                )
+
+                // Production Row's main gap below is already floored at 0dp (see its measurement
+                // note), so there's no room left there to absorb the new 3rd line — this smaller
+                // gap is the only slack left, so the line's extra height comes out of it instead.
+                Spacer(Modifier.height((dimensions.spacingSmall - extraVsSmallBaselineDp).coerceAtLeast(0.dp)))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // Same positions production's DeckListItem already uses for these two
+                    // controls — card count chip on the left, Manage Sets on the right.
+                    SuggestionChip(
+                        onClick = { },
+                        label = { Text("$cardCount Cards") },
+                        colors = SuggestionChipDefaults.suggestionChipColors(
+                            containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                            labelColor = MaterialTheme.colorScheme.onSecondaryContainer
+                        ),
+                        border = null
+                    )
+                    TextButton(onClick = onManageSets) {
+                        Icon(Icons.Default.AccountTree, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text("$setsCount Sets")
+                    }
+                }
+            }
+
+            // Both gaps below are set from real on-device uiautomator measurements against the
+            // actual decksscreen DeckListItem (924x530px at this device's Comfortable density),
+            // not from a formula guessed on paper — the previous "shrink by half the measured
+            // name height" formula was checked against real bounds and was wrong for both cases.
+            // Combined Pill measured 924x527 (needs the full gap plus a small top-up, since its
+            // Row 1 has no separate card-count chip stacked under the name the way production
+            // does — the pill already shows the count). Production Row's own content row (name +
+            // chip+button row) already reaches ~924x615 with the full gap, which overshoots by
+            // 85px — a 0dp gap there measured 924x615-85=924x~530, matching production almost
+            // exactly (within ~9px).
+            val gap = when (countLayout) {
+                DeckCardCountLayout.COMBINED_PILL ->
+                    (dimensions.paddingLarge + dimensions.spacingSmall - extraVsSmallBaselineDp).coerceAtLeast(0.dp)
+                DeckCardCountLayout.PRODUCTION_ROW -> 0.dp
+            }
+            Spacer(Modifier.height(gap))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Spacer(Modifier.weight(1f))
+                // Un-gapped inner Row, same as production: the outer Row's spacedBy only
+                // separates this icon cluster from the Study button, not the icons from each other.
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                TooltipIconButton(description = getText(R.string.edit), onClick = onEdit) {
+                    Icon(Icons.Default.Edit, contentDescription = getText(R.string.edit), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                TooltipIconButton(
+                    description = if (isPinned) getText(R.string.unpin_deck) else getText(R.string.pin_deck),
+                    onClick = onTogglePin
+                ) {
+                    Icon(
+                        Icons.Rounded.PushPin,
+                        contentDescription = null,
+                        tint = if (isPinned) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                TooltipIconButton(description = getText(R.string.delete), onClick = onDelete) {
+                    Icon(Icons.Default.Delete, contentDescription = getText(R.string.delete), tint = MaterialTheme.colorScheme.error)
+                }
+                }
+                StudySplitButton(onStudyMain = onStudy, enabled = cardCount > 0)
+            }
+        }
+    }
+}
+
+/**
+ * [SetTileProposalC] is a deliberate FORK of [SetListItem] (DecksScreenItems.kt), not a shared
+ * component or a wrapper around it — the real set tile is untouched by this experiment.
+ *
+ * Two changes versus production: (1) the card count moves from under the name to under the
+ * overflow button on the far right, and (2) the set name is allowed to wrap to 2 lines instead
+ * of being truncated to 1.
+ *
+ * The overflow trigger is a plain Icon with an explicit 24dp clickable/ripple box, NOT
+ * TooltipIconButton/IconButton — Material3's IconButton enforces an internal minimum 48dp
+ * interactive size no matter what size modifier you give it, which is what made a plain
+ * Alignment.Top placement (and, before that, runtime pixel-offset math trying to compensate for
+ * it) put the visible glyph well below the name's top instead of flush with it. With no hidden
+ * minimum to correct for, Alignment.Top alone puts the glyph exactly where it's placed — no
+ * measurement, no offset modifier, nothing to get subtly wrong. Trade-off: this loses the
+ * tooltip-on-long-press and the full 48dp accessibility touch target TooltipIconButton gives for
+ * free; worth revisiting before this ever reaches production code.
+ */
+@Composable
+private fun SetTileProposalC(
+    name: String,
+    cardCount: Int,
+    isPinned: Boolean,
+    onEdit: () -> Unit,
+    onTogglePin: () -> Unit,
+    onDelete: () -> Unit,
+    onManageSets: () -> Unit,
+    onStudy: () -> Unit
+) {
+    val dimensions = LocalStudiareDimensions.current
+    var showOverflow by remember { mutableStateOf(false) }
+    val overflowInteractionSource = remember { MutableInteractionSource() }
+
+    ElevatedCard(
+        elevation = CardDefaults.elevatedCardElevation(defaultElevation = dimensions.cardElevation, pressedElevation = 8.dp),
+        shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+        colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
+        modifier = Modifier.width(dimensions.setTileWidth)
+    ) {
+        Column(modifier = Modifier.padding(dimensions.paddingMedium.coerceAtLeast(dimensions.cornerRadiusMedium))) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Top
+            ) {
+                Text(
+                    name,
+                    style = MaterialTheme.typography.titleMedium.copy(
+                        hyphens = Hyphens.Auto,
+                        lineBreak = LineBreak.Paragraph
+                    ),
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f).padding(end = dimensions.spacingSmall)
+                )
+                Column(horizontalAlignment = Alignment.End) {
+                    Box {
+                        // Deliberately NOT TooltipIconButton/IconButton here: Material3's
+                        // IconButton enforces an internal minimum 48dp interactive size no
+                        // matter what size you request (the same thing that made shrinking the
+                        // touch target in production not work), so the glyph ends up centered in
+                        // an invisible box well below where it's placed. A plain, explicitly-sized
+                        // clickable box has no hidden minimum, so top-aligning it next to the name
+                        // puts the glyph flush with the name's top with no measurement/offset math
+                        // needed at all.
+                        Icon(
+                            Icons.Default.MoreVert,
+                            contentDescription = getText(R.string.options_more),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier
+                                .size(24.dp)
+                                .clip(CircleShape)
+                                .clickable(
+                                    interactionSource = overflowInteractionSource,
+                                    indication = ripple(bounded = false, radius = 20.dp),
+                                    onClickLabel = getText(R.string.options_more)
+                                ) { showOverflow = true }
+                        )
+                        DropdownMenu(expanded = showOverflow, onDismissRequest = { showOverflow = false }) {
+                            DropdownMenuItem(
+                                text = { Text(getText(R.string.edit)) },
+                                leadingIcon = { Icon(Icons.Default.Edit, contentDescription = null) },
+                                onClick = { showOverflow = false; onEdit() }
+                            )
+                            DropdownMenuItem(
+                                text = { Text(getText(if (isPinned) R.string.unpin_set else R.string.pin_set)) },
+                                leadingIcon = {
+                                    Icon(
+                                        Icons.Rounded.PushPin,
+                                        contentDescription = null,
+                                        tint = if (isPinned) MaterialTheme.colorScheme.primary else LocalContentColor.current
+                                    )
+                                },
+                                onClick = { showOverflow = false; onTogglePin() }
+                            )
+                            DropdownMenuItem(
+                                text = { Text(getText(R.string.delete), color = MaterialTheme.colorScheme.error) },
+                                leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
+                                onClick = { showOverflow = false; onDelete() }
+                            )
+                            DropdownMenuItem(
+                                text = { Text(getText(R.string.manage_sets)) },
+                                leadingIcon = { Icon(Icons.Default.AccountTree, contentDescription = null) },
+                                onClick = { showOverflow = false; onManageSets() }
+                            )
+                        }
+                    }
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        pluralStringResource(R.plurals.cards_count_lowercase, cardCount, cardCount),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(dimensions.paddingLarge))
+
+            Box(
+                modifier = Modifier.fillMaxWidth(),
+                contentAlignment = Alignment.Center
+            ) {
+                StudySplitButton(onStudyMain = onStudy, enabled = cardCount > 0)
+            }
+        }
     }
 }
 

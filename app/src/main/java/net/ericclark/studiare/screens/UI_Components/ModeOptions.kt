@@ -534,7 +534,8 @@ object FreeformSwipeNavigation : ModeOption(R.string.freeform_swipe_navigation) 
                         else -> getText(R.string.freeform_nav_both)
                     }
                 },
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
+                equalWidth = false
             )
         }
     }
