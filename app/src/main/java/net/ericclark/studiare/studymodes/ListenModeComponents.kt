@@ -123,7 +123,7 @@ fun ListenModeShell(
                 viewModel = viewModel,
                 screenId = screenId,
                 title = {
-                    AdaptiveSessionTitle(state.deckWithCards.deck.name, state.studyMode.asString())
+                    AdaptiveSessionTitle(state)
                 },
                 navigationIcon = {
                     TooltipIconButton(description = getText(R.string.back), onClick = {
@@ -185,7 +185,7 @@ fun ListenModeLayout(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column(modifier = Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
-                QuizCardContent(state = state, viewModel = viewModel, modifier = Modifier.fillMaxSize(), overrideSide = overrideSide)
+                QuizCardContent(state = state, viewModel = viewModel, modifier = Modifier.fillMaxSize(), overrideSide = overrideSide, showIndex = !state.continuousSession)
             }
             Spacer(Modifier.width(dimensions.spacingLarge))
             Column(
@@ -209,7 +209,7 @@ fun ListenModeLayout(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
-            QuizCardContent(state = state, viewModel = viewModel, overrideSide = overrideSide)
+            QuizCardContent(state = state, viewModel = viewModel, overrideSide = overrideSide, showIndex = !state.continuousSession)
             Spacer(Modifier.height(dimensions.spacingMedium))
             belowCard()
         }

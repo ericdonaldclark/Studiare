@@ -355,6 +355,53 @@ HideDifficultySelection:
     LEARN_FREEFORM: true
     LEARN_AUDIO: true
 
+# Continuous Session
+# Never end the session - once every card (or crossword/word search grid) is cleared, reshuffle
+# the same pool and keep going instead of showing the completion screen. No card numbers are shown
+# while this is on. Offered everywhere except Freeform, which has no "complete" state of its own
+# to loop past.
+ContinuousSession:
+  displayName: continuous_session
+  description: continuous_session_desc
+  field: continuousSession
+  type: Boolean
+  default: false
+  # Not offered under Guided: it's always FSRS-scheduled, which decides when to hand back a card
+  # from a real-world due-date calculation - looping it forever doesn't fit that model.
+  modes:
+    GAMES_ANAGRAM: true
+    GAMES_CROSSWORD: true
+    GAMES_HANGMAN: true
+    GAMES_MEMORY: true
+    GAMES_WORD_SEARCH: true
+    LEARN_AUDIO: true
+    LEARN_FREEFORM: false
+    LEARN_TYPING: true
+    LEARN_FLASHCARD: true
+    PRACTICE_FLASHCARD: true
+    PRACTICE_HEAR_MATCH: true
+    PRACTICE_LISTEN_TYPE: true
+    PRACTICE_MATCHING: true
+    PRACTICE_MULTIPLE_CHOICE: true
+    PRACTICE_LIST: true
+    PRACTICE_SEE_SPEAK: true
+    PRACTICE_TYPING_SCORED: true
+    QUIZ_FLASHCARD: true
+    QUIZ_HEAR_MATCH: true
+    QUIZ_LISTEN_TYPE: true
+    QUIZ_MATCHING: true
+    QUIZ_MULTIPLE_CHOICE: true
+    QUIZ_LIST: true
+    QUIZ_SEE_SPEAK: true
+    QUIZ_TYPING_SCORED: true
+    GUIDED_FLASHCARD: false
+    GUIDED_HEAR_MATCH: false
+    GUIDED_LISTEN_TYPE: false
+    GUIDED_MULTIPLE_CHOICE: false
+    GUIDED_LIST: false
+    GUIDED_SEE_SPEAK: false
+    GUIDED_TYPING_SCORED: false
+
 # Auto Flip
 # Flip over a card after a delay
 FlashcardAutoFlip:
@@ -972,3 +1019,83 @@ PromptSide:
     PRACTICE_HEAR_MATCH: true
     QUIZ_HEAR_MATCH: true
     GUIDED_HEAR_MATCH: true
+
+# Timed Session
+# Set a time limit for the session - it ends automatically when time runs out
+TimedSession:
+  displayName: timed_session
+  description: timed_session_desc
+  field: timedSessionEnabled
+  type: Boolean
+  default: false
+  # Duration
+  # How long the session has to be completed
+  timedSessionDurationSeconds:
+    displayName: timed_session_duration
+    description: timed_session_duration_desc
+    field: timedSessionDurationSeconds
+    type: Int
+    default: 300
+    # The real bounds are per-unit now (see TimedSessionUnit in ModeOptions.kt: 1-180s, 1-45m step
+    # .25, 1-18h step .1) - these are just the absolute outer bounds for documentation/sanity, not
+    # used directly by the slider anymore.
+    min: 1
+    max: 64800
+    step: 1
+  # Pause Timer Outside Session
+  # Pause the countdown while you're away from this session (backgrounding the app); off leaves
+  # it running the whole time, counting down in real time even while you're away.
+  TimedSessionPauseOutsideSession:
+    displayName: timed_session_pause_outside
+    description: timed_session_pause_outside_desc
+    field: timedSessionPauseOutsideSession
+    type: Boolean
+    default: false
+  # Display Frequency (under 1 minute remaining) - how often (in seconds) the in-session countdown
+  # redraws while under a minute is left. Set via TimedSessionDisplayFrequencyDialog in
+  # ModeOptions.kt; min/max here are just the outer bounds.
+  TimedSessionDisplayUpdateSecondsUnder60:
+    displayName: timed_session_display_frequency
+    description: timed_session_display_frequency_desc
+    field: timedSessionDisplayUpdateSecondsUnder60
+    type: Int
+    default: 5
+    min: 1
+    max: 60
+    step: 1
+  # Display Frequency (over 1 minute remaining) - a separate, independent cadence for while there's
+  # still more than a minute left; see TimedSessionDisplayFrequencyDialog's "Over 1 Minute" section.
+  TimedSessionDisplayUpdateSecondsOver60:
+    displayName: timed_session_display_frequency
+    description: timed_session_display_frequency_desc
+    field: timedSessionDisplayUpdateSecondsOver60
+    type: Int
+    default: 30
+    min: 1
+    max: 900
+    step: 1
+  modes:
+    LEARN_FLASHCARD: false
+    PRACTICE_FLASHCARD: true
+    QUIZ_FLASHCARD: true
+    GUIDED_FLASHCARD: false
+    PRACTICE_LIST: true
+    QUIZ_LIST: true
+    GUIDED_LIST: false
+    PRACTICE_MATCHING: true
+    QUIZ_MATCHING: true
+    PRACTICE_MULTIPLE_CHOICE: true
+    QUIZ_MULTIPLE_CHOICE: true
+    GUIDED_MULTIPLE_CHOICE: false
+    PRACTICE_SEE_SPEAK: true
+    QUIZ_SEE_SPEAK: true
+    GUIDED_SEE_SPEAK: false
+    PRACTICE_LISTEN_TYPE: true
+    QUIZ_LISTEN_TYPE: true
+    GUIDED_LISTEN_TYPE: false
+    PRACTICE_TYPING_SCORED: true
+    QUIZ_TYPING_SCORED: true
+    GUIDED_TYPING_SCORED: false
+    PRACTICE_HEAR_MATCH: true
+    QUIZ_HEAR_MATCH: true
+    GUIDED_HEAR_MATCH: false

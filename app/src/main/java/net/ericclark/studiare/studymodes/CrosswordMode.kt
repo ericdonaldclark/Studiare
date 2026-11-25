@@ -154,7 +154,7 @@ fun CrosswordScreen(
             CustomTopAppBar(
                 viewModel = viewModel,
                 screenId = ShortcutScreen.CROSSWORD,
-                title = { AdaptiveSessionTitle(state.deckWithCards.deck.name, state.studyMode.asString()) },
+                title = { AdaptiveSessionTitle(state) },
                 navigationIcon = {
                     TooltipIconButton(description = getText(R.string.back), onClick = { viewModel.endStudySession(); navController.popBackStack() }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = getText(R.string.back))

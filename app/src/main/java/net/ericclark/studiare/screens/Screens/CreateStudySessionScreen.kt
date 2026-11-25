@@ -83,6 +83,7 @@ import net.ericclark.studiare.screens.UI_Components.TypingShowLengthHint
 import net.ericclark.studiare.screens.UI_Components.TypedListenMultipleChoice
 import net.ericclark.studiare.screens.UI_Components.HearMatchAutoPlayAll
 import net.ericclark.studiare.screens.UI_Components.HideDifficultySelection
+import net.ericclark.studiare.screens.UI_Components.ContinuousSession
 import net.ericclark.studiare.screens.UI_Components.TypedChipGrid
 import net.ericclark.studiare.screens.UI_Components.ModeDefaultSettingsSaver
 import net.ericclark.studiare.screens.UI_Components.modeOptionsFor
@@ -134,6 +135,26 @@ fun CreateStudySessionScreen(
     val voicePrompt = rememberVoicePromptState()
     VoiceDownloadPrompts(state = voicePrompt, viewModel = viewModel)
 
+    // --- Preset loading (decision C in the plan file) ---
+    // loadedPresetId starts from the nav arg and is reassigned to a freshly-Pinned preset's own
+    // id, so a second round of edits without saving shows the Save button too, not just the
+    // settings-cog entry path. loadedPresetOverride is set synchronously by the Pin/Save handlers
+    // to the object they just built — presets.find{} alone would lag a frame or two behind the
+    // async DB write, which would otherwise leave isPresetDirty wrongly stuck reporting "clean"
+    // right after a fresh Pin.
+    val presets by viewModel.presets.collectAsState()
+    var loadedPresetId by rememberSaveable { mutableStateOf(presetId) }
+    var loadedPresetOverride by remember { mutableStateOf<SessionPreset?>(null) }
+    val loadedPreset = loadedPresetOverride ?: presets.find { it.id == loadedPresetId }
+
+    // The category can be switched inside the dialog, so it's dialog state seeded from the caller
+    // (or from loadedPreset, when arriving via a preset's edit button). Declared before
+    // onStartSession below (moved up from its original spot further down this function) so that
+    // closure can read it directly, since it's what gets stamped as the started session's/preset's
+    // own startedCategory.
+    var category by rememberSaveable { mutableStateOf(loadedPreset?.displayCategory() ?: initialCategory) }
+    LaunchedEffect(category) { onCategoryChosen(category) }
+
     val onStartSession: (
         mode: SessionMode, isWeighted: Boolean, numCards: Int, quizPromptSide: CardSide, numAnswers: Int,
         showCorrectLetters: Boolean, limitAnswerPool: Boolean, isGraded: Boolean, allowMultipleGuesses: Boolean,
@@ -146,6 +167,7 @@ fun CreateStudySessionScreen(
             viewModel.startStudySession(
                 parentDeck = deck,
                 mode = mode,
+                category = category,
                 isWeighted = isWeighted,
                 numCards = numCards,
                 quizPromptSide = quizPromptSide,
@@ -174,23 +196,6 @@ fun CreateStudySessionScreen(
 
     val dimensions = LocalStudiareDimensions.current
     val deckDefaultPromptSide = deck.deck.defaultPromptSide
-
-    // --- Preset loading (decision C in the plan file) ---
-    // loadedPresetId starts from the nav arg and is reassigned to a freshly-Pinned preset's own
-    // id, so a second round of edits without saving shows the Save button too, not just the
-    // settings-cog entry path. loadedPresetOverride is set synchronously by the Pin/Save handlers
-    // to the object they just built — presets.find{} alone would lag a frame or two behind the
-    // async DB write, which would otherwise leave isPresetDirty wrongly stuck reporting "clean"
-    // right after a fresh Pin.
-    val presets by viewModel.presets.collectAsState()
-    var loadedPresetId by rememberSaveable { mutableStateOf(presetId) }
-    var loadedPresetOverride by remember { mutableStateOf<SessionPreset?>(null) }
-    val loadedPreset = loadedPresetOverride ?: presets.find { it.id == loadedPresetId }
-
-    // The category can be switched inside the dialog, so it's dialog state seeded from the caller
-    // (or from loadedPreset, when arriving via a preset's edit button).
-    var category by rememberSaveable { mutableStateOf(loadedPreset?.displayCategory() ?: initialCategory) }
-    LaunchedEffect(category) { onCategoryChosen(category) }
     val isGuided = category == StudyCategory.GUIDED
 
     // --- Session Settings State ---
@@ -336,12 +341,15 @@ fun CreateStudySessionScreen(
     val availableByDifficulty = remember(selectedPool) { selectedPool.groupingBy { it.difficulty.value }.eachCount() }
 
     // Weighted counts are capped by what the current filters leave for that difficulty.
-    val optionContext = ModeOptionContext(maxForDifficulty = { availableByDifficulty[it] ?: 0 }, availableCardsCount = availableCardsCount, category = category, mode = selectedMode, deckDefaultPromptSide = deckDefaultPromptSide)
-    fun weightedCountFor(difficulty: Int): Int = DifficultyWeighting.effectiveCountFor(optionValues, difficulty, optionContext)
-    val weightedTotal = DifficultyWeighting.totalFor(optionValues, optionContext)
+    val preCountOptionContext = ModeOptionContext(maxForDifficulty = { availableByDifficulty[it] ?: 0 }, availableCardsCount = availableCardsCount, category = category, mode = selectedMode, deckDefaultPromptSide = deckDefaultPromptSide)
+    fun weightedCountFor(difficulty: Int): Int = DifficultyWeighting.effectiveCountFor(optionValues, difficulty, preCountOptionContext)
+    val weightedTotal = DifficultyWeighting.totalFor(optionValues, preCountOptionContext)
 
     var numberOfCards by rememberSaveable(inputs = arrayOf(availableCardsCount)) { mutableStateOf(loadedPreset?.numCards ?: availableCardsCount) }
     val effectiveCardCount = if (isWeighted) weightedTotal else numberOfCards
+    // Now that the session's real card count is known, build the context the rest of this screen
+    // actually renders options against - see ModeOptionContext.sessionCardCount's doc comment.
+    val optionContext = ModeOptionContext(maxForDifficulty = { availableByDifficulty[it] ?: 0 }, availableCardsCount = availableCardsCount, sessionCardCount = effectiveCardCount, category = category, mode = selectedMode, deckDefaultPromptSide = deckDefaultPromptSide)
     val isMcModeInvalid = selectedMode == SessionMode.MULTIPLE_CHOICE && deck.cards.size < numberOfAnswers
     val hasCards = if (isWeighted) weightedTotal > 0 else availableCardsCount > 0
     val isButtonEnabled = hasCards && !isMcModeInvalid
@@ -380,6 +388,7 @@ fun CreateStudySessionScreen(
             typedListenUseMultipleChoice = TypedListenMultipleChoice.valueIn(optionValues),
             hearMatchAutoPlayAllOptions = HearMatchAutoPlayAll.valueIn(optionValues),
             hideDifficultySelection = HideDifficultySelection.valueIn(optionValues),
+            continuousSession = ContinuousSession.isEnabled(optionValues),
             flashcardAutoFlipSeconds = optionValues.flashcardAutoFlipSeconds ?: ModeOptionDefaults.FLASHCARD_AUTO_FLIP_SECONDS,
             flashcardAutoFlip = FlashcardAutoFlip.valueIn(optionValues),
             flashcardDoubleTapToFlip = FlashcardDoubleTap.valueIn(optionValues),
@@ -416,7 +425,12 @@ fun CreateStudySessionScreen(
             memoryCorrectPairMs = optionValues.memoryCorrectPairMs ?: ModeOptionDefaults.MEMORY_CORRECT_PAIR_MS,
             memorySubmitAnswer = optionValues.memorySubmitAnswer ?: ModeOptionDefaults.MEMORY_SUBMIT_ANSWER,
             wordSearchHideFound = optionValues.wordSearchHideFound ?: ModeOptionDefaults.WORD_SEARCH_HIDE_FOUND,
-            wordSearchHighlightColor = optionValues.wordSearchHighlightColor ?: ModeOptionDefaults.WORD_SEARCH_HIGHLIGHT_COLOR)
+            wordSearchHighlightColor = optionValues.wordSearchHighlightColor ?: ModeOptionDefaults.WORD_SEARCH_HIGHLIGHT_COLOR,
+            timedSessionEnabled = optionValues.timedSessionEnabled ?: ModeOptionDefaults.TIMED_SESSION_ENABLED,
+            timedSessionDurationSeconds = optionValues.timedSessionDurationSeconds ?: ModeOptionDefaults.TIMED_SESSION_DURATION_SECONDS,
+            timedSessionPauseOutsideSession = optionValues.timedSessionPauseOutsideSession ?: ModeOptionDefaults.TIMED_SESSION_PAUSE_OUTSIDE_SESSION,
+            timedSessionDisplayUpdateSecondsUnder60 = optionValues.timedSessionDisplayUpdateSecondsUnder60 ?: ModeOptionDefaults.TIMED_SESSION_DISPLAY_UPDATE_SECONDS_UNDER60,
+            timedSessionDisplayUpdateSecondsOver60 = optionValues.timedSessionDisplayUpdateSecondsOver60 ?: ModeOptionDefaults.TIMED_SESSION_DISPLAY_UPDATE_SECONDS_OVER60)
         // List/Matching/Multiple Choice's value now comes from their own
         // user-configurable "show correct on a miss" option instead of a
         // category-forced local var (which no longer sets this for any of them).
@@ -469,7 +483,7 @@ fun CreateStudySessionScreen(
     val pinAsNewPreset: (name: String) -> Unit = { name ->
         val (currentConfig, effectiveAllowMultipleGuesses) = buildSessionConfig()
         val newPreset = viewModel.createPresetFromCurrentConfig(
-            deckId = deck.deck.id, name = name.ifBlank { null }, config = currentConfig, sessionMode = selectedMode,
+            deckId = deck.deck.id, name = name.ifBlank { null }, config = currentConfig, sessionMode = selectedMode, category = category,
             isWeighted = isWeighted, numCards = effectiveCardCount, quizPromptSide = quizPromptSide,
             numberOfAnswers = numberOfAnswers, showCorrectLetters = showCorrectLetters, limitAnswerPool = limitAnswerPool,
             isGraded = isGraded, allowMultipleGuesses = effectiveAllowMultipleGuesses, maxMemoryTiles = maxMemoryTiles,
@@ -486,7 +500,7 @@ fun CreateStudySessionScreen(
         if (current != null) {
             val (currentConfig, effectiveAllowMultipleGuesses) = buildSessionConfig()
             val updated = viewModel.updatePresetInPlace(
-                preset = current, config = currentConfig, sessionMode = selectedMode, isWeighted = isWeighted,
+                preset = current, config = currentConfig, sessionMode = selectedMode, category = category, isWeighted = isWeighted,
                 numCards = effectiveCardCount, quizPromptSide = quizPromptSide, numberOfAnswers = numberOfAnswers,
                 showCorrectLetters = showCorrectLetters, limitAnswerPool = limitAnswerPool, isGraded = isGraded,
                 allowMultipleGuesses = effectiveAllowMultipleGuesses, maxMemoryTiles = maxMemoryTiles, gridDensity = gridDensity,

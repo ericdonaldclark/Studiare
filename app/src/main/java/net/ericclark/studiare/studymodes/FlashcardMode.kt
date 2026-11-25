@@ -144,7 +144,7 @@ fun FlashcardScreen(
             CustomTopAppBar(
                 viewModel = viewModel,
                 screenId = ShortcutScreen.FLASHCARD,
-                title = { AdaptiveSessionTitle(state.deckWithCards.deck.name, state.studyMode.asString()) },
+                title = { AdaptiveSessionTitle(state) },
                 navigationIcon = {
                     TooltipIconButton(description = getText(R.string.back), onClick = {
                         viewModel.endStudySession()
@@ -308,7 +308,8 @@ fun PortraitFlashcardLayout(state: StudyState, viewModel: FlashcardViewModel) {
                     .aspectRatio(1.6f),
                 cardIndex = state.currentCardIndex,
                 totalCards = state.shuffledCards.size,
-                sessionId = state.sessionId
+                sessionId = state.sessionId,
+                showIndex = !state.continuousSession
             )
         }
         Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
@@ -398,7 +399,8 @@ fun LandscapeFlashcardLayout(state: StudyState, viewModel: FlashcardViewModel) {
                 modifier = Modifier.fillMaxWidth(),
                 cardIndex = state.currentCardIndex,
                 totalCards = state.shuffledCards.size,
-                sessionId = state.sessionId
+                sessionId = state.sessionId,
+                showIndex = !state.continuousSession
             )
         }
 

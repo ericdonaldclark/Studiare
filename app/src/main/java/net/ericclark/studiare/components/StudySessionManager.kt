@@ -4,6 +4,7 @@ import net.ericclark.studiare.data.*
 import net.ericclark.studiare.screens.Dialogs.studyRouteFor
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.UUID
@@ -30,8 +31,29 @@ class StudySessionManager(
     private fun updateAndSaveStudyState(newState: StudyState?) {
         var stateToProcess = newState
 
+        // Continuous Session: a normal completion (not a Timed Session timeout, which must still
+        // end the session) never actually persists as complete - reshuffle the same pool in place
+        // and keep going instead. See [reshuffleInPlace].
+        if (stateToProcess != null && stateToProcess.isComplete && stateToProcess.continuousSession && !stateToProcess.endedByTimeout) {
+            reshuffleInPlace(stateToProcess)
+            return
+        }
+
         if (stateToProcess != null && stateToProcess.currentCardIndex > stateToProcess.furthestCardIndex) {
             stateToProcess = stateToProcess.copy(furthestCardIndex = stateToProcess.currentCardIndex)
+        }
+
+        // Freeze the session clock the moment a session completes, folding whatever's run since
+        // sessionResumedAt into accumulatedTimeSeconds so later reads (the completion screen, a
+        // resumed "Try Again") see a stable total instead of one that keeps ticking after the fact.
+        if (stateToProcess != null && stateToProcess.isComplete && getStudyState()?.isComplete != true) {
+            val now = System.currentTimeMillis()
+            stateToProcess = stateToProcess.copy(
+                accumulatedTimeSeconds = stateToProcess.accumulatedTimeSeconds + (now - stateToProcess.sessionResumedAt) / 1000,
+                sessionResumedAt = now,
+                timedSessionAccumulatedSeconds = stateToProcess.timedSessionAccumulatedSeconds + (now - stateToProcess.timedSessionResumedAt) / 1000,
+                timedSessionResumedAt = now
+            )
         }
 
         if (stateToProcess != null && stateToProcess.schedulingMode == SchedulingMode.FSRS) {
@@ -127,7 +149,17 @@ class StudySessionManager(
             wordSearchGrid = stateToProcess.wordSearchGrid.map { it.joinToString("") },
             wordSearchGridWidth = stateToProcess.wordSearchGridWidth,
             wordSearchGridHeight = stateToProcess.wordSearchGridHeight,
-            wordSearchFoundWordIds = stateToProcess.wordSearchFoundWordIds
+            wordSearchFoundWordIds = stateToProcess.wordSearchFoundWordIds,
+            accumulatedTimeSeconds = stateToProcess.accumulatedTimeSeconds,
+            sessionResumedAt = stateToProcess.sessionResumedAt,
+            timedSessionEnabled = stateToProcess.timedSessionEnabled,
+            timedSessionDurationSeconds = stateToProcess.timedSessionDurationSeconds,
+            timedSessionPauseOutsideSession = stateToProcess.timedSessionPauseOutsideSession,
+            timedSessionDisplayUpdateSecondsUnder60 = stateToProcess.timedSessionDisplayUpdateSecondsUnder60,
+            timedSessionDisplayUpdateSecondsOver60 = stateToProcess.timedSessionDisplayUpdateSecondsOver60,
+            timedSessionAccumulatedSeconds = stateToProcess.timedSessionAccumulatedSeconds,
+            timedSessionResumedAt = stateToProcess.timedSessionResumedAt,
+            endedByTimeout = stateToProcess.endedByTimeout
         )
         if (updatedSession != null) {
             saveSession(updatedSession)
@@ -229,8 +261,9 @@ class StudySessionManager(
     fun resumeStudySession(session: ActiveSession) {
         val deck = getAllDecks().find { it.deck.id == session.deckId } ?: return
         val cardsInOrder = session.shuffledCardIds.mapNotNull { id -> deck.cards.find { it.id == id } }
+        val resumeNow = System.currentTimeMillis()
 
-        saveSession(session.copy(lastAccessed = System.currentTimeMillis()))
+        saveSession(session.copy(lastAccessed = resumeNow))
 
         val cwInputs = session.crosswordUserInputs.mapValues { it.value.first() }
         val completedIds = if (session.showCorrectWords) {
@@ -250,6 +283,8 @@ class StudySessionManager(
             sessionId = session.id,
             deckWithCards = deck,
             studyMode = session.mode,
+            startedCategory = session.startedCategory,
+            continuousSession = session.continuousSession,
             schedulingMode = session.schedulingMode,
             audioPlaybackSpeed = session.audioPlaybackSpeed,
             audioReplayCount = session.audioReplayCount,
@@ -350,12 +385,150 @@ class StudySessionManager(
             wordSearchGrid = session.wordSearchGrid.map { it.toList() },
             wordSearchGridWidth = session.wordSearchGridWidth,
             wordSearchGridHeight = session.wordSearchGridHeight,
-            wordSearchFoundWordIds = session.wordSearchFoundWordIds
+            wordSearchFoundWordIds = session.wordSearchFoundWordIds,
+            // Not folded: a gap between the persisted sessionResumedAt and now (whether from
+            // navigating away in-app or any other delay before resuming) must NOT be counted as
+            // time spent in the session - only time actually spent in the session counts, never
+            // time since it merely started. accumulatedTimeSeconds already holds everything
+            // properly banked by an actual pause; resetting the anchor to now (without adding
+            // anything for the gap itself) is what keeps the gap from being counted.
+            accumulatedTimeSeconds = session.accumulatedTimeSeconds,
+            sessionResumedAt = resumeNow,
+            timedSessionEnabled = session.timedSessionEnabled,
+            timedSessionDurationSeconds = session.timedSessionDurationSeconds,
+            timedSessionPauseOutsideSession = session.timedSessionPauseOutsideSession,
+            timedSessionDisplayUpdateSecondsUnder60 = session.timedSessionDisplayUpdateSecondsUnder60,
+            timedSessionDisplayUpdateSecondsOver60 = session.timedSessionDisplayUpdateSecondsOver60,
+            timedSessionAccumulatedSeconds = session.timedSessionAccumulatedSeconds,
+            // Only reset to "now" if this timer actually pauses outside the session - when it
+            // doesn't, timedSessionResumedAt must stay exactly as persisted, since it's the fixed
+            // anchor real-time elapsed is measured from, and resetting it here would silently grant
+            // extra time for however long the session sat dormant.
+            timedSessionResumedAt = if (session.timedSessionPauseOutsideSession) resumeNow else session.timedSessionResumedAt,
+            endedByTimeout = session.endedByTimeout
         )
         setStudyState(newState)
+        scheduleTimeoutCheck()
     }
 
-    fun endStudySession() { setStudyState(null) }
+    fun endStudySession() { cancelTimeoutCheck(); setStudyState(null) }
+
+    /** Folds whatever's run since [StudyState.sessionResumedAt] into [StudyState.accumulatedTimeSeconds]
+     * and stops Time Tracking's clock - called both when the whole app backgrounds (the
+     * ProcessLifecycleOwner hook in FlashcardViewModel's init{}) and when the user navigates away
+     * from the active study screen within the app (StudySessionScreenLifecycle in
+     * MainActivity.kt), so neither kind of "away" time is counted as time spent studying. No-op
+     * once the session is already complete (its clock is already frozen by
+     * [updateAndSaveStudyState]). Also resets [StudyState.sessionResumedAt] to now (and
+     * [StudyState.timedSessionResumedAt], when applicable) after folding, same as [resumeSessionClock]
+     * does - this makes a second pause call before any resume a harmless no-op (folds ~0 more) rather
+     * than double-counting the same span, which matters now that two independent triggers can both
+     * call this in close succession. Time Tracking's own clock always pauses this way, regardless of
+     * Timed Session settings - only the *timer's* clock (below) is conditional. */
+    fun pauseSessionClock() {
+        val state = getStudyState() ?: return
+        if (state.isComplete) { cancelTimeoutCheck(); return }
+        val now = System.currentTimeMillis()
+        var updated = state.copy(
+            accumulatedTimeSeconds = state.accumulatedTimeSeconds + (now - state.sessionResumedAt) / 1000,
+            sessionResumedAt = now
+        )
+        // Only pause the countdown itself if Timed Session's own "pause outside session" setting is
+        // on - off (the default) leaves timedSessionResumedAt untouched and the timeout job running,
+        // so the countdown keeps counting down in real time while the app is away.
+        if (state.timedSessionEnabled && state.timedSessionPauseOutsideSession) {
+            updated = updated.copy(
+                timedSessionAccumulatedSeconds = state.timedSessionAccumulatedSeconds + (now - state.timedSessionResumedAt) / 1000,
+                timedSessionResumedAt = now
+            )
+            cancelTimeoutCheck()
+        }
+        updateAndSaveStudyState(updated)
+    }
+
+    /**
+     * What [net.ericclark.studiare.TimedSessionNotificationService] needs to keep showing a live
+     * countdown while the app is backgrounded - a plain snapshot, not a live reference, since the
+     * service runs in its own lifecycle and re-derives the remaining time itself from
+     * [resumedAt]/[accumulatedSeconds] the same way [StudyState.timedSessionRemainingSeconds] does.
+     * Null whenever there's nothing for the notification to do: no active session, it's already
+     * complete, Timed Session is off, or "pause outside session" is on (the countdown itself already
+     * stops in that case - see [pauseSessionClock] - so there's nothing live to show).
+     */
+    data class TimedSessionNotificationSnapshot(
+        val sessionId: String,
+        val deckName: String,
+        val modeLabelResId: Int,
+        val durationSeconds: Int,
+        val accumulatedSeconds: Long,
+        val resumedAt: Long,
+        val displayFrequencyUnder60: Int,
+        val displayFrequencyOver60: Int
+    )
+
+    fun timedSessionNotificationSnapshot(): TimedSessionNotificationSnapshot? {
+        val state = getStudyState() ?: return null
+        if (state.isComplete || !state.timedSessionEnabled || state.timedSessionPauseOutsideSession) return null
+        return TimedSessionNotificationSnapshot(
+            sessionId = state.sessionId,
+            deckName = state.deckWithCards.deck.name,
+            modeLabelResId = state.studyMode.labelResId,
+            durationSeconds = state.timedSessionDurationSeconds,
+            accumulatedSeconds = state.timedSessionAccumulatedSeconds,
+            resumedAt = state.timedSessionResumedAt,
+            displayFrequencyUnder60 = state.timedSessionDisplayUpdateSecondsUnder60,
+            displayFrequencyOver60 = state.timedSessionDisplayUpdateSecondsOver60
+        )
+    }
+
+    /** Restarts Time Tracking's clock from now - the counterpart to [pauseSessionClock], called when
+     * the app returns to the foreground. Only restarts/reschedules the timer's own clock and timeout
+     * job if "pause outside session" is on (see [pauseSessionClock]) - otherwise both were left
+     * running the whole time and there's nothing to resume. */
+    fun resumeSessionClock() {
+        val state = getStudyState() ?: return
+        if (state.isComplete) return
+        val now = System.currentTimeMillis()
+        var updated = state.copy(sessionResumedAt = now)
+        if (state.timedSessionEnabled && state.timedSessionPauseOutsideSession) {
+            updated = updated.copy(timedSessionResumedAt = now)
+        }
+        updateAndSaveStudyState(updated)
+        if (state.timedSessionEnabled && state.timedSessionPauseOutsideSession) scheduleTimeoutCheck()
+    }
+
+    private var timeoutJob: kotlinx.coroutines.Job? = null
+
+    /** Cancels any pending Timed Session auto-end job - called whenever the countdown's own clock
+     * stops running (backgrounding, only when "pause outside session" is on) or the session itself
+     * ends, so a stale job from a previous session/pause can never fire. */
+    private fun cancelTimeoutCheck() {
+        timeoutJob?.cancel()
+        timeoutJob = null
+    }
+
+    /** (Re)schedules Timed Session's auto-end for whatever time is actually left on *its own* clock
+     * right now (see [StudyState.timedSessionAccumulatedSeconds]/[StudyState.timedSessionResumedAt]) -
+     * a no-op if the session isn't timed, is already complete, or has no time left (that last case is
+     * handled by firing the check immediately rather than scheduling a negative delay). Called once
+     * at session start/resume regardless of "pause outside session", since that setting only affects
+     * whether backgrounding later cancels/reschedules this - the initial schedule is the same either way. */
+    private fun scheduleTimeoutCheck() {
+        cancelTimeoutCheck()
+        val state = getStudyState() ?: return
+        if (!state.timedSessionEnabled || state.isComplete) return
+        val elapsed = state.timedSessionAccumulatedSeconds + (System.currentTimeMillis() - state.timedSessionResumedAt) / 1000
+        val remainingSeconds = state.timedSessionDurationSeconds - elapsed
+        timeoutJob = viewModelScope.launch {
+            if (remainingSeconds > 0) delay(remainingSeconds * 1000)
+            // Re-fetch rather than trust the captured `state` - plenty could have happened during
+            // the delay (the user answered more cards, paused/resumed, or the session already ended).
+            val current = getStudyState() ?: return@launch
+            if (current.sessionId == state.sessionId && current.timedSessionEnabled && !current.isComplete) {
+                updateAndSaveStudyState(current.copy(isComplete = true, endedByTimeout = true))
+            }
+        }
+    }
 
     /** Applies changes from the in-session settings button to the running session and saves them with it. */
     fun applySessionOptions(values: ModeDefaultSettings) {
@@ -380,6 +553,7 @@ class StudySessionManager(
             typedListenUseMultipleChoice = values.typedListenUseMultipleChoice ?: state.typedListenUseMultipleChoice,
             hearMatchAutoPlayAllOptions = values.hearMatchAutoPlayAllOptions ?: state.hearMatchAutoPlayAllOptions,
             hideDifficultySelection = values.hideDifficultySelection ?: state.hideDifficultySelection,
+            continuousSession = values.continuousSession ?: state.continuousSession,
             flashcardAutoFlipSeconds = values.flashcardAutoFlipSeconds ?: state.flashcardAutoFlipSeconds,
             flashcardAutoFlip = values.flashcardAutoFlip ?: state.flashcardAutoFlip,
             flashcardDoubleTapToFlip = values.flashcardDoubleTapToFlip ?: state.flashcardDoubleTapToFlip,
@@ -421,8 +595,152 @@ class StudySessionManager(
         ))
     }
 
+    /** Mode-specific content generated once per round from a fixed card list - crossword/word
+     *  search grids, List's answer pool. Separated from card *selection* ([buildRoundContent]
+     *  below) since [reshuffleInPlace] needs this part but deliberately skips selection: it
+     *  recycles the same cards the session already picked, just reordered, rather than re-running
+     *  the filters (which for [SortMode.RANDOM] would silently swap in a different subset every
+     *  loop instead of looping the one the session actually started with). */
+    private data class SessionRoundVisuals(
+        val cwWords: List<CrosswordWord>, val cwWidth: Int, val cwHeight: Int,
+        val wsWords: List<net.ericclark.studiare.data.WordSearchWord>, val wsGrid: List<String>, val wsWidth: Int, val wsHeight: Int,
+        val pickerOptions: List<String>
+    )
+
+    private fun buildRoundVisuals(cards: List<Card>, mode: SessionMode, parentDeck: DeckWithCards, quizPromptSide: CardSide, gridDensity: Int, resolvedAutoByDeckSide: CardSide): SessionRoundVisuals {
+        var cwWords: List<CrosswordWord> = emptyList()
+        var cwWidth = 0
+        var cwHeight = 0
+
+        var wsWords: List<net.ericclark.studiare.data.WordSearchWord> = emptyList()
+        var wsGrid: List<String> = emptyList()
+        var wsWidth = 0
+        var wsHeight = 0
+
+        if (mode == SessionMode.CROSSWORD) {
+            val (words, dim) = generateCrossword(cards, quizPromptSide, gridDensity, resolvedAutoByDeckSide)
+            cwWords = words; cwWidth = dim.first; cwHeight = dim.second
+        } else if (mode == SessionMode.WORD_SEARCH) {
+            val (words, grid, width, height) = generateWordSearch(cards, quizPromptSide, gridDensity, resolvedAutoByDeckSide)
+            wsWords = words; wsGrid = grid; wsWidth = width; wsHeight = height
+        }
+        val pickerOptions = if (mode == SessionMode.LIST) {
+            val poolPromptSide = resolvePoolPromptSide(quizPromptSide, resolvedAutoByDeckSide)
+            val pickSide = if (poolPromptSide == CardSide.FRONT) CardSide.BACK else CardSide.FRONT
+            parentDeck.cards.map { if (pickSide == CardSide.FRONT) it.front else it.back }.filter { it.isNotBlank() }.distinct().sortedWith(String.CASE_INSENSITIVE_ORDER)
+        } else emptyList()
+
+        return SessionRoundVisuals(cwWords, cwWidth, cwHeight, wsWords, wsGrid, wsWidth, wsHeight, pickerOptions)
+    }
+
+    /** What a brand-new session of [mode] needs from [parentDeck]/[config]'s filters/mix: the card
+     *  selection itself plus [buildRoundVisuals]. Only ever used for a real start - [reshuffleInPlace]
+     *  intentionally doesn't re-select, see its own doc comment. */
+    private data class SessionRoundContent(
+        val finalCards: List<Card>,
+        val cwWords: List<CrosswordWord>, val cwWidth: Int, val cwHeight: Int,
+        val wsWords: List<net.ericclark.studiare.data.WordSearchWord>, val wsGrid: List<String>, val wsWidth: Int, val wsHeight: Int,
+        val pickerOptions: List<String>,
+        val resolvedAutoByDeckSide: CardSide
+    )
+
+    /** Returns `null` when the filtered pool is empty (e.g. FSRS with nothing due). */
+    private fun buildRoundContent(parentDeck: DeckWithCards, mode: SessionMode, config: AutoSetConfig, numCards: Int, quizPromptSide: CardSide, gridDensity: Int): SessionRoundContent? {
+        var sessionCards = cardUtils.getFilteredAndSortedCards(parentDeck, config)
+
+        if (config.schedulingMode == SchedulingMode.FSRS) {
+            val now = System.currentTimeMillis()
+            sessionCards = sessionCards.filter { it.isDueForFsrs(now) }
+        }
+
+        // Difficulty weighting: keep only the first N cards of each difficulty (in the already-sorted
+        // order), so the session holds exactly the requested mix. Filter keeps sort order intact.
+        config.difficultyCounts?.let { counts ->
+            val chosenIds = sessionCards.groupBy { it.difficulty.value }
+                .flatMap { (difficulty, cards) -> cards.take(counts[difficulty] ?: 0) }
+                .map { it.id }.toSet()
+            sessionCards = sessionCards.filter { it.id in chosenIds }
+        }
+        val finalCards = sessionCards.take(min(numCards, sessionCards.size))
+        if (finalCards.isEmpty()) return null
+        val resolvedAutoByDeckSide = computeAutoByDeckSide(parentDeck.cards)
+        val visuals = buildRoundVisuals(finalCards, mode, parentDeck, quizPromptSide, gridDensity, resolvedAutoByDeckSide)
+
+        return SessionRoundContent(finalCards, visuals.cwWords, visuals.cwWidth, visuals.cwHeight, visuals.wsWords, visuals.wsGrid, visuals.wsWidth, visuals.wsHeight, visuals.pickerOptions, resolvedAutoByDeckSide)
+    }
+
+    /**
+     * Continuous Session's loop: instead of letting [completedState] persist as complete, recycles
+     * the exact cards this session already selected (its stored `shuffledCardIds`) in a freshly
+     * shuffled order, regenerates whatever mode-specific content depends on that order (crossword/
+     * word search grid), and writes it back onto the *same* [ActiveSession]/[StudyState] - no new
+     * id, so the Study Hub tile's identity and any pin/name survive untouched. Deliberately does
+     * NOT re-run the session's filters/sort against the live deck: for [SortMode.RANDOM] that would
+     * draw a different subset of cards every loop instead of looping the one the session started
+     * with - "recycling," not "redrawing." Never reached for FSRS/Guided sessions (Continuous isn't
+     * offered there - see mode-options.yaml), so there's no due-date recheck to worry about either.
+     */
+    private fun reshuffleInPlace(completedState: StudyState) {
+        val session = getAllActiveSessions().firstOrNull { it.id == completedState.sessionId } ?: return
+        viewModelScope.launch(Dispatchers.IO) {
+            val cards = session.shuffledCardIds.mapNotNull { id -> completedState.deckWithCards.cards.find { it.id == id } }.shuffled()
+            if (cards.isEmpty()) {
+                withContext(Dispatchers.Main) { updateAndSaveStudyState(completedState.copy(continuousSession = false)) }
+                return@launch
+            }
+            val visuals = buildRoundVisuals(cards, session.mode, completedState.deckWithCards, completedState.quizPromptSide, completedState.gridDensity, completedState.resolvedAutoByDeckSide)
+
+            saveSession(session.copy(
+                shuffledCardIds = cards.map { it.id },
+                currentCardIndex = 0,
+                furthestCardIndex = 0,
+                attemptedCardIds = emptyList(),
+                incorrectCardIds = emptyList(),
+                mcOptions = emptyMap(),
+                matchingCardIdsOnScreen = emptyList(),
+                matchedPairs = emptyList(),
+                crosswordWords = visuals.cwWords, crosswordGridWidth = visuals.cwWidth, crosswordGridHeight = visuals.cwHeight, crosswordUserInputs = emptyMap(),
+                wordSearchWords = visuals.wsWords, wordSearchGrid = visuals.wsGrid, wordSearchGridWidth = visuals.wsWidth, wordSearchGridHeight = visuals.wsHeight, wordSearchFoundWordIds = emptySet(),
+                pickerOptions = visuals.pickerOptions,
+                lastAccessed = System.currentTimeMillis(),
+                isPendingSync = true
+            ))
+
+            withContext(Dispatchers.Main) {
+                setStudyState(completedState.copy(
+                    isComplete = false,
+                    shuffledCards = cards,
+                    currentCardIndex = 0,
+                    furthestCardIndex = 0,
+                    wrongSelections = emptyList(),
+                    correctAnswerFound = false,
+                    showFront = true,
+                    isFlipped = false,
+                    isCardRevealed = false,
+                    hasAttempted = false,
+                    attemptedCardIds = emptyList(),
+                    incorrectCardIds = emptyList(),
+                    mcOptions = emptyMap(),
+                    matchingCardsOnScreen = emptyList(),
+                    successfullyMatchedPairs = emptyList(),
+                    crosswordWords = visuals.cwWords, crosswordGridWidth = visuals.cwWidth, crosswordGridHeight = visuals.cwHeight, crosswordUserInputs = emptyMap(),
+                    crosswordSelectedWordId = visuals.cwWords.firstOrNull()?.id, completedWordIds = emptySet(),
+                    wordSearchWords = visuals.wsWords, wordSearchGrid = visuals.wsGrid.map { it.toList() }, wordSearchGridWidth = visuals.wsWidth, wordSearchGridHeight = visuals.wsHeight, wordSearchFoundWordIds = emptySet(),
+                    pickerOptions = visuals.pickerOptions
+                ))
+                // Each mode's own "init the next round" effect is keyed on things that can fail to
+                // change across a reshuffle (Memory's is keyed on Unit and never re-fires at all;
+                // MC/HearMatch/TypedListen's are keyed on currentCardIndex, which can stay 0 for a
+                // 1-card round) - call them directly so the round is always ready before the UI
+                // renders it, regardless of any mode screen's own effect timing.
+                if (session.mode == SessionMode.MEMORY) initMemoryGrid()
+                generateOptionsForCurrentCardIfNeeded()
+            }
+        }
+    }
+
     fun startStudySession(
-        parentDeck: DeckWithCards, mode: SessionMode, isWeighted: Boolean, numCards: Int, quizPromptSide: CardSide,
+        parentDeck: DeckWithCards, mode: SessionMode, category: StudyCategory, isWeighted: Boolean, numCards: Int, quizPromptSide: CardSide,
         numAnswers: Int, showCorrectLetters: Boolean, limitAnswerPool: Boolean, isGraded: Boolean,
         allowMultipleGuesses: Boolean,
         maxMemoryTiles: Int, gridDensity: Int, freeFormVerticalLayout: Boolean, config: AutoSetConfig,
@@ -432,60 +750,27 @@ class StudySessionManager(
         onSessionCreated: () -> Unit
     ) {
         viewModelScope.launch(Dispatchers.IO) {
-            var sessionCards = cardUtils.getFilteredAndSortedCards(parentDeck, config)
-
-            if (config.schedulingMode == SchedulingMode.FSRS) {
-                val now = System.currentTimeMillis()
-                val oneDayMillis = 24 * 60 * 60 * 1000L
-
-                sessionCards = sessionCards.filter { it.isDueForFsrs(now) }
-            }
-
-            // Difficulty weighting: keep only the first N cards of each difficulty (in the already-sorted
-            // order), so the session holds exactly the requested mix. Filter keeps sort order intact.
-            config.difficultyCounts?.let { counts ->
-                val chosenIds = sessionCards.groupBy { it.difficulty.value }
-                    .flatMap { (difficulty, cards) -> cards.take(counts[difficulty] ?: 0) }
-                    .map { it.id }.toSet()
-                sessionCards = sessionCards.filter { it.id in chosenIds }
-            }
-            val finalCards = sessionCards.take(min(numCards, sessionCards.size))
-            val resolvedAutoByDeckSide = computeAutoByDeckSide(parentDeck.cards)
-
-            if (finalCards.isEmpty()) {
+            val content = buildRoundContent(parentDeck, mode, config, numCards, quizPromptSide, gridDensity)
+            if (content == null) {
                 withContext(Dispatchers.Main) {
                     onToastMessage("No cards due for review!")
                 }
                 return@launch
             }
+            val finalCards = content.finalCards
+            val resolvedAutoByDeckSide = content.resolvedAutoByDeckSide
+            val cwWords = content.cwWords; val cwWidth = content.cwWidth; val cwHeight = content.cwHeight
+            val wsWords = content.wsWords; val wsGrid = content.wsGrid; val wsWidth = content.wsWidth; val wsHeight = content.wsHeight
+            val pickerOptions = content.pickerOptions
 
             val currentTime = System.currentTimeMillis()
-            var cwWords: List<CrosswordWord> = emptyList()
-            var cwWidth = 0
-            var cwHeight = 0
-
-            var wsWords: List<net.ericclark.studiare.data.WordSearchWord> = emptyList()
-            var wsGrid: List<String> = emptyList()
-            var wsWidth = 0
-            var wsHeight = 0
-
-            if (mode == SessionMode.CROSSWORD) {
-                val (words, dim) = generateCrossword(finalCards, quizPromptSide, gridDensity, resolvedAutoByDeckSide)
-                cwWords = words; cwWidth = dim.first; cwHeight = dim.second
-            } else if (mode == SessionMode.WORD_SEARCH) {
-                val (words, grid, width, height) = generateWordSearch(finalCards, quizPromptSide, gridDensity, resolvedAutoByDeckSide)
-                wsWords = words; wsGrid = grid; wsWidth = width; wsHeight = height
-            }
-            val pickerOptions = if (mode == SessionMode.LIST) {
-                val poolPromptSide = resolvePoolPromptSide(quizPromptSide, resolvedAutoByDeckSide)
-                val pickSide = if (poolPromptSide == CardSide.FRONT) CardSide.BACK else CardSide.FRONT
-                parentDeck.cards.map { if (pickSide == CardSide.FRONT) it.front else it.back }.filter { it.isNotBlank() }.distinct().sortedWith(String.CASE_INSENSITIVE_ORDER)
-            } else emptyList()
 
             val newSession = ActiveSession(
                 id = UUID.randomUUID().toString(),
                 deckId = parentDeck.deck.id,
                 mode = mode,
+                startedCategory = category,
+                continuousSession = config.continuousSession,
                 schedulingMode = config.schedulingMode,
                 audioPlaybackSpeed = config.audioPlaybackSpeed,
                 audioReplayCount = config.audioReplayCount,
@@ -538,6 +823,11 @@ class StudySessionManager(
                 memorySubmitAnswer = config.memorySubmitAnswer,
                 wordSearchHideFound = config.wordSearchHideFound,
                 wordSearchHighlightColor = config.wordSearchHighlightColor,
+                timedSessionEnabled = config.timedSessionEnabled,
+                timedSessionDurationSeconds = config.timedSessionDurationSeconds,
+                timedSessionPauseOutsideSession = config.timedSessionPauseOutsideSession,
+                timedSessionDisplayUpdateSecondsUnder60 = config.timedSessionDisplayUpdateSecondsUnder60,
+                timedSessionDisplayUpdateSecondsOver60 = config.timedSessionDisplayUpdateSecondsOver60,
                 isWeighted = isWeighted,
                 difficulties = config.selectedDifficulties,
                 totalCards = finalCards.size,
@@ -600,6 +890,8 @@ class StudySessionManager(
                         sessionId = newSession.id,
                         deckWithCards = parentDeck,
                         studyMode = mode,
+                        startedCategory = category,
+                        continuousSession = config.continuousSession,
                         schedulingMode = config.schedulingMode,
                         audioPlaybackSpeed = config.audioPlaybackSpeed,
                         audioReplayCount = config.audioReplayCount,
@@ -681,9 +973,15 @@ class StudySessionManager(
                         wordSearchGrid = wsGrid.map { it.toList() },
                         wordSearchGridWidth = wsWidth,
                         wordSearchGridHeight = wsHeight,
-                        wordSearchFoundWordIds = emptySet()
+                        wordSearchFoundWordIds = emptySet(),
+                        timedSessionEnabled = config.timedSessionEnabled,
+                        timedSessionDurationSeconds = config.timedSessionDurationSeconds,
+                        timedSessionPauseOutsideSession = config.timedSessionPauseOutsideSession,
+                        timedSessionDisplayUpdateSecondsUnder60 = config.timedSessionDisplayUpdateSecondsUnder60,
+                        timedSessionDisplayUpdateSecondsOver60 = config.timedSessionDisplayUpdateSecondsOver60
                     )
                 )
+                scheduleTimeoutCheck()
                 onSessionCreated()
             }
         }
@@ -774,6 +1072,7 @@ class StudySessionManager(
         difficultyCounts = if (session.isWeighted) getStudyState()?.let { difficultyMixOf(it.deckWithCards, session.shuffledCardIds) } else null,
 
         schedulingMode = session.schedulingMode,
+        continuousSession = session.continuousSession,
         audioPlaybackSpeed = session.audioPlaybackSpeed,
         audioReplayCount = session.audioReplayCount,
         audioAutoAdvance = session.audioAutoAdvance,
@@ -823,7 +1122,12 @@ class StudySessionManager(
         memoryCorrectPairMs = session.memoryCorrectPairMs,
         memorySubmitAnswer = session.memorySubmitAnswer,
         wordSearchHideFound = session.wordSearchHideFound,
-        wordSearchHighlightColor = session.wordSearchHighlightColor
+        wordSearchHighlightColor = session.wordSearchHighlightColor,
+        timedSessionEnabled = session.timedSessionEnabled,
+        timedSessionDurationSeconds = session.timedSessionDurationSeconds,
+        timedSessionPauseOutsideSession = session.timedSessionPauseOutsideSession,
+        timedSessionDisplayUpdateSecondsUnder60 = session.timedSessionDisplayUpdateSecondsUnder60,
+        timedSessionDisplayUpdateSecondsOver60 = session.timedSessionDisplayUpdateSecondsOver60
     )
 
     /**
@@ -838,7 +1142,7 @@ class StudySessionManager(
             val session = getAllActiveSessions().firstOrNull { it.id == state.sessionId } ?: return@let
             deleteSession(session)
             val config = replayConfigFor(session)
-            startStudySession(state.deckWithCards, session.mode, session.isWeighted,
+            startStudySession(state.deckWithCards, session.mode, session.startedCategory, session.isWeighted,
                 session.totalCards, session.quizPromptSide, session.numberOfAnswers,
                 session.showCorrectLetters, session.limitAnswerPool, session.isGraded,
                 session.allowMultipleGuesses,
@@ -864,7 +1168,7 @@ class StudySessionManager(
             deleteSession(session)
             val deck = state.deckWithCards.copy(cards = incorrect)
             val config = replayConfigFor(session)
-            startStudySession(deck, session.mode, session.isWeighted, incorrect.size,
+            startStudySession(deck, session.mode, session.startedCategory, session.isWeighted, incorrect.size,
                 session.quizPromptSide, session.numberOfAnswers, session.showCorrectLetters,
                 session.limitAnswerPool, session.isGraded, session.allowMultipleGuesses,
                 session.maxMemoryTiles,
@@ -886,7 +1190,12 @@ class StudySessionManager(
                     isFlipped = false, firstTryCorrectCount = 0, hasAttempted = false, lastAccessed = System.currentTimeMillis(),
                     mcOptions = emptyMap(), matchedPairs = emptyList(), incorrectCardIds = emptyList(), wordSearchFoundWordIds = emptySet(),
                     isPinned = pin || session.isPinned,
-                    name = name ?: session.name
+                    name = name ?: session.name,
+                    // Fresh clock/timer - without this, restarting a session that just ended by
+                    // timeout would carry its spent accumulatedTimeSeconds over and immediately
+                    // time out again.
+                    accumulatedTimeSeconds = 0, sessionResumedAt = System.currentTimeMillis(), endedByTimeout = false,
+                    timedSessionAccumulatedSeconds = 0, timedSessionResumedAt = System.currentTimeMillis()
                 )
                 resumeStudySession(reset)
                 saveSession(reset)

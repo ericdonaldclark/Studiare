@@ -180,7 +180,7 @@ fun FlashcardQuizScreen(
             CustomTopAppBar(
                 viewModel = viewModel,
                 screenId = ShortcutScreen.LIST_QUIZ,
-                title = { AdaptiveSessionTitle(state.deckWithCards.deck.name, state.studyMode.asString()) },
+                title = { AdaptiveSessionTitle(state) },
                 navigationIcon = {
                     TooltipIconButton(description = getText(R.string.back), onClick = {
                         viewModel.endStudySession()
@@ -369,6 +369,7 @@ fun PortraitFlashcardQuizLayout(
                 state = state,
                 viewModel = viewModel,
                 modifier = Modifier.fillMaxSize(),
+                showIndex = !state.continuousSession,
                 tags = cardTags
             )
         }
@@ -450,6 +451,7 @@ fun LandscapeFlashcardQuizLayout(
                 state = state,
                 viewModel = viewModel,
                 modifier = Modifier.fillMaxSize(),
+                showIndex = !state.continuousSession,
                 tags = cardTags
             )
         }

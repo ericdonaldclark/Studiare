@@ -9,6 +9,11 @@ data class ActiveSession(
     @PrimaryKey val id: String = UUID.randomUUID().toString(),
     val deckId: String = "",
     val mode: SessionMode = SessionMode.FLASHCARD,
+    // The category button (Learn/Practice/Quiz/Games/Guided) actually tapped to start this session -
+    // recorded directly rather than derived, since an ungraded Flashcard session is otherwise
+    // indistinguishable between Learn and Practice (see ActiveSession.displayCategory/
+    // StudyState.currentCategory, which both just return this now instead of guessing).
+    val startedCategory: StudyCategory = StudyCategory.PRACTICE,
     val isWeighted: Boolean = false,
     val difficulties: List<Int> = emptyList(),
     val totalCards: Int = 0,
@@ -68,6 +73,7 @@ data class ActiveSession(
     val typedListenUseMultipleChoice: Boolean = ModeOptionDefaults.TYPED_LISTEN_USE_MULTIPLE_CHOICE,
     val hearMatchAutoPlayAllOptions: Boolean = ModeOptionDefaults.HEAR_MATCH_AUTO_PLAY_ALL_OPTIONS,
     val hideDifficultySelection: Boolean = ModeOptionDefaults.HIDE_DIFFICULTY_SELECTION,
+    val continuousSession: Boolean = ModeOptionDefaults.CONTINUOUS_SESSION,
     val flashcardAutoFlipSeconds: Int = ModeOptionDefaults.FLASHCARD_AUTO_FLIP_SECONDS,
     val flashcardAutoFlip: Boolean = ModeOptionDefaults.FLASHCARD_AUTO_FLIP,
     val flashcardDoubleTapToFlip: Boolean = ModeOptionDefaults.FLASHCARD_DOUBLE_TAP_TO_FLIP,
@@ -138,5 +144,24 @@ data class ActiveSession(
 
     // --- SYNC METADATA ---
     val isPendingSync: Boolean = true,
-    val isDeleted: Boolean = false
+    val isDeleted: Boolean = false,
+
+    // --- Time Tracking (local only, like furthestCardIndex - not mirrored to FirestoreActiveSession) ---
+    val accumulatedTimeSeconds: Long = 0,
+    val sessionResumedAt: Long = System.currentTimeMillis(),
+
+    // --- Timed Sessions (local only, same as Time Tracking above) ---
+    val timedSessionEnabled: Boolean = false,
+    val timedSessionDurationSeconds: Int = 0,
+    val timedSessionPauseOutsideSession: Boolean = false,
+    val timedSessionDisplayUpdateSecondsUnder60: Int = 0,
+    val timedSessionDisplayUpdateSecondsOver60: Int = 0,
+    val endedByTimeout: Boolean = false,
+    // The countdown's own pause-capable clock - same shape as accumulatedTimeSeconds/sessionResumedAt
+    // above, but kept separate since whether *this* clock pauses is itself the
+    // timedSessionPauseOutsideSession setting, independent of Time Tracking's own (always-pausing)
+    // clock. When that setting is off, timedSessionResumedAt is set once at session start and never
+    // touched again, so elapsed time naturally keeps counting in real time even while backgrounded.
+    val timedSessionAccumulatedSeconds: Long = 0,
+    val timedSessionResumedAt: Long = System.currentTimeMillis()
 )

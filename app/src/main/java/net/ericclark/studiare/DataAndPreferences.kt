@@ -921,7 +921,9 @@ class PreferenceManager(context: Context) {
                             id = json.getString("id"),
                             deckId = json.getString("deckId"),
                             mode = parsedMode,
+                            startedCategory = json.optString("startedCategory", "PRACTICE").toStudyCategory(),
                             isWeighted = json.getBoolean("isWeighted"),
+                            continuousSession = json.optBoolean("continuousSession", false),
                             difficulties = difficulties,
                             totalCards = json.getInt("totalCards"),
                             shuffledCardIds = cardIds,
@@ -1022,7 +1024,9 @@ class PreferenceManager(context: Context) {
                     put("id", session.id)
                     put("deckId", session.deckId)
                     put("mode", session.mode.name)
+                    put("startedCategory", session.startedCategory.name)
                     put("isWeighted", session.isWeighted)
+                    put("continuousSession", session.continuousSession)
                     put("difficulties", JSONArray(session.difficulties))
                     put("totalCards", session.totalCards)
                     put("shuffledCardIds", JSONArray(session.shuffledCardIds))

@@ -4,6 +4,8 @@ data class StudyState(
     val sessionId: String,
     val deckWithCards: DeckWithCards,
     val studyMode: SessionMode,
+    // Mirrors ActiveSession.startedCategory - see its own doc comment.
+    val startedCategory: StudyCategory = StudyCategory.PRACTICE,
     val schedulingMode: SchedulingMode = SchedulingMode.NORMAL,
     val nextIntervals: Map<Int, String> = emptyMap(),
     val isWeighted: Boolean,
@@ -59,6 +61,7 @@ data class StudyState(
     val typedListenUseMultipleChoice: Boolean = ModeOptionDefaults.TYPED_LISTEN_USE_MULTIPLE_CHOICE,
     val hearMatchAutoPlayAllOptions: Boolean = ModeOptionDefaults.HEAR_MATCH_AUTO_PLAY_ALL_OPTIONS,
     val hideDifficultySelection: Boolean = ModeOptionDefaults.HIDE_DIFFICULTY_SELECTION,
+    val continuousSession: Boolean = ModeOptionDefaults.CONTINUOUS_SESSION,
     val flashcardAutoFlipSeconds: Int = ModeOptionDefaults.FLASHCARD_AUTO_FLIP_SECONDS,
     val flashcardAutoFlip: Boolean = ModeOptionDefaults.FLASHCARD_AUTO_FLIP,
     val flashcardDoubleTapToFlip: Boolean = ModeOptionDefaults.FLASHCARD_DOUBLE_TAP_TO_FLIP,
@@ -118,8 +121,80 @@ data class StudyState(
     val wordSearchGrid: List<List<Char>> = emptyList(),
     val wordSearchGridWidth: Int = 0,
     val wordSearchGridHeight: Int = 0,
-    val wordSearchFoundWordIds: Set<String> = emptySet()
+    val wordSearchFoundWordIds: Set<String> = emptySet(),
+    // --- Time Tracking ---
+    // Pause-safe elapsed time: accumulatedTimeSeconds is everything already banked from previous
+    // runs (earlier resumes, or before the app was last backgrounded); sessionResumedAt is when
+    // the clock most recently started running again. Reading "now" requires both, since a plain
+    // `now - createdAt` would count backgrounded/paused time as if the user were still studying.
+    val accumulatedTimeSeconds: Long = 0,
+    val sessionResumedAt: Long = System.currentTimeMillis(),
+
+    // --- Timed Sessions ---
+    val timedSessionEnabled: Boolean = false,
+    val timedSessionDurationSeconds: Int = 0,
+    val timedSessionPauseOutsideSession: Boolean = false,
+    val timedSessionDisplayUpdateSecondsUnder60: Int = 0,
+    val timedSessionDisplayUpdateSecondsOver60: Int = 0,
+    // True only when StudySessionManager force-completed this session because its timer ran out,
+    // rather than the user finishing every card normally - lets the completion screen show a
+    // different header ("Time's Up!" instead of "Congratulations!").
+    val endedByTimeout: Boolean = false,
+    // The countdown's own pause-capable clock - see ActiveSession's matching fields' doc comment
+    // for why this is separate from accumulatedTimeSeconds/sessionResumedAt above.
+    val timedSessionAccumulatedSeconds: Long = 0,
+    val timedSessionResumedAt: Long = System.currentTimeMillis()
 )
+
+/** Total time spent in this session so far, including whatever's run since [StudyState.sessionResumedAt]
+ * (frozen at 0 additional once [StudyState.isComplete], since [net.ericclark.studiare.components.StudySessionManager]
+ * folds the final run into [StudyState.accumulatedTimeSeconds] the moment a session completes). */
+fun StudyState.elapsedSeconds(): Long =
+    accumulatedTimeSeconds + if (isComplete) 0 else (System.currentTimeMillis() - sessionResumedAt) / 1000
+
+/**
+ * The time shown on the completion screen - [elapsedSeconds] for an ordinary finish, but exactly
+ * [StudyState.timedSessionDurationSeconds] when the session ended by timeout. A timed-out session
+ * lasted precisely as long as its timer, by definition, regardless of how much of that time was
+ * spent paused, backgrounded, or away in another screen - [elapsedSeconds]' own wall-clock
+ * pause/resume bookkeeping (accurate for ordinary sessions) has no bearing on that fixed number.
+ */
+fun StudyState.completionTimeSeconds(): Long = if (endedByTimeout) timedSessionDurationSeconds.toLong() else elapsedSeconds()
+
+/** Seconds left on this session's timer, or null if Timed Session isn't on. Never negative - once
+ * it would go below 0, [net.ericclark.studiare.components.StudySessionManager] has already force-completed
+ * the session. Uses the timer's own clock, not [elapsedSeconds] - when
+ * [StudyState.timedSessionPauseOutsideSession] is off, that clock never pauses, so this keeps
+ * counting down in real time even while the app is backgrounded. */
+fun StudyState.timedSessionRemainingSeconds(): Long? {
+    if (!timedSessionEnabled) return null
+    val timerElapsed = timedSessionAccumulatedSeconds + if (isComplete) 0 else (System.currentTimeMillis() - timedSessionResumedAt) / 1000
+    return (timedSessionDurationSeconds - timerElapsed).coerceAtLeast(0)
+}
+
+/**
+ * How long a live Timed Session display (the app bar pill, [net.ericclark.studiare.TimedSessionNotificationService])
+ * should wait before its next redraw, given [remainingSeconds] left and the two configured
+ * cadences. The last 5 seconds always update every second regardless of either setting, so the
+ * final countdown never looks frozen.
+ */
+fun timedSessionTickDelaySeconds(remainingSeconds: Long, displayFrequencyUnder60: Int, displayFrequencyOver60: Int): Long {
+    if (remainingSeconds <= 5) return 1L
+    val freq = (if (remainingSeconds <= 60) displayFrequencyUnder60 else displayFrequencyOver60).toLong().coerceAtLeast(1)
+    // Never let one tick jump straight past the always-every-second final 5 seconds (e.g. 12 -> 7 -> 2
+    // would skip 6/5/4/3) - clamp so the tick right before entering that window lands exactly on 5.
+    return freq.coerceAtMost(remainingSeconds - 5)
+}
+
+/** "H:MM:SS" once an hour or more is left, otherwise "M:SS" - the clock-style format used by the
+ *  Timed Session app bar pill and background notification (distinct from [formatElapsedTime]'s
+ *  single-dominant-unit style, which fits a completion-screen badge better than a live countdown). */
+fun formatCountdown(totalSeconds: Long): String {
+    val hours = totalSeconds / 3600
+    val minutes = (totalSeconds % 3600) / 60
+    val seconds = totalSeconds % 60
+    return if (hours > 0) "%d:%02d:%02d".format(hours, minutes, seconds) else "%d:%02d".format(minutes, seconds)
+}
 
 /** The options a running session lets the user change from its settings button, read back from this state. */
 fun StudyState.sessionOptions(): ModeDefaultSettings = ModeDefaultSettings(
@@ -142,6 +217,7 @@ fun StudyState.sessionOptions(): ModeDefaultSettings = ModeDefaultSettings(
     typedListenUseMultipleChoice = typedListenUseMultipleChoice,
     hearMatchAutoPlayAllOptions = hearMatchAutoPlayAllOptions,
     hideDifficultySelection = hideDifficultySelection,
+    continuousSession = continuousSession,
     flashcardAutoFlipSeconds = flashcardAutoFlipSeconds,
     flashcardAutoFlip = flashcardAutoFlip,
     flashcardDoubleTapToFlip = flashcardDoubleTapToFlip,

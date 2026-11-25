@@ -130,7 +130,7 @@ fun AnagramScreen(
             CustomTopAppBar(
                 viewModel = viewModel,
                 screenId = ShortcutScreen.ANAGRAM,
-                title = { AdaptiveSessionTitle(state.deckWithCards.deck.name, state.studyMode.asString()) },
+                title = { AdaptiveSessionTitle(state) },
                 navigationIcon = {
                     TooltipIconButton(description = getText(R.string.back), onClick = {
                         viewModel.endStudySession()
@@ -239,6 +239,7 @@ fun PortraitAnagramLayout(
             QuizCardContent(
                 state = state,
                 viewModel = viewModel,
+                showIndex = !state.continuousSession,
                 tags = cardTags
             )
             Spacer(Modifier.height(dimensions.spacingSmall))
@@ -341,6 +342,7 @@ fun LandscapeAnagramLayout(
                 state = state,
                 viewModel = viewModel,
                 modifier = Modifier.fillMaxSize(),
+                showIndex = !state.continuousSession,
                 tags = cardTags
             )
         }

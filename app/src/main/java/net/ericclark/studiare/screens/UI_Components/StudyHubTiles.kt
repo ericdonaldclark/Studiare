@@ -1009,6 +1009,7 @@ internal fun sessionTileChipDataFor(option: ModeOption, values: ModeDefaultSetti
         is SwitchModeOption -> SessionTileChipData(sessionTileChipLabel(option), option.valueIn(values))
         PromptSide -> SessionTileChipData("${sessionTileChipLabel(option)}: ${sessionTilePromptSideChipValue(PromptSide.valueIn(values, context))}", true)
         DifficultyWeighting -> SessionTileChipData(sessionTileChipLabel(option), DifficultyWeighting.isWeighted(values))
+        ContinuousSession -> SessionTileChipData(sessionTileChipLabel(option), ContinuousSession.isEnabled(values))
         ShowCorrectLetters -> SessionTileChipData(sessionTileChipLabel(option), ShowCorrectLetters.valueIn(values, context.category))
         TypingShowLengthHint -> SessionTileChipData(sessionTileChipLabel(option), TypingShowLengthHint.valueIn(values, context))
         RequireConfirmTap -> SessionTileChipData(sessionTileChipLabel(option), RequireConfirmTap.valueIn(values, context))

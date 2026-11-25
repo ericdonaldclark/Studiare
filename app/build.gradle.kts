@@ -46,13 +46,17 @@ val generatedModeOptionsDir = layout.buildDirectory.dir("generated/modeoptions/k
 
 android {
     namespace = "net.ericclark.studiare"
-    compileSdk = 35
+    compileSdk = 36
+    // .1 is needed for the real Android 16 Live Update API (Notification.ProgressStyle,
+    // setRequestPromotedOngoing) used by the Timed Session notification - see AudioStudyService.kt
+    // for the pre-16 fallback and TimedSessionNotificationService.kt for the Live Update path.
+    compileSdkMinor = 1
 
     defaultConfig {
         applicationId = "net.ericclark.studiare"
         minSdk = 24
         //noinspection OldTargetApi,ExpiredTargetSdkVersion
-        targetSdk = 35
+        targetSdk = 36
         versionCode = 1
         versionName = "0.1.0 Alpha-2026.07.05"
 

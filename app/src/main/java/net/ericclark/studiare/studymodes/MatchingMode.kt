@@ -182,7 +182,7 @@ fun MatchingScreen(
             CustomTopAppBar(
                 viewModel = viewModel,
                 screenId = ShortcutScreen.MATCHING,
-                title = { AdaptiveSessionTitle(state.deckWithCards.deck.name, state.studyMode.asString()) },
+                title = { AdaptiveSessionTitle(state) },
                 navigationIcon = {
                     TooltipIconButton(description = getText(R.string.back), onClick = {
                         viewModel.endStudySession()

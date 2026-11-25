@@ -38,6 +38,7 @@ import net.ericclark.studiare.data.*
 import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
 import net.ericclark.studiare.ui.theme.pressSquish
 import net.ericclark.studiare.ui.theme.completionAccuracyBadgeShape
+import net.ericclark.studiare.ui.theme.completionTimeBadgeShape
 import net.ericclark.studiare.components.CardTagRow
 import net.ericclark.studiare.components.getText
 import androidx.compose.animation.core.Spring
@@ -95,7 +96,12 @@ fun StudyCompletionScreen(navController: NavController, viewModel: FlashcardView
     }
 
     var notScored = false
-    if (state.studyMode == SessionMode.FLASHCARD || state.studyMode == SessionMode.TYPING || state.studyMode == SessionMode.CROSSWORD ||
+    // Flashcard is the one mode here that can go either way: Practice/Learn's plain flip-and-read
+    // has no Correct/Incorrect input at all (flipCard/nextCard always pass isGraded = false), but
+    // the Quiz tab's "flashcards_quiz" section swaps in real Correct/Incorrect buttons
+    // (FlashcardActionButtons' "GRADED" mode, submitSelfGradedResult) that track firstTryCorrectCount
+    // the same as every other graded mode — so only an ungraded Flashcard session is unscored.
+    if ((state.studyMode == SessionMode.FLASHCARD && !state.isGraded) || state.studyMode == SessionMode.TYPING || state.studyMode == SessionMode.CROSSWORD ||
         state.studyMode == SessionMode.MEMORY || state.studyMode == SessionMode.ANAGRAM || state.studyMode == SessionMode.HANGMAN ||
         state.studyMode == SessionMode.FREEFORM || state.studyMode == SessionMode.WORD_SEARCH)
         notScored = true
@@ -248,6 +254,10 @@ fun StudyCompletionScreen(navController: NavController, viewModel: FlashcardView
                 buttonLayout = CompletionButtonLayout.TWO_COLUMN,
                 showAccuracy = !notScored,
                 accuracyPercent = score,
+                elapsedSeconds = state.completionTimeSeconds(),
+                endedByTimeout = state.endedByTimeout,
+                attemptedCount = state.attemptedCardIds.size,
+                totalCount = state.shuffledCards.size,
                 showMissedCardsButton = showMissedCardsButton,
                 missedCardsCount = missedCards.size,
                 keep = keep,
@@ -290,6 +300,10 @@ fun StudyCompletionBody(
     buttonLayout: CompletionButtonLayout,
     showAccuracy: Boolean,
     accuracyPercent: Int,
+    elapsedSeconds: Long,
+    endedByTimeout: Boolean,
+    attemptedCount: Int,
+    totalCount: Int,
     showMissedCardsButton: Boolean,
     missedCardsCount: Int,
     keep: Boolean,
@@ -318,6 +332,10 @@ fun StudyCompletionBody(
         AdaptiveCompletionTop(
             showAccuracy = showAccuracy,
             accuracyPercent = accuracyPercent,
+            elapsedSeconds = elapsedSeconds,
+            endedByTimeout = endedByTimeout,
+            attemptedCount = attemptedCount,
+            totalCount = totalCount,
             showMissedCardsButton = showMissedCardsButton,
             missedCardsCount = missedCardsCount,
             keep = keep,
@@ -424,6 +442,10 @@ fun StudyCompletionBody(
 private fun AdaptiveCompletionTop(
     showAccuracy: Boolean,
     accuracyPercent: Int,
+    elapsedSeconds: Long,
+    endedByTimeout: Boolean,
+    attemptedCount: Int,
+    totalCount: Int,
     showMissedCardsButton: Boolean,
     missedCardsCount: Int,
     keep: Boolean,
@@ -447,7 +469,7 @@ private fun AdaptiveCompletionTop(
         // height instead.
         val probeHeight = subcompose("probe-full") {
             CompletionTopContent(
-                CompletionHeaderStyle.FULL, showAccuracy, accuracyPercent, showMissedCardsButton, missedCardsCount,
+                CompletionHeaderStyle.FULL, showAccuracy, accuracyPercent, elapsedSeconds, endedByTimeout, attemptedCount, totalCount, showMissedCardsButton, missedCardsCount,
                 keep, onKeepChange, pin, onPinChange, reshuffle, onReshuffleChange, missedOnly, onMissedOnlyChange,
                 name, onNameChange, defaultName, scrollable = false
             )
@@ -457,7 +479,7 @@ private fun AdaptiveCompletionTop(
 
         val finalPlaceables = subcompose("final") {
             CompletionTopContent(
-                chosenStyle, showAccuracy, accuracyPercent, showMissedCardsButton, missedCardsCount,
+                chosenStyle, showAccuracy, accuracyPercent, elapsedSeconds, endedByTimeout, attemptedCount, totalCount, showMissedCardsButton, missedCardsCount,
                 keep, onKeepChange, pin, onPinChange, reshuffle, onReshuffleChange, missedOnly, onMissedOnlyChange,
                 name, onNameChange, defaultName, scrollable = true
             )
@@ -478,6 +500,10 @@ private fun CompletionTopContent(
     headerStyle: CompletionHeaderStyle,
     showAccuracy: Boolean,
     accuracyPercent: Int,
+    elapsedSeconds: Long,
+    endedByTimeout: Boolean,
+    attemptedCount: Int,
+    totalCount: Int,
     showMissedCardsButton: Boolean,
     missedCardsCount: Int,
     keep: Boolean,
@@ -501,7 +527,7 @@ private fun CompletionTopContent(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(dimensions.spacingMedium)
     ) {
-        CompletionHeader(headerStyle = headerStyle, showAccuracy = showAccuracy, accuracyPercent = accuracyPercent)
+        CompletionHeader(headerStyle = headerStyle, showAccuracy = showAccuracy, accuracyPercent = accuracyPercent, elapsedSeconds = elapsedSeconds, endedByTimeout = endedByTimeout, attemptedCount = attemptedCount, totalCount = totalCount)
 
         // --- Keep / Pin / Name / Card order module ---
         // "Keep" controls whether the session survives at all. Pin is always visible right
@@ -621,7 +647,7 @@ private fun CompletionTopContent(
 // cross-fades the two and animates the bounds between their different measured sizes, rather than
 // the hard cut a plain `when` would give.
 @Composable
-private fun CompletionHeader(headerStyle: CompletionHeaderStyle, showAccuracy: Boolean, accuracyPercent: Int) {
+private fun CompletionHeader(headerStyle: CompletionHeaderStyle, showAccuracy: Boolean, accuracyPercent: Int, elapsedSeconds: Long, endedByTimeout: Boolean, attemptedCount: Int, totalCount: Int) {
     AnimatedContent(
         targetState = headerStyle,
         transitionSpec = {
@@ -631,18 +657,30 @@ private fun CompletionHeader(headerStyle: CompletionHeaderStyle, showAccuracy: B
         },
         label = "completion-header"
     ) { style ->
-        CompletionHeaderContent(headerStyle = style, showAccuracy = showAccuracy, accuracyPercent = accuracyPercent)
+        CompletionHeaderContent(headerStyle = style, showAccuracy = showAccuracy, accuracyPercent = accuracyPercent, elapsedSeconds = elapsedSeconds, endedByTimeout = endedByTimeout, attemptedCount = attemptedCount, totalCount = totalCount)
+    }
+}
+
+// Single dominant unit with its letter, e.g. "45s"/"12m"/"3h" - mirrors the cookie's own
+// value+unit shape (the score cookie reads "92%", not "92 percent"), and the same
+// one-unit-at-a-time convention StudySessionManager.formatInterval already uses elsewhere.
+private fun formatElapsedTime(totalSeconds: Long): String {
+    val hours = totalSeconds / 3600
+    val minutes = totalSeconds / 60
+    return when {
+        hours > 0 -> "${hours}h"
+        minutes > 0 -> "${minutes}m"
+        else -> "${totalSeconds}s"
     }
 }
 
 @Composable
-private fun CompletionHeaderContent(headerStyle: CompletionHeaderStyle, showAccuracy: Boolean, accuracyPercent: Int) {
+private fun CompletionHeaderContent(headerStyle: CompletionHeaderStyle, showAccuracy: Boolean, accuracyPercent: Int, elapsedSeconds: Long, endedByTimeout: Boolean, attemptedCount: Int, totalCount: Int) {
     val dimensions = LocalStudiareDimensions.current
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
     when (headerStyle) {
         CompletionHeaderStyle.FULL -> {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(dimensions.spacingMedium, Alignment.CenterHorizontally), modifier = Modifier.fillMaxWidth(0.92f)) {
-                Icon(imageVector = Icons.Default.EmojiEvents, contentDescription = null, modifier = Modifier.size(80.dp), tint = MaterialTheme.colorScheme.primary)
                 if (showAccuracy) {
                     // Same fixed-size cookie badge as the Compact header, scaled up to pair with the 80dp icon.
                     Surface(
@@ -660,9 +698,28 @@ private fun CompletionHeaderContent(headerStyle: CompletionHeaderStyle, showAccu
                         }
                     }
                 }
+                Icon(imageVector = Icons.Default.EmojiEvents, contentDescription = null, modifier = Modifier.size(80.dp), tint = MaterialTheme.colorScheme.primary)
+                // Always shown, on the trophy's right - score (when present) mirrors it on the left.
+                Surface(
+                    shape = completionTimeBadgeShape(),
+                    color = MaterialTheme.colorScheme.tertiaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+                    modifier = Modifier.size(72.dp)
+                ) {
+                    Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                        Text(
+                            text = formatElapsedTime(elapsedSeconds),
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
             }
-            Text(getText(R.string.congratulations), style = MaterialTheme.typography.displaySmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
-            Text(getText(R.string.completed_session_msg), style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+            Text(getText(if (endedByTimeout) R.string.time_up else R.string.congratulations), style = MaterialTheme.typography.displaySmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+            Text(
+                if (endedByTimeout) pluralStringResource(R.plurals.time_up_session_msg_format, totalCount, attemptedCount, totalCount) else getText(R.string.completed_session_msg),
+                style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = androidx.compose.ui.text.style.TextAlign.Center
+            )
         }
         // Drops just the 80dp icon + its spacing - cheapest space saving that changes nothing else.
         CompletionHeaderStyle.NO_ICON -> {
@@ -690,9 +747,15 @@ private fun CompletionHeaderContent(headerStyle: CompletionHeaderStyle, showAccu
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall), modifier = Modifier.fillMaxWidth(0.92f)) {
                 Icon(imageVector = Icons.Default.EmojiEvents, contentDescription = null, modifier = Modifier.size(32.dp), tint = MaterialTheme.colorScheme.primary)
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(getText(R.string.congratulations), style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
-                    Text(getText(R.string.completed_session_msg), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(getText(if (endedByTimeout) R.string.time_up else R.string.congratulations), style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                    Text(
+                        if (endedByTimeout) pluralStringResource(R.plurals.time_up_session_msg_format, totalCount, attemptedCount, totalCount) else getText(R.string.completed_session_msg),
+                        style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
+                // No room for a centered trophy-between-cookies layout at this size - both cookies
+                // just sit trailing, score before time so the pair reads in the same left-to-right
+                // order (score, time) as the Full header's (score, trophy, time).
                 if (showAccuracy) {
                     // A fixed square size, not wrap-content padding, so the cookie's points stay
                     // legible regardless of whether the text is "0%" or "100%".
@@ -709,6 +772,20 @@ private fun CompletionHeaderContent(headerStyle: CompletionHeaderStyle, showAccu
                                 fontWeight = FontWeight.Bold
                             )
                         }
+                    }
+                }
+                Surface(
+                    shape = completionTimeBadgeShape(),
+                    color = MaterialTheme.colorScheme.tertiaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+                    modifier = Modifier.size(56.dp)
+                ) {
+                    Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                        Text(
+                            text = formatElapsedTime(elapsedSeconds),
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Bold
+                        )
                     }
                 }
             }
