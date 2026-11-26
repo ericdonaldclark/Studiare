@@ -38,7 +38,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import net.ericclark.studiare.screens.Dialogs.AnkiMappingConfig
-import net.ericclark.studiare.screens.Screens.CreateStudySessionScreen
+import net.ericclark.studiare.screens.Dialogs.CreateStudySessionDialog
 import androidx.work.BackoffPolicy
 import androidx.work.Constraints
 import androidx.work.ExistingPeriodicWorkPolicy

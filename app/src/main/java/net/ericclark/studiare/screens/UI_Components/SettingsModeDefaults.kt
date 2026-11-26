@@ -18,8 +18,8 @@ import net.ericclark.studiare.R
 import net.ericclark.studiare.components.getText
 import net.ericclark.studiare.data.*
 import net.ericclark.studiare.ui.theme.*
-import net.ericclark.studiare.screens.Screens.CreateStudySessionScreen
-import net.ericclark.studiare.screens.Screens.ModeSelectionSection
+import net.ericclark.studiare.screens.Dialogs.CreateStudySessionDialog
+import net.ericclark.studiare.screens.Dialogs.ModeSelectionSection
 
 /**
  * Settings → Mode Defaults: a category chip row above a mode chip row (filtered to that category's
@@ -121,6 +121,12 @@ internal fun ModeDefaultsSettingsContent(viewModel: FlashcardViewModel, snackbar
         modeOptionsFor(selectedCategory, selectedMode).filter { it.isVisible(settings) }.forEach { option ->
             if (option.dialogSection) {
                 Text(getText(option.labelRes), style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                // Control() itself doesn't render this for a dialogSection option (the session
+                // dialog shows it in its own DialogSection header instead) - shown explicitly here
+                // since this screen has no such header to put it in.
+                option.explainerRes?.let {
+                    Text(getText(it), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
                 Spacer(Modifier.height(dimensions.spacingSmall))
             } else {
                 Spacer(Modifier.height(dimensions.spacingSmall))

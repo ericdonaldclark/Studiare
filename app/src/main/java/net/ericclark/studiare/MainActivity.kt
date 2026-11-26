@@ -1005,7 +1005,7 @@ fun StudiareNavGraph(
                         val presetId = backStackEntry.arguments?.getString("presetId")
                         val deck = decks.find { it.deck.id == deckId }
                         if (deck != null) {
-                            net.ericclark.studiare.screens.Screens.CreateStudySessionScreen(
+                            net.ericclark.studiare.screens.Dialogs.CreateStudySessionDialog(
                                 navController = navController,
                                 deck = deck,
                                 viewModel = viewModel,

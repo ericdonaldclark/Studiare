@@ -1,8 +1,7 @@
-package net.ericclark.studiare.screens.Screens
+package net.ericclark.studiare.screens.Dialogs
 
 import android.Manifest
 import android.content.pm.PackageManager
-import android.content.res.Configuration
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -10,12 +9,14 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.EnterExitState
 import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.fadeIn
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.PushPin as FilledPushPin
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Save
@@ -30,21 +31,13 @@ import androidx.compose.runtime.toMutableStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.navigation.NavController
 import net.ericclark.studiare.*
 import net.ericclark.studiare.data.*
-import net.ericclark.studiare.screens.Dialogs.VoiceDownloadPrompts
-import net.ericclark.studiare.screens.Dialogs.rememberVoicePromptState
-import net.ericclark.studiare.screens.Dialogs.studyRouteFor
-import net.ericclark.studiare.screens.Dialogs.usesVoices
 import kotlinx.coroutines.flow.first
 import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
 import net.ericclark.studiare.ui.theme.StudiareDimensions
@@ -89,7 +82,7 @@ import net.ericclark.studiare.screens.UI_Components.ModeDefaultSettingsSaver
 import net.ericclark.studiare.screens.UI_Components.modeOptionsFor
 
 @Composable
-fun CreateStudySessionScreen(
+fun CreateStudySessionDialog(
     navController: NavController,
     deck: DeckWithCards,
     viewModel: FlashcardViewModel,
@@ -215,9 +208,6 @@ fun CreateStudySessionScreen(
                 .overlaidWith(loadedPreset?.toModeDefaultSettings())
         )
     }
-    val expandedOptionIds = rememberSaveable(saver = listSaver<SnapshotStateList<String>, String>(save = { it.toList() }, restore = { it.toMutableStateList() })) {
-        mutableStateListOf<String>()
-    }
     val numberOfAnswers = NumberOfAnswers.valueIn(optionValues)
     val showCorrectLetters = ShowCorrectLetters.valueIn(optionValues, category)
     val maxMemoryTiles = MaxMemoryTiles.valueIn(optionValues)
@@ -261,14 +251,6 @@ fun CreateStudySessionScreen(
     var sortMode by rememberSaveable { mutableStateOf(loadedPreset?.sortMode ?: SortMode.RANDOM) }
     var sortDirection by rememberSaveable { mutableStateOf(loadedPreset?.sortDirection ?: Direction.ASC) }
     var sortSide by rememberSaveable { mutableStateOf(loadedPreset?.sortSide ?: CardSide.FRONT) }
-
-    // --- Expansion States ---
-    var categoryExpanded by rememberSaveable { mutableStateOf(true) }
-    var modeExpanded by rememberSaveable { mutableStateOf(true) }
-    var modeSettingsExpanded by rememberSaveable { mutableStateOf(true) }
-    var selectionExpanded by rememberSaveable { mutableStateOf(true) }
-    var sortExpanded by rememberSaveable { mutableStateOf(false) }
-    var numberExpanded by rememberSaveable { mutableStateOf(false) }
 
     // --- Logic ---
     // Learn/Practice/Quiz/Games/Smart reorg: the graded/non-graded toggle is gone — each tab fully
@@ -544,257 +526,178 @@ fun CreateStudySessionScreen(
         )
     }
 
-    val configuration = LocalConfiguration.current
-    // Was a raw, unnamed 600dp check duplicating WindowWidthSizeClass.Medium's own threshold —
-    // now reads the one shared breakpoint source instead (same effective value, just not a
-    // second hand-rolled copy of it). The landscape OR is a deliberate, separate UX call (still
-    // show side-by-side on a narrow-but-landscape screen) and stays.
-    val useSideBySide = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE ||
-        net.ericclark.studiare.LocalWindowWidthSizeClass.current >= androidx.compose.material3.windowsizeclass.WindowWidthSizeClass.Medium
-    // The side-by-side layout's right-panel Cancel/Start row is pinned to match the left panel's
-    // Number of Cards footer's collapsed height exactly, measured at runtime (see below) rather than
-    // a magic-number height — their natural heights come from unrelated content (buttons vs. a
-    // two-line collapsible header) with no simpler way to keep them in sync.
-    val density = LocalDensity.current
-    var cardCountFooterHeight by remember { mutableStateOf(0.dp) }
     val snackbarHostState = remember { SnackbarHostState() }
-    Scaffold(
-        containerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
-        snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
-        topBar = {
-            CustomTopAppBar(
-                viewModel = viewModel,
-                title = { Text(getText(R.string.study_session_create)) },
-                navigationIcon = {
-                    TooltipIconButton(description = getText(R.string.back), onClick = onDismiss) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = getText(R.string.back))
-                    }
-                }
-            )
+
+    // Only tabs with something to show for the current (category, mode) appear, so none ever
+    // render empty. Guided already excludes Difficulty Weighting/Timed Session/Continuous Session
+    // from every GUIDED_* key in mode-options.yaml, so "sessionoptions" disappears there on its
+    // own via the .any{} check below - Filter & Sort needs its own isGuided check since FSRS
+    // picking its own cards isn't registry-driven.
+    val tabs = remember(category, selectedMode, optionValues, isGuided) {
+        buildList {
+            add("setup")
+            if (modeOptionsFor(category, selectedMode).any { !it.dialogSection && it.isVisible(optionValues) }) add("modeoptions")
+            if (modeOptionsFor(category, selectedMode).any { it.dialogSection && it.isVisible(optionValues) }) add("sessionoptions")
+            if (!isGuided) add("filter")
+            add("cards")
         }
-    ) { scaffoldPadding ->
-        Box(modifier = Modifier.padding(scaffoldPadding).fillMaxSize()) {
-            // Gated on mainContentReady (see its declaration above) so this form's genuinely
-            // expensive first composition happens after, not during, the NavHost transition into
-            // this screen — a plain fade covers its otherwise-abrupt appearance. DEBUG-only; see
-            // mainContentReady's own declaration for why.
-            AnimatedVisibility(
-                visible = mainContentReady,
-                enter = fadeIn(),
-                exit = ExitTransition.None,
-                modifier = Modifier.fillMaxSize()
-            ) {
-            Column(modifier = Modifier.padding(dimensions.paddingMedium).fillMaxSize()) {
+    }
+    var selectedTab by rememberSaveable { mutableStateOf("setup") }
+    LaunchedEffect(tabs) { if (selectedTab !in tabs) selectedTab = tabs.first() }
 
-                if (useSideBySide) {
-                    // --- LANDSCAPE LAYOUT ---
-                    // Bypass the Pager and Tabs entirely. Split the screen directly. Each panel is its
-                    // own Column: a scrollable content area (weight 1f) with that panel's own pinned
-                    // footer below it — Number of Cards under the left panel, Cancel/Start under the
-                    // right — instead of a single bar shared across both. (A shared bar previously sat
-                    // after this weighted Row as a sibling; being unweighted, Column measured it with an
-                    // infinite-height probe to size the weighted panels, and a fillMaxHeight()/intrinsics
-                    // divider inside it either starved the panels or crashed on expand — seeded
-                    // CardCountSection has a SubcomposeLayout-based picker that can't be intrinsics-measured.)
-                    Row(modifier = Modifier.weight(1f).fillMaxWidth()) {
+    @Composable
+    fun tabLabel(id: String): String = when (id) {
+        "setup" -> getText(R.string.setup)
+        "modeoptions" -> getText(R.string.mode_options)
+        "sessionoptions" -> getText(R.string.session_options)
+        "filter" -> getText(R.string.filter_and_sort)
+        else -> getText(R.string.cards)
+    }
 
-                        // LEFT COLUMN: Session Settings, pinned Number of Cards footer
-                        Column(modifier = Modifier.weight(1f).fillMaxHeight().padding(end = dimensions.paddingMedium)) {
-                            Column(
-                                modifier = Modifier.weight(1f).verticalScroll(rememberScrollState())
-                            ) {
-                                CategorySelectionSection(
-                                    category = category,
-                                    isExpanded = categoryExpanded,
-                                    onToggle = { categoryExpanded = !categoryExpanded },
-                                    onCategoryChange = { newCategory ->
-                                        category = newCategory
-                                        selectedMode = modesForCategory(newCategory).first()
-                                    }
-                                )
-                                ModeSelectionSection(
-                                    category = category,
-                                    mode = selectedMode,
-                                    onModeChange = { selectedMode = it },
-                                    isExpanded = modeExpanded,
-                                    onExpandedChange = { modeExpanded = it },
-                                    isFsrs = false
-                                )
-                                // ModeSettingsSection's own trailing divider is only "extra" when it ends
-                                // up being the last thing in this scroll — i.e. when the mode has no
-                                // options below it for ModeOptionDialogSections to render.
-                                val hasDialogSectionOptions = modeOptionsFor(category, selectedMode).any { it.dialogSection && it.isVisible(optionValues) }
-                                ModeSettingsSection(selectedMode, modeSettingsExpanded, { modeSettingsExpanded = it }, optionValues, optionContext, showDivider = hasDialogSectionOptions) { optionValues = it }
-                                ModeOptionDialogSections(optionContext.category, selectedMode, optionValues, optionContext, { optionValues = it }, expandedOptionIds)
-                                SaveAsDefaultButtons(optionContext.category, selectedMode, optionValues, viewModel, snackbarHostState, modifier = Modifier.padding(top = dimensions.spacingSmall))
-                            }
+    AnimatedDialog(onDismissRequest = onDismiss, properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)) {
+        // Gated on mainContentReady (see its declaration above) so this form's genuinely expensive
+        // first composition happens after, not during, the NavHost transition into this screen - a
+        // plain fade covers its otherwise-abrupt appearance. DEBUG-only; see mainContentReady's own
+        // declaration for why.
+        AnimatedVisibility(
+            visible = mainContentReady,
+            enter = fadeIn(),
+            exit = ExitTransition.None
+        ) {
+        Card(
+            modifier = Modifier.widthIn(min = 280.dp, max = 560.dp).fillMaxHeight(0.9f),
+            shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
+            elevation = CardDefaults.cardElevation(defaultElevation = dimensions.cardElevation)
+        ) {
+            Column(Modifier.fillMaxHeight()) {
+                Text(
+                    getText(R.string.study_session_create),
+                    style = MaterialTheme.typography.titleLarge,
+                    modifier = Modifier.fillMaxWidth()
+                        .padding(start = dimensions.paddingLarge, end = dimensions.paddingLarge, top = dimensions.paddingMedium, bottom = dimensions.paddingSmall)
+                )
 
-                            if (!isWeighted) {
-                                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant, modifier = Modifier.padding(vertical = dimensions.spacingMedium))
-                                Box(modifier = Modifier.onGloballyPositioned {
-                                    // Captured once, the first time this footer lays out collapsed, then
-                                    // frozen — not re-captured on every later collapse. Collapsing plays
-                                    // a shrink animation through several in-between heights; continuously
-                                    // re-measuring made the Cancel/Start row's min height track that
-                                    // animation (briefly ballooning to the expanded size, then shrinking
-                                    // back down) instead of staying fixed the whole time.
-                                    if (!numberExpanded && cardCountFooterHeight == 0.dp) {
-                                        cardCountFooterHeight = with(density) { it.size.height.toDp() }
-                                    }
-                                }) {
-                                    CardCountSection(numberOfCards, availableCardsCount, numberExpanded, { numberExpanded = it }, { numberOfCards = it }, showDivider = false)
-                                }
-                            }
-                        }
-
-                        VerticalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-
-                        // RIGHT COLUMN: Filter & Sort, pinned Cancel/Start footer
-                        Column(modifier = Modifier.weight(1f).fillMaxHeight().padding(start = dimensions.paddingMedium)) {
-                            Column(
-                                modifier = Modifier.weight(1f).verticalScroll(rememberScrollState())
-                            ) {
-                                val selectionState = SelectionSectionState(
-                                    selectionMode, selectedTags, selectedDifficulties, excludeKnown, alphabetStart, alphabetEnd, filterSide, cardOrderStart, cardOrderEnd,
-                                    timeValue, timeUnit, filterType, reviewThreshold, reviewDirection, scoreThreshold, scoreDirection, availableTags, allTagDefinitions,
-                                    availableCardsCount, totalCards, maxDeckReviews)
-                                val selectionActions = SelectionSectionActions(
-                                    { selectionMode = it }, { selectedTags = it }, { diffs -> selectedDifficulties.clear();
-                                        selectedDifficulties.addAll(diffs) }, { excludeKnown = it }, { alphabetStart = it },
-                                    { alphabetEnd = it }, { filterSide = it }, { cardOrderStart = it },
-                                    { cardOrderEnd = it }, { timeValue = it }, { timeUnit = it },
-                                    { filterType = it }, { reviewThreshold = it }, { reviewDirection = it },
-                                    { scoreThreshold = it }, { scoreDirection = it })
-
-                                if (!isGuided) SelectionModeDialogSection(
-                                    state = selectionState, actions = selectionActions, isExpanded = selectionExpanded, onToggleExpand = { selectionExpanded = !selectionExpanded })
-
-                                // showDivider = false: this is the last section before the panel's own
-                                // divider pinned above its Cancel/Start footer — without it, the two
-                                // dividers (and their padding) would stack right on top of each other.
-                                if (!isGuided) SortModeDialogSection(
-                                    sortMode, { sortMode = it }, sortDirection, { sortDirection = it }, sortSide,
-                                    { sortSide = it }, sortExpanded, { sortExpanded = !sortExpanded }, showDivider = false)
-
-                                if (isMcModeInvalid) Text(pluralStringResource(R.plurals.mc_requirement, numberOfAnswers), color = MaterialTheme.colorScheme.error)
-                            }
-
-                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant, modifier = Modifier.padding(vertical = dimensions.spacingMedium))
-
-                            Row(
-                                modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = cardCountFooterHeight),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                TextButton(onClick = onDismiss, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
-                                    Text(getText(R.string.cancel))
-                                }
-
-                                Spacer(modifier = Modifier.weight(1f))
-
-                                PresetPinSaveButtons(
-                                    hasLoadedPreset = loadedPreset != null,
-                                    isDirty = isPresetDirty,
-                                    onPin = { showPinPresetDialog = true },
-                                    onSave = saveToLoadedPreset
-                                )
-                                StartSessionButton(startSession, isButtonEnabled, dimensions)
-                            }
-                        }
+                ScrollableTabRow(selectedTabIndex = tabs.indexOf(selectedTab).coerceAtLeast(0), edgePadding = dimensions.paddingMedium) {
+                    tabs.forEach { id ->
+                        Tab(selected = selectedTab == id, onClick = { selectedTab = id }, text = { Text(tabLabel(id)) })
                     }
-                } else {
-                    // --- PORTRAIT LAYOUT ---
-                    // M3 Expressive: one continuous scroll instead of tabs hiding Filter & Sort
-                    // behind a tap — mirrors the wide layout's "everything visible" approach,
-                    // just stacked instead of side-by-side.
-                    Column(
-                        modifier = Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState())
-                    ) {
-                        Text(
-                            getText(R.string.session_settings),
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.padding(bottom = dimensions.spacingSmall)
-                        )
-                        CategorySelectionSection(
-                            category = category,
-                            isExpanded = categoryExpanded,
-                            onToggle = { categoryExpanded = !categoryExpanded },
-                            onCategoryChange = { newCategory ->
-                                category = newCategory
-                                selectedMode = modesForCategory(newCategory).first()
-                            }
-                        )
-                        ModeSelectionSection(
-                            category = category,
-                            mode = selectedMode,
-                            onModeChange = { selectedMode = it },
-                            isExpanded = modeExpanded,
-                            onExpandedChange = { modeExpanded = it },
-                            isFsrs = false
-                        )
-                        ModeSettingsSection(selectedMode, modeSettingsExpanded, { modeSettingsExpanded = it }, optionValues, optionContext) { optionValues = it }
-                        ModeOptionDialogSections(optionContext.category, selectedMode, optionValues, optionContext, { optionValues = it }, expandedOptionIds)
-                        SaveAsDefaultButtons(optionContext.category, selectedMode, optionValues, viewModel, snackbarHostState, modifier = Modifier.padding(top = dimensions.spacingSmall))
-
-                        Spacer(Modifier.height(dimensions.spacingSmall))
-
-                        if (!isGuided) Text(
-                            getText(R.string.filter_and_sort),
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.padding(bottom = dimensions.spacingSmall)
-                        )
-
-                        val selectionState = SelectionSectionState(
-                            selectionMode, selectedTags, selectedDifficulties, excludeKnown, alphabetStart, alphabetEnd, filterSide, cardOrderStart, cardOrderEnd,
-                            timeValue, timeUnit, filterType, reviewThreshold, reviewDirection, scoreThreshold, scoreDirection, availableTags, allTagDefinitions,
-                            availableCardsCount, totalCards, maxDeckReviews)
-                        val selectionActions = SelectionSectionActions(
-                            { selectionMode = it }, { selectedTags = it }, { diffs -> selectedDifficulties.clear();
-                                selectedDifficulties.addAll(diffs) }, { excludeKnown = it }, { alphabetStart = it },
-                            { alphabetEnd = it }, { filterSide = it }, { cardOrderStart = it },
-                            { cardOrderEnd = it }, { timeValue = it }, { timeUnit = it },
-                            { filterType = it }, { reviewThreshold = it }, { reviewDirection = it },
-                            { scoreThreshold = it }, { scoreDirection = it })
-                        if (!isGuided) SelectionModeDialogSection(
-                            state = selectionState, actions = selectionActions, isExpanded = selectionExpanded, onToggleExpand = { selectionExpanded = !selectionExpanded })
-                        if (!isGuided) SortModeDialogSection(
-                            sortMode, { sortMode = it }, sortDirection, { sortDirection = it }, sortSide,
-                            { sortSide = it }, sortExpanded, { sortExpanded = !sortExpanded }, showDivider = false)
-                    }
-                    if (!isWeighted) {
-                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant, modifier = Modifier.padding(vertical = dimensions.spacingMedium))
-                        CardCountSection(numberOfCards, availableCardsCount, numberExpanded, { numberExpanded = it }, { numberOfCards = it })
-                    }
-                    Spacer(Modifier.height(dimensions.spacingSmall))
                 }
 
-                if (!useSideBySide) {
-                    if (isMcModeInvalid) Text(pluralStringResource(R.plurals.mc_requirement, numberOfAnswers), color = MaterialTheme.colorScheme.error)
+                Column(
+                    // fill = true (the default): always expands to the Card's full remaining
+                    // height, so the footer stays pinned at the bottom even when a tab's own
+                    // content (e.g. Cards) is short, instead of the Card shrink-wrapping it.
+                    modifier = Modifier.weight(1f).verticalScroll(rememberScrollState())
+                        .padding(horizontal = dimensions.paddingMedium, vertical = dimensions.paddingSmall)
+                ) {
+                    when (selectedTab) {
+                        "setup" -> {
+                            CategorySelectionSection(
+                                category = category,
+                                onCategoryChange = { newCategory ->
+                                    category = newCategory
+                                    selectedMode = modesForCategory(newCategory).first()
+                                }
+                            )
+                            ModeSelectionSection(category = category, mode = selectedMode, onModeChange = { selectedMode = it }, showDivider = false)
+                        }
+                        "modeoptions" -> ModeOptionsInline(category, selectedMode, optionValues, optionContext) { optionValues = it }
+                        "sessionoptions" -> {
+                            ModeOptionDialogSections(category, selectedMode, optionValues, optionContext) { optionValues = it }
+                            SaveAsDefaultButtons(category, selectedMode, optionValues, viewModel, snackbarHostState, modifier = Modifier.padding(top = dimensions.spacingSmall))
+                        }
+                        "filter" -> {
+                            val selectionState = SelectionSectionState(
+                                selectionMode, selectedTags, selectedDifficulties, excludeKnown, alphabetStart, alphabetEnd, filterSide, cardOrderStart, cardOrderEnd,
+                                timeValue, timeUnit, filterType, reviewThreshold, reviewDirection, scoreThreshold, scoreDirection, availableTags, allTagDefinitions,
+                                availableCardsCount, totalCards, maxDeckReviews)
+                            val selectionActions = SelectionSectionActions(
+                                { selectionMode = it }, { selectedTags = it }, { diffs -> selectedDifficulties.clear();
+                                    selectedDifficulties.addAll(diffs) }, { excludeKnown = it }, { alphabetStart = it },
+                                { alphabetEnd = it }, { filterSide = it }, { cardOrderStart = it },
+                                { cardOrderEnd = it }, { timeValue = it }, { timeUnit = it },
+                                { filterType = it }, { reviewThreshold = it }, { reviewDirection = it },
+                                { scoreThreshold = it }, { scoreDirection = it })
+                            SelectionModeDialogSection(state = selectionState, actions = selectionActions, isExpanded = true, onToggleExpand = {}, collapsible = false, alphabetical = true)
+                            SortModeDialogSection(
+                                sortMode, { sortMode = it }, sortDirection, { sortDirection = it }, sortSide,
+                                { sortSide = it }, sortExpanded = true, onToggleExpand = {}, showDivider = false, collapsible = false, alphabetical = true)
+                            if (isMcModeInvalid) Text(pluralStringResource(R.plurals.mc_requirement, numberOfAnswers), color = MaterialTheme.colorScheme.error)
+                        }
+                        "cards" -> {
+                            if (!isWeighted) {
+                                CardCountSection(numberOfCards, availableCardsCount, { numberOfCards = it }, showDivider = false)
+                            } else {
+                                Text(
+                                    getText(R.string.card_count_follows_weighting),
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+                            }
+                        }
+                    }
+                }
 
+                // Card-count preview: pinned above the footer on every tab, tapping it jumps to
+                // the Cards tab directly (always one of [tabs], so no guard needed).
+                if (selectedTab != "cards") {
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     Row(
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier.fillMaxWidth()
+                            .clickable { selectedTab = "cards" }
+                            .padding(horizontal = dimensions.paddingLarge, vertical = dimensions.paddingMedium),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        TextButton(onClick = onDismiss, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
-                            Text(getText(R.string.cancel))
-                        }
-
-                        Spacer(modifier = Modifier.weight(1f))
-
-                        PresetPinSaveButtons(
-                            hasLoadedPreset = loadedPreset != null,
-                            isDirty = isPresetDirty,
-                            onPin = { showPinPresetDialog = true },
-                            onSave = saveToLoadedPreset
+                        Text(
+                            stringResource(R.string.cards_preview_format, effectiveCardCount, availableCardsCount),
+                            modifier = Modifier.weight(1f),
+                            color = MaterialTheme.colorScheme.primary
                         )
-                        StartSessionButton(onStart = startSession, enabled = isButtonEnabled, dimensions = dimensions)
+                        Icon(Icons.Default.KeyboardArrowRight, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
+
+                if (isMcModeInvalid && selectedTab != "filter") Text(
+                    pluralStringResource(R.plurals.mc_requirement, numberOfAnswers),
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.padding(horizontal = dimensions.paddingLarge)
+                )
+
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(dimensions.paddingMedium),
+                    horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    TextButton(onClick = onDismiss, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
+                        Text(getText(R.string.cancel))
+                    }
+
+                    Spacer(modifier = Modifier.weight(1f))
+
+                    PresetPinSaveButtons(
+                        hasLoadedPreset = loadedPreset != null,
+                        isDirty = isPresetDirty,
+                        onPin = { showPinPresetDialog = true },
+                        onSave = saveToLoadedPreset
+                    )
+                    // Omitted on the last visible tab - nowhere left to advance to, so
+                    // Start Session alone gets the spotlight there.
+                    val currentTabIndex = tabs.indexOf(selectedTab)
+                    if (currentTabIndex in 0 until tabs.lastIndex) {
+                        OutlinedButton(
+                            onClick = { selectedTab = tabs[currentTabIndex + 1] },
+                            modifier = Modifier.defaultMinSize(minHeight = 56.dp),
+                            shape = RoundedCornerShape(dimensions.cornerRadiusButton)
+                        ) {
+                            Text(getText(R.string.next))
+                        }
+                    }
+                    StartSessionButton(onStart = startSession, enabled = isButtonEnabled, dimensions = dimensions)
+                }
             }
-            }
+        }
         }
     }
 }
@@ -913,31 +816,79 @@ fun selectCardPool(
     return pool
 }
 
+/** The same short "what this category is for" line the Study Hub's empty state ([CategoryPickerContent])
+ *  shows under each category button. */
+fun categoryDescriptionRes(category: StudyCategory): Int = when (category) {
+    StudyCategory.LEARN -> R.string.category_learn_desc
+    StudyCategory.PRACTICE -> R.string.category_practice_desc
+    StudyCategory.QUIZ -> R.string.category_quiz_desc
+    StudyCategory.GAMES -> R.string.category_game_desc
+    StudyCategory.GUIDED -> R.string.category_smart_desc
+}
+
 /** Category chooser at the top of the session settings. All categories show at once (wrapping), not in a scrolling row. */
 @Composable
 fun CategorySelectionSection(
     category: StudyCategory,
-    isExpanded: Boolean,
-    onToggle: () -> Unit,
     onCategoryChange: (StudyCategory) -> Unit
 ) {
     val dimensions = LocalStudiareDimensions.current
-    DialogSection(
-        title = getText(R.string.category),
-        subtitle = category.asString(),
-        isExpanded = isExpanded,
-        onToggle = onToggle
-    ) {
+    DialogSection(title = getText(R.string.category)) {
         TypedChipGrid(
             items = listOf(
-                StudyCategory.LEARN, StudyCategory.PRACTICE, StudyCategory.QUIZ, StudyCategory.GAMES, StudyCategory.GUIDED
+                StudyCategory.LEARN, StudyCategory.PRACTICE, StudyCategory.QUIZ, StudyCategory.GUIDED, StudyCategory.GAMES
             ),
             selected = category,
             labelFor = { it.asString() },
             onSelected = onCategoryChange,
-            iconFor = { net.ericclark.studiare.screens.UI_Components.categoryIcon(it) }
+            iconFor = { net.ericclark.studiare.screens.UI_Components.categoryIcon(it) },
+            showCheckmarkWhenSelected = true
+        )
+        Spacer(Modifier.height(dimensions.spacingSmall))
+        Text(
+            text = getText(categoryDescriptionRes(category)),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
         )
     }
+}
+
+/** The short "what this mode does" line shown under the mode chips, keyed by the exact
+ *  (category, mode) pair - every pair [modesForCategory] can produce has one. */
+fun modeDescriptionRes(category: StudyCategory, mode: SessionMode): Int = when (category to mode) {
+    StudyCategory.LEARN to SessionMode.AUDIO -> R.string.mode_learn_audio_desc
+    StudyCategory.LEARN to SessionMode.FREEFORM -> R.string.mode_learn_freeform_desc
+    StudyCategory.LEARN to SessionMode.TYPING -> R.string.mode_learn_typing_desc
+    StudyCategory.LEARN to SessionMode.FLASHCARD -> R.string.mode_learn_flashcard_desc
+    StudyCategory.PRACTICE to SessionMode.FLASHCARD -> R.string.mode_practice_flashcard_desc
+    StudyCategory.PRACTICE to SessionMode.HEAR_MATCH -> R.string.mode_practice_hear_match_desc
+    StudyCategory.PRACTICE to SessionMode.LISTEN_TYPE -> R.string.mode_practice_listen_type_desc
+    StudyCategory.PRACTICE to SessionMode.MATCHING -> R.string.mode_practice_matching_desc
+    StudyCategory.PRACTICE to SessionMode.MULTIPLE_CHOICE -> R.string.mode_practice_multiple_choice_desc
+    StudyCategory.PRACTICE to SessionMode.LIST -> R.string.mode_practice_picking_desc
+    StudyCategory.PRACTICE to SessionMode.SEE_SPEAK -> R.string.mode_practice_see_speak_desc
+    StudyCategory.PRACTICE to SessionMode.TYPING_SCORED -> R.string.mode_practice_typing_desc
+    StudyCategory.QUIZ to SessionMode.FLASHCARD -> R.string.mode_quiz_flashcard_desc
+    StudyCategory.QUIZ to SessionMode.HEAR_MATCH -> R.string.mode_quiz_hear_match_desc
+    StudyCategory.QUIZ to SessionMode.LISTEN_TYPE -> R.string.mode_quiz_listen_type_desc
+    StudyCategory.QUIZ to SessionMode.MATCHING -> R.string.mode_quiz_matching_desc
+    StudyCategory.QUIZ to SessionMode.MULTIPLE_CHOICE -> R.string.mode_quiz_multiple_choice_desc
+    StudyCategory.QUIZ to SessionMode.LIST -> R.string.mode_quiz_picking_desc
+    StudyCategory.QUIZ to SessionMode.SEE_SPEAK -> R.string.mode_quiz_see_speak_desc
+    StudyCategory.QUIZ to SessionMode.TYPING_SCORED -> R.string.mode_quiz_typing_desc
+    StudyCategory.GAMES to SessionMode.ANAGRAM -> R.string.mode_game_anagram_desc
+    StudyCategory.GAMES to SessionMode.CROSSWORD -> R.string.mode_game_crossword_desc
+    StudyCategory.GAMES to SessionMode.HANGMAN -> R.string.mode_game_hangman_desc
+    StudyCategory.GAMES to SessionMode.MEMORY -> R.string.mode_game_memory_desc
+    StudyCategory.GAMES to SessionMode.WORD_SEARCH -> R.string.mode_game_word_search_desc
+    StudyCategory.GUIDED to SessionMode.FLASHCARD -> R.string.mode_guided_flashcard_desc
+    StudyCategory.GUIDED to SessionMode.HEAR_MATCH -> R.string.mode_guided_hear_match_desc
+    StudyCategory.GUIDED to SessionMode.LISTEN_TYPE -> R.string.mode_guided_listen_type_desc
+    StudyCategory.GUIDED to SessionMode.MULTIPLE_CHOICE -> R.string.mode_guided_multiple_choice_desc
+    StudyCategory.GUIDED to SessionMode.LIST -> R.string.mode_guided_picking_desc
+    StudyCategory.GUIDED to SessionMode.SEE_SPEAK -> R.string.mode_guided_see_speak_desc
+    StudyCategory.GUIDED to SessionMode.TYPING_SCORED -> R.string.mode_guided_typing_desc
+    else -> error("No mode description for $category/$mode")
 }
 
 @Composable
@@ -945,45 +896,28 @@ fun ModeSelectionSection(
     category: StudyCategory,
     mode: SessionMode,
     onModeChange: (SessionMode) -> Unit,
-    isExpanded: Boolean,
-    onExpandedChange: (Boolean) -> Unit,
-    isFsrs: Boolean // New parameter
+    showDivider: Boolean = true
 ) {
     val dimensions = LocalStudiareDimensions.current
     @Composable
     fun chipLabel(m: SessionMode): String = m.asString()
-    DialogSection(
-        title = getText(R.string.mode) ,
-        subtitle = chipLabel(mode),
-        isExpanded = isExpanded,
-        onToggle = { onExpandedChange(!isExpanded) }) {
-
+    val modesInPriorityOrder = modesForCategory(category)
+    val modeLabels = modesInPriorityOrder.associateWith { chipLabel(it) }
+    DialogSection(title = getText(R.string.mode), showDivider = showDivider) {
         TypedChipGrid(
-            items = modesForCategory(category),
+            items = modesInPriorityOrder.sortedBy { modeLabels[it] },
             selected = mode,
             labelFor = { chipLabel(it) },
-            onSelected = onModeChange
+            onSelected = onModeChange,
+            showCheckmarkWhenSelected = true
+        )
+        Spacer(Modifier.height(dimensions.spacingSmall))
+        Text(
+            text = getText(modeDescriptionRes(category, mode)),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
         )
     }
 }
 
 
-/** Mode Settings: the mode's inline options (the ones with no section of their own) in one collapsible section. */
-@Composable
-fun ModeSettingsSection(
-    mode: SessionMode, isExpanded: Boolean, onToggle: (Boolean) -> Unit,
-    values: ModeDefaultSettings, context: ModeOptionContext,
-    showDivider: Boolean = true,
-    onChange: (ModeDefaultSettings) -> Unit
-) {
-    DialogSection(
-        title = getText(R.string.mode_settings),
-        subtitle = getText(R.string.configure) + " " + mode.asString(),
-        isExpanded = isExpanded,
-        onToggle = { onToggle(!isExpanded) },
-        contentTopSpacing = 0.dp,
-        showDivider = showDivider
-    ) {
-        ModeOptionsInline(context.category, mode, values, context, onChange)
-    }
-}

@@ -308,14 +308,20 @@ fun SortModeDialogSection(
     sortDirection: Direction, onSortDirectionChange: (Direction) -> Unit,
     sortSide: CardSide, onSortSideChange: (CardSide) -> Unit,
     sortExpanded: Boolean, onToggleExpand: () -> Unit,
-    showDivider: Boolean = true
+    showDivider: Boolean = true,
+    // false for CreateStudySessionScreen's tabbed layout, where every section is always shown -
+    // SetAutoDialogs.kt still wants this collapsible, so it stays the default.
+    collapsible: Boolean = true,
+    // true only for CreateStudySessionDialog.kt, which wants its chips alphabetized by their
+    // displayed label; SetAutoDialogs.kt keeps the enum's own (priority) order by default.
+    alphabetical: Boolean = false
 ) {
     val dimensions = LocalStudiareDimensions.current
     DialogSection(
         title = getText(R.string.sort_and_priority),
-        subtitle = if (sortMode == SortMode.RANDOM) SortMode.RANDOM.asString() else "${sortMode.asString()} (${sortDirection.asString()})",
-        isExpanded = sortExpanded,
-        onToggle = onToggleExpand,
+        subtitle = if (collapsible) (if (sortMode == SortMode.RANDOM) SortMode.RANDOM.asString() else "${sortMode.asString()} (${sortDirection.asString()})") else null,
+        isExpanded = if (collapsible) sortExpanded else null,
+        onToggle = if (collapsible) onToggleExpand else null,
         showDivider = showDivider
     ) {
         Column {
@@ -324,7 +330,9 @@ fun SortModeDialogSection(
                 horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall),
                 verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)
             ) {
-                SortMode.entries.forEach { option ->
+                val sortOptionLabels = SortMode.entries.associateWith { it.asString() }
+                val sortOptions = if (alphabetical) SortMode.entries.sortedBy { sortOptionLabels[it] } else SortMode.entries
+                sortOptions.forEach { option ->
                     SequencedSelectionChip(
                         selected = sortMode == option,
                         onClick = { onSortModeChange(option) },
@@ -502,7 +510,8 @@ fun CountPicker(
     labelColor: Color = Color.Unspecified
 ) {
     val dimensions = LocalStudiareDimensions.current
-    Text(label, style = MaterialTheme.typography.bodyMedium, color = labelColor, modifier = Modifier.padding(top = dimensions.paddingSmall))
+    if (label.isNotBlank())
+        Text(label, style = MaterialTheme.typography.bodyMedium, color = labelColor, modifier = Modifier.padding(top = dimensions.paddingSmall))
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.Center,
@@ -515,7 +524,10 @@ fun CountPicker(
             valueText = if (max == 0) "0" else value.toString(),
             onCommit = { text -> text.toIntOrNull()?.let { onValueChange(it.coerceIn(min, max.coerceAtLeast(min))) } },
             isValid = { text -> text.toIntOrNull()?.let { it in min..max } == true },
-            fontSize = 24.sp
+            fontSize = 24.sp,
+            // Capped so it doesn't greedily fill the whole Row (its own inner Box is a plain
+            // fillMaxWidth()) and push the + button off the edge of the dialog.
+            modifier = Modifier.widthIn(max = 120.dp)
         )
 
         Spacer(Modifier.width(dimensions.spacingMedium))
@@ -536,8 +548,6 @@ fun CountPicker(
 fun CardCountSection(
     numberOfCards: Int,
     availableCardsCount: Int,
-    isExpanded: Boolean,
-    onToggle: (Boolean) -> Unit,
     onValueChange: (Int) -> Unit,
     label: String? = null,
     showDivider: Boolean = true
@@ -545,13 +555,10 @@ fun CardCountSection(
     val dimensions = LocalStudiareDimensions.current
     DialogSection(
         title = label ?: getText(R.string.number_of_cards),
-        subtitle = stringResource(R.string.count_of_total_format, numberOfCards, availableCardsCount),
-        isExpanded = isExpanded,
-        onToggle = { onToggle(!isExpanded) },
         showDivider = showDivider
     ) {
         CountPicker(
-            label = stringResource(R.string.count_format, numberOfCards),
+            label = "",
             value = numberOfCards,
             max = availableCardsCount,
             onValueChange = onValueChange
@@ -600,16 +607,21 @@ fun DialogSection(
         ) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(title, style = MaterialTheme.typography.titleMedium, color = titleColor, fontWeight = titleFontWeight)
-                if (isCollapsible && !isExpanded!!) {
+                // Collapsed (collapsible, not expanded): the usual summary-while-collapsed line,
+                // with its own top gap. Non-collapsible (isExpanded == null): subtitle doubles as a
+                // static explainer that's always shown, tight under the title with no gap - same
+                // sizing/positioning as SwitchModeOption's own title+description pair.
+                if (subtitle != null && (!isCollapsible || !isExpanded!!)) {
                     Text(
-                        text = subtitle ?: "",
+                        text = subtitle,
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(top = dimensions.paddingSmall)
+                        modifier = if (isCollapsible) Modifier.padding(top = dimensions.paddingSmall) else Modifier
                     )
                 }
             }
             if (switchChecked != null && onSwitchChange != null) {
+                Spacer(Modifier.width(dimensions.spacingSmall))
                 StudiareSwitch(checked = switchChecked, onCheckedChange = onSwitchChange)
                 if (isCollapsible) Spacer(Modifier.width(dimensions.spacingSmall))
             }
@@ -699,7 +711,13 @@ fun SelectionModeDialogSection(
     state: SelectionSectionState,
     actions: SelectionSectionActions,
     isExpanded: Boolean,
-    onToggleExpand: () -> Unit
+    onToggleExpand: () -> Unit,
+    // false for CreateStudySessionScreen's tabbed layout, where every section is always shown -
+    // SetAutoDialogs.kt still wants this collapsible, so it stays the default.
+    collapsible: Boolean = true,
+    // true only for CreateStudySessionDialog.kt, which wants its chips alphabetized by their
+    // displayed label; SetAutoDialogs.kt keeps the enum's own (priority) order by default.
+    alphabetical: Boolean = false
 ) {
     val dimensions = LocalStudiareDimensions.current
 
@@ -717,12 +735,12 @@ fun SelectionModeDialogSection(
 
     DialogSection(
         title = getText(R.string.selection_mode),
-        subtitle = "$subtitle ${if (state.excludeKnown) stringResource(R.string.no_known) else ""}",
-        isExpanded = isExpanded,
-        onToggle = onToggleExpand
+        subtitle = if (collapsible) "$subtitle ${if (state.excludeKnown) stringResource(R.string.no_known) else ""}" else null,
+        isExpanded = if (collapsible) isExpanded else null,
+        onToggle = if (collapsible) onToggleExpand else null
     ) {
         Column {
-            val selectionOptions = listOf(
+            val selectionOptionsInPriorityOrder = listOf(
                 SelectionMode.ANY,
                 SelectionMode.DIFFICULTY,
                 SelectionMode.TAGS,
@@ -733,6 +751,8 @@ fun SelectionModeDialogSection(
                 SelectionMode.REVIEW_COUNT,
                 SelectionMode.SCORE
             )
+            val selectionOptionLabels = selectionOptionsInPriorityOrder.associateWith { it.asString() }
+            val selectionOptions = if (alphabetical) selectionOptionsInPriorityOrder.sortedBy { selectionOptionLabels[it] } else selectionOptionsInPriorityOrder
             FlowRow(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall),

@@ -12,8 +12,8 @@ import androidx.compose.ui.res.stringResource
 import net.ericclark.studiare.R
 import org.json.JSONArray
 import org.json.JSONObject
-import net.ericclark.studiare.screens.Screens.CreateStudySessionScreen
-import net.ericclark.studiare.screens.Screens.ModeSelectionSection
+import net.ericclark.studiare.screens.Dialogs.CreateStudySessionDialog
+import net.ericclark.studiare.screens.Dialogs.ModeSelectionSection
 
 interface StringResourceEnum {
     val labelResId: Int
