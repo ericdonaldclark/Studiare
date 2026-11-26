@@ -142,7 +142,7 @@ fun MultipleChoiceScreen(
             CustomTopAppBar(
                 viewModel = viewModel,
                 screenId = ShortcutScreen.MULTIPLE_CHOICE,
-                title = { AdaptiveSessionTitle(state.deckWithCards.deck.name, state.studyMode.asString()) },
+                title = { AdaptiveSessionTitle(state) },
                 navigationIcon = {
                     TooltipIconButton(description = getText(R.string.back), onClick = {
                         viewModel.endStudySession()
@@ -267,6 +267,7 @@ fun PortraitMCLayout(
                 viewModel = viewModel,
                 modifier = Modifier.fillMaxSize(),
                 showNavigation = true, // We handle nav via selection
+                showIndex = !state.continuousSession,
                 tags = cardTags
 
             )
@@ -374,6 +375,7 @@ fun LandscapeMCLayout(
                 viewModel = viewModel,
                 modifier = Modifier.fillMaxSize(),
                 showNavigation = true,
+                showIndex = !state.continuousSession,
                 tags = cardTags
             )
         }

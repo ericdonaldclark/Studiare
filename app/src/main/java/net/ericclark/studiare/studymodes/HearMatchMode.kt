@@ -149,7 +149,7 @@ fun HearMatchScreen(navController: NavController, viewModel: FlashcardViewModel)
             CustomTopAppBar(
                 viewModel = viewModel,
                 screenId = ShortcutScreen.HEAR_MATCH,
-                title = { AdaptiveSessionTitle(state.deckWithCards.deck.name, state.studyMode.asString()) },
+                title = { AdaptiveSessionTitle(state) },
                 navigationIcon = {
                     TooltipIconButton(description = getText(R.string.back), onClick = {
                         viewModel.endStudySession()
@@ -180,7 +180,7 @@ fun HearMatchScreen(navController: NavController, viewModel: FlashcardViewModel)
         if (windowWidthSizeClass != WindowWidthSizeClass.Compact) {
             Row(modifier = Modifier.padding(padding).fillMaxSize().padding(dimensions.paddingMedium)) {
                 Column(modifier = Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.Center) {
-                    QuizCardContent(state = state, viewModel = viewModel, modifier = Modifier.fillMaxSize(), showNavigation = true)
+                    QuizCardContent(state = state, viewModel = viewModel, modifier = Modifier.fillMaxSize(), showNavigation = true, showIndex = !state.continuousSession)
                 }
                 Spacer(Modifier.width(dimensions.spacingLarge))
                 Column(modifier = Modifier.weight(1f).fillMaxHeight()) {
@@ -214,7 +214,7 @@ fun HearMatchScreen(navController: NavController, viewModel: FlashcardViewModel)
         } else {
             Column(modifier = Modifier.padding(padding).fillMaxSize().padding(dimensions.paddingMedium)) {
                 Box(modifier = Modifier.weight(0.4f).fillMaxWidth(), contentAlignment = Alignment.Center) {
-                    QuizCardContent(state = state, viewModel = viewModel, modifier = Modifier.fillMaxSize(), showNavigation = true)
+                    QuizCardContent(state = state, viewModel = viewModel, modifier = Modifier.fillMaxSize(), showNavigation = true, showIndex = !state.continuousSession)
                 }
                 Spacer(Modifier.height(dimensions.spacingMedium))
                 Column(modifier = Modifier.weight(0.6f).fillMaxWidth()) {

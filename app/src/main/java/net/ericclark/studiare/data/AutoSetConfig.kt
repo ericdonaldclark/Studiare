@@ -27,6 +27,7 @@ data class AutoSetConfig(
     val typedListenUseMultipleChoice: Boolean = ModeOptionDefaults.TYPED_LISTEN_USE_MULTIPLE_CHOICE,
     val hearMatchAutoPlayAllOptions: Boolean = ModeOptionDefaults.HEAR_MATCH_AUTO_PLAY_ALL_OPTIONS,
     val hideDifficultySelection: Boolean = ModeOptionDefaults.HIDE_DIFFICULTY_SELECTION,
+    val continuousSession: Boolean = ModeOptionDefaults.CONTINUOUS_SESSION,
     val flashcardAutoFlipSeconds: Int = ModeOptionDefaults.FLASHCARD_AUTO_FLIP_SECONDS,
     val flashcardAutoFlip: Boolean = ModeOptionDefaults.FLASHCARD_AUTO_FLIP,
     val flashcardDoubleTapToFlip: Boolean = ModeOptionDefaults.FLASHCARD_DOUBLE_TAP_TO_FLIP,
@@ -64,6 +65,11 @@ data class AutoSetConfig(
     val memorySubmitAnswer: Boolean = ModeOptionDefaults.MEMORY_SUBMIT_ANSWER,
     val wordSearchHideFound: Boolean = ModeOptionDefaults.WORD_SEARCH_HIDE_FOUND,
     val wordSearchHighlightColor: Int = ModeOptionDefaults.WORD_SEARCH_HIGHLIGHT_COLOR,
+    val timedSessionEnabled: Boolean = ModeOptionDefaults.TIMED_SESSION_ENABLED,
+    val timedSessionDurationSeconds: Int = ModeOptionDefaults.TIMED_SESSION_DURATION_SECONDS,
+    val timedSessionPauseOutsideSession: Boolean = ModeOptionDefaults.TIMED_SESSION_PAUSE_OUTSIDE_SESSION,
+    val timedSessionDisplayUpdateSecondsUnder60: Int = ModeOptionDefaults.TIMED_SESSION_DISPLAY_UPDATE_SECONDS_UNDER60,
+    val timedSessionDisplayUpdateSecondsOver60: Int = ModeOptionDefaults.TIMED_SESSION_DISPLAY_UPDATE_SECONDS_OVER60,
 
     val sortMode: SortMode,      // "Random", "Alphabetical", "Review Date", etc.
     val sortDirection: Direction, // "ASC", "DESC"

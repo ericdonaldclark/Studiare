@@ -18,15 +18,19 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import net.ericclark.studiare.ui.theme.pressSquish
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -67,6 +71,12 @@ class ModeOptionContext(
     val maxForDifficulty: (Int) -> Int,
     /** Total cards the current filters leave; only used for summaries in the session dialog. */
     val availableCardsCount: Int = 0,
+    /** How many cards this session will actually use once difficulty weighting/the card-count
+     *  picker are applied - [availableCardsCount] is the filtered *pool*, this is what's actually
+     *  going in the session. Defaults to [availableCardsCount] for every context built before that
+     *  distinction mattered (Settings → Mode Defaults, the in-session options editor). Used by
+     *  [TimedSession] to suggest a duration from the session's real card count, not the pool size. */
+    val sessionCardCount: Int = availableCardsCount,
     /**
      * The category being configured — some defaults differ by category (e.g. Typing's length hint),
      * and the `_modes` registry itself is keyed by (category, mode) pair. In a running session this
@@ -113,6 +123,17 @@ abstract class ModeOption(
      * Defaults to always visible.
      */
     open fun isVisible(values: ModeDefaultSettings): Boolean = true
+
+    /**
+     * Non-null shows a Switch in this [dialogSection]'s header (see [DialogSection]'s own
+     * `switchChecked`/`onSwitchChange`), so a section with its own on/off state (Difficulty
+     * Weighting, Timed Session) can be turned on without expanding it first. Null (the default) for
+     * every section without such a state - it just won't show a header switch.
+     */
+    open fun headerSwitchValue(values: ModeDefaultSettings): Boolean? = null
+
+    /** Applies the header switch's new value; only ever called when [headerSwitchValue] is non-null. */
+    open fun withHeaderSwitchValue(values: ModeDefaultSettings, context: ModeOptionContext, enabled: Boolean): ModeDefaultSettings = values
 
     /** The control itself. [values] are the current settings; [onChange] receives the full new set. */
     @Composable
@@ -378,36 +399,403 @@ object DifficultyWeighting : ModeOption(R.string.difficulty_weighting, dialogSec
         if (isWeighted(values)) stringResource(R.string.count_of_total_format, totalFor(values, context), context.availableCardsCount)
         else getText(R.string.difficulty_weighting_off)
 
+    // Lets the dialog section's own header show a Switch (see DialogSection/ModeOptionDialogSections)
+    // so this can be turned on without expanding the section first - the switch used to live inside
+    // Control() itself, only reachable once expanded.
+    override fun headerSwitchValue(values: ModeDefaultSettings): Boolean = isWeighted(values)
+    override fun withHeaderSwitchValue(values: ModeDefaultSettings, context: ModeOptionContext, enabled: Boolean): ModeDefaultSettings =
+        values.copy(difficultyWeighted = enabled)
+
+    @Composable
+    override fun Control(values: ModeDefaultSettings, context: ModeOptionContext, onChange: (ModeDefaultSettings) -> Unit) {
+        var selectedDifficulty by rememberSaveable { mutableIntStateOf(1) }
+
+        Column(modifier = Modifier.fillMaxWidth()) {
+            // The on/off switch itself lives in the section header now - see headerSwitchValue above.
+            // Everything below configures the weighting regardless of whether it's currently on, same
+            // as Timed Session's duration picker.
+            TypedChipRow(
+                items = DifficultySetting.entries,
+                selected = DifficultySetting.fromInt(selectedDifficulty),
+                labelFor = { it.value.toString() },
+                onSelected = { selectedDifficulty = it.value }
+            )
+            val count = effectiveCountFor(values, selectedDifficulty, context)
+            CountPicker(
+                label = stringResource(R.string.difficulty_count, selectedDifficulty, count),
+                value = count,
+                max = context.maxForDifficulty(selectedDifficulty),
+                onValueChange = { onChange(withCount(values, selectedDifficulty, it)) },
+                showSlider = false,
+                showPresets = false,
+                min = 0,
+                labelColor = MaterialTheme.colorScheme.tertiary
+            )
+        }
+    }
+}
+
+/**
+ * A time limit for the whole session - when it runs out, StudySessionManager force-completes the
+ * session (see scheduleTimeoutCheck/StudyState.endedByTimeout). Start-only, like
+ * [DifficultyWeighting]: the countdown is set up once when the session begins, not something a
+ * running session's settings button offers to change mid-flight.
+ */
+object TimedSession : ModeOption(R.string.timed_session, dialogSection = true, sessionEdit = SessionEdit.START_ONLY) {
+    // Seeds the duration stepper the first time the switch is turned on, so the user starts from a
+    // plausible number instead of the flat YAML default (5 minutes) regardless of deck size.
+    private const val SUGGESTED_SECONDS_PER_CARD = 10
+
+    fun isEnabled(values: ModeDefaultSettings): Boolean = values.timedSessionEnabled ?: ModeOptionDefaults.TIMED_SESSION_ENABLED
+    fun durationSeconds(values: ModeDefaultSettings): Int = values.timedSessionDurationSeconds ?: ModeOptionDefaults.TIMED_SESSION_DURATION_SECONDS
+
+    // Suggests in [unit], clamped to that unit's own range - e.g. 1 card * 10s/card = 10s is below
+    // Minutes' own 1-minute floor, so it suggests 1m.
+    private fun suggestedSeconds(context: ModeOptionContext, unit: TimedSessionUnit): Int {
+        val rawDisplay = (context.sessionCardCount * SUGGESTED_SECONDS_PER_CARD).toDouble() / unit.secondsPerUnit
+        return unit.toSeconds(rawDisplay.coerceIn(unit.minValue, unit.maxValue))
+    }
+
+    // Lets the dialog section's own header show a Switch (see DialogSection/ModeOptionDialogSections)
+    // so this can be turned on without expanding the section first - the switch used to live inside
+    // Control() itself, only reachable once expanded. Uses Minutes as the suggestion unit here since
+    // there's no remembered unit selection to read outside of Control()'s own composition.
+    override fun headerSwitchValue(values: ModeDefaultSettings): Boolean = isEnabled(values)
+    override fun withHeaderSwitchValue(values: ModeDefaultSettings, context: ModeOptionContext, enabled: Boolean): ModeDefaultSettings {
+        val seconds = durationSeconds(values)
+        val suggested = if (enabled && seconds == ModeOptionDefaults.TIMED_SESSION_DURATION_SECONDS) {
+            suggestedSeconds(context, TimedSessionUnit.MINUTES)
+        } else seconds
+        return values.copy(timedSessionEnabled = enabled, timedSessionDurationSeconds = suggested)
+    }
+
+    override fun copyValue(source: ModeDefaultSettings, target: ModeDefaultSettings) =
+        target.copy(
+            timedSessionEnabled = source.timedSessionEnabled,
+            timedSessionDurationSeconds = source.timedSessionDurationSeconds,
+            timedSessionPauseOutsideSession = source.timedSessionPauseOutsideSession,
+            timedSessionDisplayUpdateSecondsUnder60 = source.timedSessionDisplayUpdateSecondsUnder60,
+            timedSessionDisplayUpdateSecondsOver60 = source.timedSessionDisplayUpdateSecondsOver60
+        )
+
+    @Composable
+    override fun summary(values: ModeDefaultSettings, context: ModeOptionContext): String =
+        if (isEnabled(values)) {
+            val minutes = (durationSeconds(values) / 60).coerceAtLeast(1)
+            pluralStringResource(R.plurals.timed_session_summary_minutes, minutes, minutes)
+        } else getText(R.string.timed_session_off)
+
     @Composable
     override fun Control(values: ModeDefaultSettings, context: ModeOptionContext, onChange: (ModeDefaultSettings) -> Unit) {
         val dimensions = LocalStudiareDimensions.current
-        var selectedDifficulty by rememberSaveable { mutableIntStateOf(1) }
-        val weighted = isWeighted(values)
+        val seconds = durationSeconds(values)
+        var unit by rememberSaveable { mutableStateOf(TimedSessionUnit.MINUTES) }
 
-        Column(modifier = Modifier.fillMaxWidth()) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(getText(R.string.difficulty_weighting_switch), modifier = Modifier.weight(1f))
-                StudiareSwitch(checked = weighted, onCheckedChange = { onChange(values.copy(difficultyWeighted = it)) })
+        // The on/off switch itself lives in the section header now - see headerSwitchValue above.
+        // Everything below configures the duration/pause/display-frequency settings regardless of
+        // whether Timed Session is currently on.
+        Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)) {
+            UnitValueEditor(
+                units = TimedSessionUnit.entries,
+                selectedUnit = unit,
+                seconds = seconds,
+                onUnitChange = { unit = it },
+                onValueChange = { onChange(values.copy(timedSessionDurationSeconds = it)) }
+            )
+            // Pause Timer Outside Session and Display Frequency live under Timed Session itself,
+            // not as their own top-level options - see their own isVisible overrides (always
+            // false) and the explanation on each.
+            HorizontalDivider(modifier = Modifier.padding(vertical = dimensions.spacingSmall))
+            TimedSessionPauseOutsideSession.Control(values, context, onChange)
+            TimedSessionDisplayUpdateSecondsUnder60.Control(values, context, onChange)
+        }
+    }
+}
+
+/** Whether leaving the session (backgrounding the app) pauses the countdown. Off (default) lets it
+ *  keep counting down in real time while you're away - see [StudySessionManager.pauseSessionClock]/
+ *  [resumeSessionClock] for the actual pause/resume logic this flag gates.
+ *
+ *  Rendered inline inside [TimedSession]'s own Control() (right under the duration slider) instead
+ *  of through the generic mode-options list, so [isVisible] is hard-false here - the generic
+ *  renderers (ModeOptionsInline/ModeOptionDialogSections) must never show this on their own, or it
+ *  would render twice. */
+object TimedSessionPauseOutsideSession : SwitchModeOption(R.string.timed_session_pause_outside, R.string.timed_session_pause_outside_desc, sessionEdit = SessionEdit.START_ONLY) {
+    override fun valueIn(values: ModeDefaultSettings) = values.timedSessionPauseOutsideSession ?: ModeOptionDefaults.TIMED_SESSION_PAUSE_OUTSIDE_SESSION
+    override fun withValue(values: ModeDefaultSettings, value: Boolean) = values.copy(timedSessionPauseOutsideSession = value)
+    override fun isVisible(values: ModeDefaultSettings) = false
+}
+
+/**
+ * How often (in seconds) the in-session countdown display - not built yet, see the roadmap plan -
+ * redraws while under a minute remains. A separate, independent cadence from
+ * [TimedSessionDisplayUpdateSecondsOver60] - these are two distinct settings, not one value re-cast
+ * into two scales, since a user may want the countdown to redraw rapidly only once it's actually
+ * close to running out. The last 5 seconds are always expected to update every second regardless of
+ * this setting, once that display exists, but that acceleration is pure behavior and has no
+ * representation here.
+ *
+ * Rendered inline inside [TimedSession]'s own Control(), same as [TimedSessionPauseOutsideSession] -
+ * [isVisible] is hard-false for the same reason. Its [Control] (and [TimedSessionDisplayUpdateSecondsOver60]'s,
+ * which shares the same row/dialog) shows both cadences at once and a button that opens
+ * [TimedSessionDisplayFrequencyDialog], since the combined range (1 second to 15 minutes) is too
+ * wide for a single stepper or slider to cover usefully in one scale.
+ */
+object TimedSessionDisplayUpdateSecondsUnder60 : ModeOption(R.string.timed_session_display_frequency) {
+    fun valueIn(values: ModeDefaultSettings): Int = values.timedSessionDisplayUpdateSecondsUnder60 ?: ModeOptionDefaults.TIMED_SESSION_DISPLAY_UPDATE_SECONDS_UNDER60
+    override fun isVisible(values: ModeDefaultSettings) = false
+    override fun copyValue(source: ModeDefaultSettings, target: ModeDefaultSettings) = target.copy(timedSessionDisplayUpdateSecondsUnder60 = valueIn(source))
+
+    @Composable
+    override fun Control(values: ModeDefaultSettings, context: ModeOptionContext, onChange: (ModeDefaultSettings) -> Unit) =
+        DisplayFrequencyRow(values, onChange)
+}
+
+/** The "over 1 minute remaining" counterpart to [TimedSessionDisplayUpdateSecondsUnder60] - see that
+ *  object's doc for why these are two independent settings rather than one. [Control] renders the
+ *  same shared row, so either object's Control() being called shows (and edits) both cadences. */
+object TimedSessionDisplayUpdateSecondsOver60 : ModeOption(R.string.timed_session_display_frequency) {
+    fun valueIn(values: ModeDefaultSettings): Int = values.timedSessionDisplayUpdateSecondsOver60 ?: ModeOptionDefaults.TIMED_SESSION_DISPLAY_UPDATE_SECONDS_OVER60
+    override fun isVisible(values: ModeDefaultSettings) = false
+    override fun copyValue(source: ModeDefaultSettings, target: ModeDefaultSettings) = target.copy(timedSessionDisplayUpdateSecondsOver60 = valueIn(source))
+
+    @Composable
+    override fun Control(values: ModeDefaultSettings, context: ModeOptionContext, onChange: (ModeDefaultSettings) -> Unit) =
+        DisplayFrequencyRow(values, onChange)
+}
+
+@Composable
+private fun displayFrequencySummaryText(under60: Int, over60: Int): String {
+    val underText = pluralStringResource(R.plurals.timed_session_display_frequency_summary_seconds, under60, under60)
+    val overText = if (over60 % 60 == 0) {
+        val minutes = over60 / 60
+        pluralStringResource(R.plurals.timed_session_display_frequency_summary_minutes, minutes, minutes)
+    } else {
+        pluralStringResource(R.plurals.timed_session_display_frequency_summary_seconds, over60, over60)
+    }
+    return stringResource(R.string.timed_session_display_frequency_summary_format, underText, overText)
+}
+
+@Composable
+private fun DisplayFrequencyRow(values: ModeDefaultSettings, onChange: (ModeDefaultSettings) -> Unit) {
+    val dimensions = LocalStudiareDimensions.current
+    var showDialog by rememberSaveable { mutableStateOf(false) }
+    val under60 = TimedSessionDisplayUpdateSecondsUnder60.valueIn(values)
+    val over60 = TimedSessionDisplayUpdateSecondsOver60.valueIn(values)
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.fillMaxWidth().clickable { showDialog = true }.padding(vertical = dimensions.paddingSmall)
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(getText(R.string.timed_session_display_frequency), style = MaterialTheme.typography.bodyLarge)
+            Text(displayFrequencySummaryText(under60, over60), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        TextButton(onClick = { showDialog = true }) { Text(getText(R.string.edit)) }
+    }
+    if (showDialog) {
+        TimedSessionDisplayFrequencyDialog(
+            under60Seconds = under60,
+            over60Seconds = over60,
+            onConfirm = { newUnder60, newOver60 ->
+                onChange(values.copy(timedSessionDisplayUpdateSecondsUnder60 = newUnder60, timedSessionDisplayUpdateSecondsOver60 = newOver60))
+                showDialog = false
+            },
+            onDismiss = { showDialog = false }
+        )
+    }
+}
+
+/** A unit a [UnitValueEditor] can express a seconds value in - e.g. Seconds/Minutes/Hours for the
+ *  duration picker, or the narrower Seconds/Minutes pairs each [TimedSessionDisplayFrequencyDialog]
+ *  section offers. Each unit carries its own slider range/step, since a shared scale across very
+ *  different units (seconds vs. hours) makes fine adjustment impossible at one end or the other. */
+private interface SteppedTimeUnit : StringResourceEnum {
+    val secondsPerUnit: Int
+    val minValue: Double
+    val maxValue: Double
+    val step: Double
+    val decimalPlaces: Int
+}
+
+private fun SteppedTimeUnit.toDisplay(seconds: Int): Double = seconds.toDouble() / secondsPerUnit
+private fun SteppedTimeUnit.toSeconds(displayValue: Double): Int = (displayValue * secondsPerUnit).roundToInt()
+
+/** Seconds (1-180, step 1), Minutes (1-45, step .25) and Hours (1-18, step .1) each have their own
+ *  slider scale - a 2-hour-max slider in 30s steps makes a 1-minute adjustment nearly impossible to
+ *  land on, and an 18-hour-max one in 1s steps is equally useless at the other end. */
+private enum class TimedSessionUnit(
+    override val labelResId: Int,
+    override val secondsPerUnit: Int,
+    override val minValue: Double,
+    override val maxValue: Double,
+    override val step: Double,
+    override val decimalPlaces: Int
+) : SteppedTimeUnit {
+    SECONDS(R.string.unit_seconds, 1, 1.0, 90.0, 1.0, 0),
+    MINUTES(R.string.unit_minutes, 60, 1.0, 60.0, 0.25, 2),
+    HOURS(R.string.unit_hours, 3600, 1.0, 6.0, 0.1, 1)
+}
+
+/** A plain (non-enum) [SteppedTimeUnit] - lets each section of [TimedSessionDisplayFrequencyDialog]
+ *  declare its own per-unit range without touching [TimedSessionUnit]'s own duration-picker ranges. */
+private data class TimeUnitSpec(
+    override val labelResId: Int,
+    override val secondsPerUnit: Int,
+    override val minValue: Double,
+    override val maxValue: Double,
+    override val step: Double,
+    override val decimalPlaces: Int
+) : SteppedTimeUnit
+
+/**
+ * The slider+dropdown+textfield editor shared by [TimedSession]'s duration control and both
+ * sections of [TimedSessionDisplayFrequencyDialog]: a tap-to-type value pill, a unit dropdown (only
+ * shown when there's more than one [units] to choose from), and a continuous slider.
+ */
+@Composable
+private fun <T : SteppedTimeUnit> UnitValueEditor(
+    units: List<T>,
+    selectedUnit: T,
+    seconds: Int,
+    onUnitChange: (T) -> Unit,
+    onValueChange: (Int) -> Unit
+) {
+    val dimensions = LocalStudiareDimensions.current
+    Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)) {
+            val displayValue = selectedUnit.toDisplay(seconds)
+            val valueText = "%.${selectedUnit.decimalPlaces}f".format(displayValue)
+            EditableStepperPill(
+                valueText = valueText,
+                onCommit = { text ->
+                    text.toDoubleOrNull()?.let { typed ->
+                        onValueChange(selectedUnit.toSeconds(typed.coerceIn(selectedUnit.minValue, selectedUnit.maxValue)))
+                    }
+                },
+                isValid = { text -> text.toDoubleOrNull()?.let { it in selectedUnit.minValue..selectedUnit.maxValue } == true },
+                allowDecimal = true,
+                fontSize = 20.sp,
+                modifier = Modifier.weight(1f)
+            )
+            if (units.size > 1) {
+                ExpressiveDropdownMenuField(
+                    options = units,
+                    selectedOption = selectedUnit,
+                    optionLabel = { it.asString() },
+                    onSelect = { newUnit ->
+                        // Re-express the current value in the new unit's own scale, clamped to its
+                        // range, so the slider/pill never show a value their own unit couldn't
+                        // actually produce.
+                        val converted = newUnit.toSeconds(newUnit.toDisplay(seconds).coerceIn(newUnit.minValue, newUnit.maxValue))
+                        onUnitChange(newUnit)
+                        onValueChange(converted)
+                    },
+                    modifier = Modifier.widthIn(min = 120.dp).weight(1f),
+                    monochromeAccent = true
+                )
+            } else {
+                Text(selectedUnit.asString(), style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
             }
-            if (weighted) {
-                Spacer(Modifier.height(dimensions.spacingSmall))
-                TypedChipRow(
-                    items = DifficultySetting.entries,
-                    selected = DifficultySetting.fromInt(selectedDifficulty),
-                    labelFor = { it.value.toString() },
-                    onSelected = { selectedDifficulty = it.value }
+        }
+        // Continuous, no tick marks - same as CountPicker's own slider (card count): the real
+        // granularity comes from rounding in onValueChange, not from Slider's `steps` (which would
+        // otherwise force the drag itself to snap to however many ticks it draws).
+        Slider(
+            value = selectedUnit.toDisplay(seconds).toFloat().coerceIn(selectedUnit.minValue.toFloat(), selectedUnit.maxValue.toFloat()),
+            onValueChange = { raw ->
+                val snappedSteps = (raw / selectedUnit.step.toFloat()).roundToInt()
+                val snapped = (snappedSteps * selectedUnit.step).coerceIn(selectedUnit.minValue, selectedUnit.maxValue)
+                onValueChange(selectedUnit.toSeconds(snapped))
+            },
+            valueRange = selectedUnit.minValue.toFloat()..selectedUnit.maxValue.toFloat(),
+            steps = 0
+        )
+    }
+}
+
+private val displayFrequencySecondsUnit = TimeUnitSpec(R.string.unit_seconds, 1, 1.0, 60.0, 1.0, 0)
+private val displayFrequencyMinutesUnit = TimeUnitSpec(R.string.unit_minutes, 60, 1.0, 15.0, 0.25, 2)
+private val displayFrequencyLongSecondsUnit = TimeUnitSpec(R.string.unit_seconds, 1, 60.0, 900.0, 1.0, 0)
+
+/**
+ * Opened from [DisplayFrequencyRow]. Two independent values, each with its own scale: under a
+ * minute (seconds only, 1-60) and over a minute (minutes or seconds, up to 15 minutes/900 seconds) -
+ * these aren't the same number re-expressed, they're two separate cadences the countdown display
+ * will use depending on how much time is left. Save commits both at once; Cancel discards both.
+ */
+@Composable
+private fun TimedSessionDisplayFrequencyDialog(
+    under60Seconds: Int,
+    over60Seconds: Int,
+    onConfirm: (Int, Int) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val dimensions = LocalStudiareDimensions.current
+    var localUnder60 by rememberSaveable { mutableStateOf(under60Seconds) }
+    var localOver60 by rememberSaveable { mutableStateOf(over60Seconds) }
+    // TimeUnitSpec isn't Bundle-savable, so the over-60 section's unit choice is saved as a plain
+    // Boolean and resolved back to a unit below.
+    var over60UsesMinutes by rememberSaveable { mutableStateOf(over60Seconds % 60 == 0) }
+    val over60Unit = if (over60UsesMinutes) displayFrequencyMinutesUnit else displayFrequencyLongSecondsUnit
+
+    AnimatedDialog(onDismissRequest = onDismiss, properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)) {
+        Card(
+            shape = RoundedCornerShape(dimensions.cornerRadiusDialog),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
+            modifier = Modifier.widthIn(min = 280.dp, max = 560.dp).heightIn(max = (LocalConfiguration.current.screenHeightDp * 0.85f).dp)
+        ) {
+            Column(modifier = Modifier.padding(dimensions.paddingLarge)) {
+                Text(getText(R.string.timed_session_display_frequency), style = MaterialTheme.typography.headlineSmall)
+                Text(
+                    getText(R.string.timed_session_display_frequency_desc),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = dimensions.spacingSmall, bottom = dimensions.spacingMedium)
                 )
-                val count = effectiveCountFor(values, selectedDifficulty, context)
-                CountPicker(
-                    label = stringResource(R.string.difficulty_count, selectedDifficulty, count),
-                    value = count,
-                    max = context.maxForDifficulty(selectedDifficulty),
-                    onValueChange = { onChange(withCount(values, selectedDifficulty, it)) },
-                    showSlider = false,
-                    showPresets = false,
-                    min = 0,
-                    labelColor = MaterialTheme.colorScheme.tertiary
-                )
+                Column(
+                    modifier = Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(dimensions.spacingMedium)
+                ) {
+                    Column(verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)) {
+                        Text(getText(R.string.timed_session_display_frequency_section_seconds), style = MaterialTheme.typography.titleSmall)
+                        UnitValueEditor(
+                            units = listOf(displayFrequencySecondsUnit),
+                            selectedUnit = displayFrequencySecondsUnit,
+                            seconds = localUnder60,
+                            onUnitChange = {},
+                            onValueChange = { localUnder60 = it }
+                        )
+                    }
+                    HorizontalDivider()
+                    Column(verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)) {
+                        Text(getText(R.string.timed_session_display_frequency_section_minutes), style = MaterialTheme.typography.titleSmall)
+                        UnitValueEditor(
+                            units = listOf(displayFrequencyMinutesUnit, displayFrequencyLongSecondsUnit),
+                            selectedUnit = over60Unit,
+                            seconds = localOver60,
+                            onUnitChange = { over60UsesMinutes = it == displayFrequencyMinutesUnit },
+                            onValueChange = { localOver60 = it }
+                        )
+                    }
+                }
+                Spacer(Modifier.height(dimensions.spacingMedium))
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                    TextButton(onClick = onDismiss, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) { Text(getText(R.string.cancel)) }
+                    Spacer(Modifier.width(dimensions.spacingSmall))
+
+                    val saveInteractionSource = remember { MutableInteractionSource() }
+                    Button(
+                        onClick = {
+                            onConfirm(
+                                localUnder60.coerceIn(ModeOptionDefaults.TIMED_SESSION_DISPLAY_UPDATE_SECONDS_UNDER60_MIN, ModeOptionDefaults.TIMED_SESSION_DISPLAY_UPDATE_SECONDS_UNDER60_MAX),
+                                localOver60.coerceIn(ModeOptionDefaults.TIMED_SESSION_DISPLAY_UPDATE_SECONDS_OVER60_MIN, ModeOptionDefaults.TIMED_SESSION_DISPLAY_UPDATE_SECONDS_OVER60_MAX)
+                            )
+                        },
+                        interactionSource = saveInteractionSource,
+                        modifier = Modifier.defaultMinSize(minHeight = 56.dp).pressSquish(saveInteractionSource, 0.95f),
+                        shape = RoundedCornerShape(dimensions.cornerRadiusButton)
+                    ) { Text(getText(R.string.save)) }
+                }
             }
         }
     }
@@ -578,6 +966,34 @@ object HearMatchAutoPlayAll : SwitchModeOption(R.string.hear_match_auto_play_all
 object HideDifficultySelection : SwitchModeOption(R.string.hide_difficulty_selection, R.string.hide_difficulty_selection_desc) {
     override fun valueIn(values: ModeDefaultSettings) = values.hideDifficultySelection ?: ModeOptionDefaults.HIDE_DIFFICULTY_SELECTION
     override fun withValue(values: ModeDefaultSettings, value: Boolean) = values.copy(hideDifficultySelection = value)
+}
+
+/**
+ * Never shows the completion screen - reshuffles the same pool and keeps going instead. Its own
+ * section (not inside the flat Mode Settings list) rather than a plain [SwitchModeOption], since
+ * it's a standalone toggle unrelated to the mode's other settings - same [dialogSection] mechanism
+ * [TimedSession]/[DifficultyWeighting] use for their own sections, just with nothing further to
+ * configure once it's on, so [summary] is left at its default `null` (no subtitle -> no collapse
+ * chevron; see [DialogSection]'s own `isCollapsible`), and the section is always shown expanded.
+ */
+object ContinuousSession : ModeOption(R.string.continuous_session, dialogSection = true) {
+    fun isEnabled(values: ModeDefaultSettings): Boolean = values.continuousSession ?: ModeOptionDefaults.CONTINUOUS_SESSION
+
+    override fun copyValue(source: ModeDefaultSettings, target: ModeDefaultSettings) =
+        target.copy(continuousSession = source.continuousSession)
+
+    override fun headerSwitchValue(values: ModeDefaultSettings): Boolean = isEnabled(values)
+    override fun withHeaderSwitchValue(values: ModeDefaultSettings, context: ModeOptionContext, enabled: Boolean): ModeDefaultSettings =
+        values.copy(continuousSession = enabled)
+
+    @Composable
+    override fun Control(values: ModeDefaultSettings, context: ModeOptionContext, onChange: (ModeDefaultSettings) -> Unit) {
+        Text(
+            getText(R.string.continuous_session_desc),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
 }
 
 /** Flashcard: flip the card by itself after this many seconds on the first side (0 = off). */
@@ -1101,6 +1517,7 @@ internal val allModeOptions: List<ModeOption> = listOf(
     TypedListenMultipleChoice,
     HearMatchAutoPlayAll,
     HideDifficultySelection,
+    ContinuousSession,
     AnagramFirstLetterHint,
     AnagramUppercase,
     AnagramColorVowels,
@@ -1146,7 +1563,11 @@ internal val allModeOptions: List<ModeOption> = listOf(
     AudioNextCardDelay,
     AudioAutoAdvance,
     PromptSide,
-    DifficultyWeighting
+    DifficultyWeighting,
+    TimedSession,
+    TimedSessionPauseOutsideSession,
+    TimedSessionDisplayUpdateSecondsUnder60,
+    TimedSessionDisplayUpdateSecondsOver60
 )
 
 /**
@@ -1333,7 +1754,9 @@ fun ModeOptionDialogSections(
             onToggle = { if (expanded) expandedIds.remove(option.id) else expandedIds.add(option.id) },
             // The last section's own trailing divider would double up with the panel's divider
             // pinned above its footer (Number of Cards / Cancel+Start) in the session dialog.
-            showDivider = index != options.lastIndex
+            showDivider = index != options.lastIndex,
+            switchChecked = option.headerSwitchValue(values),
+            onSwitchChange = { onChange(option.withHeaderSwitchValue(values, context, it)) }
         ) {
             option.Control(values, context, onChange)
         }

@@ -147,7 +147,7 @@ fun AudioStudyScreen(
             CustomTopAppBar(
                 viewModel = viewModel,
                 screenId = ShortcutScreen.AUDIO,
-                title = { AdaptiveSessionTitle(state.deckWithCards.deck.name, state.studyMode.asString()) },
+                title = { AdaptiveSessionTitle(state) },
                 navigationIcon = {
                     TooltipIconButton(description = getText(R.string.back), onClick = {
                         viewModel.endStudySession()
@@ -215,7 +215,8 @@ fun AudioStudyScreen(
                         onCardDoubleTap = { viewModel.flipAudioShownSide() },
                         cardGestures = cardGestures,
                         viewModel = viewModel,
-                        hideDifficultySelection = state.hideDifficultySelection
+                        hideDifficultySelection = state.hideDifficultySelection,
+                        showIndex = !state.continuousSession
                     )
                 } else {
                     PortraitAudioLayout(
@@ -229,7 +230,8 @@ fun AudioStudyScreen(
                         onCardDoubleTap = { viewModel.flipAudioShownSide() },
                         cardGestures = cardGestures,
                         viewModel = viewModel,
-                        hideDifficultySelection = state.hideDifficultySelection
+                        hideDifficultySelection = state.hideDifficultySelection,
+                        showIndex = !state.continuousSession
                     )
                 }
             } else {
@@ -260,7 +262,7 @@ fun PortraitAudioLayout(
     onTogglePlay: () -> Unit, onNext: () -> Unit, onPrev: () -> Unit,
     feedback: String?,
     onCardTap: () -> Unit = {}, onCardDoubleTap: () -> Unit = {}, cardGestures: Modifier = Modifier,
-    viewModel: FlashcardViewModel, hideDifficultySelection: Boolean
+    viewModel: FlashcardViewModel, hideDifficultySelection: Boolean, showIndex: Boolean = true
 ) {
     val dimensions = LocalStudiareDimensions.current
 
@@ -300,7 +302,9 @@ fun PortraitAudioLayout(
         }
 
         Spacer(Modifier.weight(1f))
-        Text(text = stringResource(R.string.card_index_of_total, currentIndex + 1, totalCards), style = MaterialTheme.typography.titleMedium)
+        if (showIndex) {
+            Text(text = stringResource(R.string.card_index_of_total, currentIndex + 1, totalCards), style = MaterialTheme.typography.titleMedium)
+        }
         Spacer(Modifier.height(dimensions.spacingLarge))
         AudioControls(isPlaying, onTogglePlay, onNext, onPrev)
         Spacer(Modifier.height(dimensions.spacingLarge))
@@ -341,7 +345,7 @@ fun LandscapeAudioLayout(
     onTogglePlay: () -> Unit, onNext: () -> Unit, onPrev: () -> Unit,
     feedback: String?,
     onCardTap: () -> Unit = {}, onCardDoubleTap: () -> Unit = {}, cardGestures: Modifier = Modifier,
-    viewModel: FlashcardViewModel, hideDifficultySelection: Boolean
+    viewModel: FlashcardViewModel, hideDifficultySelection: Boolean, showIndex: Boolean = true
 ) {
     val dimensions = LocalStudiareDimensions.current
 
@@ -392,7 +396,9 @@ fun LandscapeAudioLayout(
                 }
             }
             Spacer(Modifier.height(dimensions.spacingMedium))
-            Text(text = stringResource(R.string.card_index_of_total, currentIndex + 1, totalCards), style = MaterialTheme.typography.titleMedium)
+            if (showIndex) {
+                Text(text = stringResource(R.string.card_index_of_total, currentIndex + 1, totalCards), style = MaterialTheme.typography.titleMedium)
+            }
             Spacer(Modifier.height(dimensions.spacingLarge))
             AudioControls(isPlaying, onTogglePlay, onNext, onPrev)
             if (!hideDifficultySelection) {

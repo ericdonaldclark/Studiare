@@ -9,7 +9,7 @@ import androidx.room.TypeConverters
 // Top-level (not a companion constant) so it's a valid compile-time constant for the annotation
 // below while still being referenceable elsewhere (e.g. Settings → About) as the single source
 // of truth for the schema version shown to the user.
-const val DATABASE_VERSION = 40
+const val DATABASE_VERSION = 47
 
 @Database(entities = [Deck::class, Card::class, TagDefinition::class, ActiveSession::class, DeckCollection::class, CollectionDeckCrossRef::class, TemplateSet::class, SessionPreset::class], version = DATABASE_VERSION, exportSchema = false)
 @TypeConverters(Converters::class)
@@ -644,6 +644,97 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        // Time Tracking — local-only (like `furthestCardIndex`, not synced to Firestore) pause-safe
+        // elapsed-time fields on the existing `sessions` table.
+        val MIGRATION_40_41 = object : androidx.room.migration.Migration(40, 41) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `sessions` ADD COLUMN `accumulatedTimeSeconds` INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE `sessions` ADD COLUMN `sessionResumedAt` INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
+        // Timed Sessions - local-only (like the Time Tracking columns above, not synced to Firestore)
+        // fields on the existing `sessions` table, plus the same two settings on `session_presets`
+        // so a saved preset round-trips its Timed Session choice too.
+        val MIGRATION_41_42 = object : androidx.room.migration.Migration(41, 42) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `sessions` ADD COLUMN `timedSessionEnabled` INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE `sessions` ADD COLUMN `timedSessionDurationSeconds` INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE `sessions` ADD COLUMN `endedByTimeout` INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE `session_presets` ADD COLUMN `timedSessionEnabled` INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE `session_presets` ADD COLUMN `timedSessionDurationSeconds` INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
+        // Timed Session's two new options (pause-outside-session, display frequency), plus the
+        // countdown's own pause-capable clock columns on `sessions` (local-only, not synced).
+        val MIGRATION_42_43 = object : androidx.room.migration.Migration(42, 43) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `sessions` ADD COLUMN `timedSessionPauseOutsideSession` INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE `sessions` ADD COLUMN `timedSessionDisplayUpdateSeconds` INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE `sessions` ADD COLUMN `timedSessionAccumulatedSeconds` INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE `sessions` ADD COLUMN `timedSessionResumedAt` INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE `session_presets` ADD COLUMN `timedSessionPauseOutsideSession` INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE `session_presets` ADD COLUMN `timedSessionDisplayUpdateSeconds` INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
+        // No MIGRATION_43_44: display frequency split into two independent values (under/over 1
+        // minute remaining), replacing the single timedSessionDisplayUpdateSeconds column from
+        // MIGRATION_42_43. SQLite can't drop a column without a full table rebuild, so rather than
+        // hand-write one, this version bump is deliberately left without a migration path -
+        // fallbackToDestructiveMigration() (below) wipes and recreates `sessions`/`session_presets`
+        // instead. Expected/accepted to lose in-progress session state and saved presets on upgrade.
+
+        // Records which category button (Learn/Practice/Quiz/Games/Guided) actually started a
+        // session, instead of guessing it from mode/isGraded/schedulingMode - an ungraded Flashcard
+        // session was otherwise indistinguishable between Learn and Practice, which made the Study
+        // Hub show the same session under both section headers (deleting one made both vanish).
+        // Backfilled for existing rows with the same guess the old derivation used, so nothing
+        // changes for sessions already on disk - only sessions created after this migration get the
+        // real, precise category.
+        // SessionPreset has the same mode/isGraded/schedulingMode-only ambiguity (see its own
+        // displayCategory()) - a pinned preset's badge has the identical Learn-vs-Practice gap,
+        // fixed here the same way.
+        val MIGRATION_45_46 = object : androidx.room.migration.Migration(45, 46) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `sessions` ADD COLUMN `startedCategory` TEXT NOT NULL DEFAULT 'PRACTICE'")
+                db.execSQL(
+                    """
+                    UPDATE `sessions` SET `startedCategory` = CASE
+                        WHEN `mode` IN ('ANAGRAM', 'HANGMAN', 'MEMORY', 'CROSSWORD', 'WORD_SEARCH') THEN 'GAMES'
+                        WHEN `mode` IN ('TYPING', 'FREEFORM', 'AUDIO') THEN 'LEARN'
+                        WHEN `schedulingMode` = 'FSRS' THEN 'GUIDED'
+                        WHEN `isGraded` = 1 THEN 'QUIZ'
+                        ELSE 'PRACTICE'
+                    END
+                    """
+                )
+                db.execSQL("ALTER TABLE `session_presets` ADD COLUMN `startedCategory` TEXT NOT NULL DEFAULT 'PRACTICE'")
+                db.execSQL(
+                    """
+                    UPDATE `session_presets` SET `startedCategory` = CASE
+                        WHEN `sessionMode` IN ('ANAGRAM', 'HANGMAN', 'MEMORY', 'CROSSWORD', 'WORD_SEARCH') THEN 'GAMES'
+                        WHEN `sessionMode` IN ('TYPING', 'FREEFORM', 'AUDIO') THEN 'LEARN'
+                        WHEN `schedulingMode` = 'FSRS' THEN 'GUIDED'
+                        WHEN `isGraded` = 1 THEN 'QUIZ'
+                        ELSE 'PRACTICE'
+                    END
+                    """
+                )
+            }
+        }
+
+        // Continuous Sessions: never show completion, just reshuffle the same pool in place and
+        // keep going. Plain opt-in flag, same shape for sessions and pinned presets - no backfill
+        // needed since every existing row simply defaults to off.
+        val MIGRATION_46_47 = object : androidx.room.migration.Migration(46, 47) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `sessions` ADD COLUMN `continuousSession` INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE `session_presets` ADD COLUMN `continuousSession` INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
         @Volatile
         private var INSTANCE: AppDatabase? = null
 
@@ -654,7 +745,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "studiare_database"
                 )
-                    .addMigrations(MIGRATION_7_8, MIGRATION_8_9, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18, MIGRATION_18_19, MIGRATION_19_20, MIGRATION_20_21, MIGRATION_21_22, MIGRATION_22_23, MIGRATION_23_24, MIGRATION_24_25, MIGRATION_25_26, MIGRATION_26_27, MIGRATION_27_28, MIGRATION_28_29, MIGRATION_29_30, MIGRATION_30_31, MIGRATION_31_32, MIGRATION_32_33, MIGRATION_33_34, MIGRATION_34_35, MIGRATION_35_36, MIGRATION_36_37, MIGRATION_37_38, MIGRATION_38_39, MIGRATION_39_40)
+                    .addMigrations(MIGRATION_7_8, MIGRATION_8_9, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18, MIGRATION_18_19, MIGRATION_19_20, MIGRATION_20_21, MIGRATION_21_22, MIGRATION_22_23, MIGRATION_23_24, MIGRATION_24_25, MIGRATION_25_26, MIGRATION_26_27, MIGRATION_27_28, MIGRATION_28_29, MIGRATION_29_30, MIGRATION_30_31, MIGRATION_31_32, MIGRATION_32_33, MIGRATION_33_34, MIGRATION_34_35, MIGRATION_35_36, MIGRATION_36_37, MIGRATION_37_38, MIGRATION_38_39, MIGRATION_39_40, MIGRATION_40_41, MIGRATION_41_42, MIGRATION_42_43, MIGRATION_45_46, MIGRATION_46_47)
                     .fallbackToDestructiveMigration()
                     .build()
 

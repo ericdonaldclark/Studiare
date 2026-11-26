@@ -122,7 +122,7 @@ fun TypingScreen(
             CustomTopAppBar(
                 viewModel = viewModel,
                 screenId = ShortcutScreen.TYPING,
-                title = { AdaptiveSessionTitle(state.deckWithCards.deck.name, state.studyMode.asString()) },
+                title = { AdaptiveSessionTitle(state) },
                 navigationIcon = {
                     TooltipIconButton(description = getText(R.string.back), onClick = { viewModel.endStudySession(); navController.popBackStack() }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = getText(R.string.back))
@@ -226,6 +226,7 @@ fun PortraitTypingLayout(
             QuizCardContent(
                 state = state,
                 viewModel = viewModel,
+                showIndex = !state.continuousSession,
                 tags = cardTags
             )
             Spacer(Modifier.height(dimensions.spacingMedium))
@@ -325,6 +326,7 @@ fun LandscapeTypingLayout(
                 state = state,
                 viewModel = viewModel,
                 modifier = Modifier.fillMaxSize(),
+                showIndex = !state.continuousSession,
                 tags = cardTags
             )
         }

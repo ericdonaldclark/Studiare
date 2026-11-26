@@ -4,6 +4,7 @@ import net.ericclark.studiare.screens.UI_Components.ConnectedButtonGroup
 import net.ericclark.studiare.screens.UI_Components.SessionOptionsAction
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -124,29 +125,85 @@ fun CustomTopAppBar(
  * A study session's top bar title: the deck/set name, then " - " and the mode name — but only
  * when the full "Deck - Mode" string actually fits the title slot's available width. If it
  * doesn't, the mode suffix is dropped so the deck name itself is never the thing that gets
- * truncated/ellipsized away. Pass the deck name and mode label separately (not pre-combined)
- * since this needs to measure and choose between the two forms itself.
+ * truncated/ellipsized away. If Timed Session is on, a countdown pill (see [TimedSessionPill])
+ * always claims its own space first — the pill never gets squeezed out; the title text is what
+ * drops first (to deck-name-only, then disappears entirely) when space runs short.
  */
 @Composable
-fun AdaptiveSessionTitle(deckName: String, modeLabel: String) {
+fun AdaptiveSessionTitle(state: StudyState) {
+    val deckName = state.deckWithCards.deck.name
+    val modeLabel = state.studyMode.asString()
     val full = "$deckName - $modeLabel"
     val textMeasurer = rememberTextMeasurer()
     val style = LocalTextStyle.current
-    BoxWithConstraints {
-        val maxWidthPx = constraints.maxWidth
-        val fits = remember(full, style, maxWidthPx) {
-            maxWidthPx <= 0 || textMeasurer.measure(
-                text = full,
-                style = style,
-                maxLines = 1,
-                softWrap = false,
-                constraints = androidx.compose.ui.unit.Constraints(maxWidth = maxWidthPx)
-            ).let { !it.hasVisualOverflow }
+    val remainingSeconds = state.timedSessionRemainingSeconds()
+
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        BoxWithConstraints(modifier = Modifier.weight(1f, fill = false)) {
+            val maxWidthPx = constraints.maxWidth
+            val displayText = remember(full, deckName, style, maxWidthPx) {
+                fun fits(text: String) = maxWidthPx > 0 && !textMeasurer.measure(
+                    text = text,
+                    style = style,
+                    maxLines = 1,
+                    softWrap = false,
+                    constraints = androidx.compose.ui.unit.Constraints(maxWidth = maxWidthPx)
+                ).hasVisualOverflow
+                when {
+                    fits(full) -> full
+                    fits(deckName) -> deckName
+                    else -> null
+                }
+            }
+            displayText?.let {
+                Text(text = it, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
         }
+        if (remainingSeconds != null) {
+            Spacer(Modifier.width(LocalStudiareDimensions.current.spacingSmall))
+            TimedSessionPill(state, remainingSeconds)
+        }
+    }
+}
+
+/** The app bar's live countdown, shown whenever [StudyState.timedSessionEnabled] is on. Redraws at
+ *  [timedSessionTickDelaySeconds]'s cadence rather than every second, following whichever display
+ *  frequency the mode options configured. [state] is read via [rememberUpdatedState] inside the
+ *  polling loop so a pause/resume (which changes [StudyState.timedSessionResumedAt] without
+ *  changing [StudyState.sessionId]) is picked up on the very next tick instead of a stale one. */
+@Composable
+private fun TimedSessionPill(state: StudyState, initialRemainingSeconds: Long) {
+    val dimensions = LocalStudiareDimensions.current
+    val currentState = rememberUpdatedState(state)
+    var remaining by remember(state.sessionId) { mutableStateOf(initialRemainingSeconds) }
+
+    LaunchedEffect(state.sessionId, state.timedSessionResumedAt) {
+        while (true) {
+            val s = currentState.value
+            val r = s.timedSessionRemainingSeconds() ?: break
+            remaining = r
+            if (r <= 0) break
+            delay(timedSessionTickDelaySeconds(r, s.timedSessionDisplayUpdateSecondsUnder60, s.timedSessionDisplayUpdateSecondsOver60) * 1000)
+        }
+    }
+
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        modifier = Modifier
+            .background(MaterialTheme.colorScheme.tertiaryContainer, RoundedCornerShape(50))
+            .padding(horizontal = dimensions.paddingSmall, vertical = 4.dp)
+    ) {
+        Icon(
+            Icons.Default.Timer,
+            contentDescription = getText(R.string.timed_session),
+            tint = MaterialTheme.colorScheme.onTertiaryContainer,
+            modifier = Modifier.size(16.dp)
+        )
         Text(
-            text = if (fits) full else deckName,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
+            text = formatCountdown(remaining),
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onTertiaryContainer
         )
     }
 }
@@ -368,6 +425,10 @@ fun EditableStepperPill(
         contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
         modifier = modifier
     ) {
+        // Centers the value when this pill is stretched wider than its content (e.g. given
+        // Modifier.weight(1f) standalone, as Timed Session's duration field does) - a no-op for
+        // every other caller, which sizes this to wrap its content tightly via defaultMinSize.
+        Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
         if (isEditing) {
             androidx.compose.foundation.text.BasicTextField(
                 value = editValue,
@@ -412,6 +473,7 @@ fun EditableStepperPill(
                 text = valueText,
                 fontSize = fontSize,
                 fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Center,
                 modifier = Modifier
                     .clickable {
                         editValue = androidx.compose.ui.text.input.TextFieldValue(valueText, androidx.compose.ui.text.TextRange(0, valueText.length))
@@ -420,6 +482,7 @@ fun EditableStepperPill(
                     }
                     .padding(horizontal = dimensions.paddingLarge, vertical = dimensions.paddingSmall)
             )
+        }
         }
     }
 }
@@ -511,6 +574,12 @@ fun DialogSection(
     /** Title weight override, e.g. to match the Study Hub's mode-header look. Defaults to
      * titleMedium's own weight when unspecified. */
     titleFontWeight: FontWeight? = null,
+    /** Non-null shows a Switch in the header, before the chevron, with its own tap target - lets a
+     *  section with an on/off option (e.g. Difficulty Weighting, Timed Session) be turned on/off
+     *  without expanding it first. Independent of [isExpanded]/[onToggle]: flipping it doesn't
+     *  change the collapsed state either way. */
+    switchChecked: Boolean? = null,
+    onSwitchChange: ((Boolean) -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit
 ) {
     val dimensions = LocalStudiareDimensions.current
@@ -539,6 +608,10 @@ fun DialogSection(
                         modifier = Modifier.padding(top = dimensions.paddingSmall)
                     )
                 }
+            }
+            if (switchChecked != null && onSwitchChange != null) {
+                StudiareSwitch(checked = switchChecked, onCheckedChange = onSwitchChange)
+                if (isCollapsible) Spacer(Modifier.width(dimensions.spacingSmall))
             }
             if (isCollapsible) {
                 val iconRotation by androidx.compose.animation.core.animateFloatAsState(

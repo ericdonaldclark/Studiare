@@ -1,4 +1,4 @@
-<resources>
+<resources xmlns:tools="http://schemas.android.com/tools">
 
     <string name="app_name">Studiare</string>
 
@@ -101,6 +101,26 @@
     <string name="linkage_settings">Linkage Settings</string>
     <string name="linked_to_parent_deck_explainer">Linked to the parent deck. Open Linkage Settings to edit this here.</string>
     <string name="open_linkage_settings">Open Linkage Settings</string>
+    <string name="timed_session">Timed Session</string>
+    <string name="timed_session_desc">Set a time limit for the session - it ends automatically when time runs out.</string>
+    <string name="timed_session_duration">Duration</string>
+    <string name="timed_session_duration_desc">How long the session has to be completed.</string>
+    <string name="timed_session_off">Off</string>
+    <string name="unit_seconds">Seconds</string>
+    <string name="unit_minutes">Minutes</string>
+    <string name="unit_hours">Hours</string>
+    <string name="timed_session_pause_outside">Pause Timer Outside Session</string>
+    <string name="timed_session_pause_outside_desc">Pause the countdown while you\'re away from this session - off leaves it running the whole time.</string>
+    <string name="timed_session_display_frequency">Display Frequency</string>
+    <string name="timed_session_display_frequency_desc">How often the in-session countdown updates while there\'s still plenty of time left.</string>
+    <string name="timed_session_display_frequency_section_seconds">Under 1 Minute</string>
+    <string name="timed_session_display_frequency_section_minutes">Over 1 Minute</string>
+    <string name="timed_session_display_frequency_summary_format">Under 1m: %1$s\nOver 1m: %2$s</string>
+    <string name="time_up">Time\'s Up!</string>
+    <string name="timed_session_notification_channel_name">Timed Session</string>
+    <string name="timed_session_notification_channel_desc">Shows your Timed Session countdown while you\'re away from the app</string>
+    <string name="timed_session_notification_text_format">%1$s remaining</string>
+    <string name="timed_session_notification_timeup_text">Time\'s up</string>
     <string name="clear_data">Clear Data</string>
     <string name="rich_text">Rich Text</string>
     <string name="plain_text">Plain Text</string>
@@ -540,6 +560,8 @@
     <string name="hear_match_auto_play_all_desc">Play every answer clip once when the card loads, before you tap any</string>
     <string name="hide_difficulty_selection">Hide Difficulty Selection</string>
     <string name="hide_difficulty_selection_desc">Hide the difficulty slider and mark-known button</string>
+    <string name="continuous_session">Continuous Session</string>
+    <string name="continuous_session_desc">Never finish - reshuffle and keep going instead of ending the session</string>
     <string name="hear_match_option_label_format">Option %1$d</string>
     <string name="flashcard_auto_flip">Auto Flip</string>
     <string name="flashcard_auto_flip_off">Off</string>
@@ -1149,7 +1171,7 @@
     <!-- StudyScreens -->
     <string name="start_fsrs_session">Start a spaced repetition session</string>
     <string name="no_active_sessions">No active sessions</string>
-    <string name="no_active_sessions_description">Active Sessions in progress will appear here</string>
+    <string name="no_active_sessions_description">Sessions in progress will appear here</string>
     <string name="pick_a_category">Pick a Category</string>
     <string name="download_hd_languages_title">Download HD Languages?</string>
     <string name="download_selected">Download selected</string>
@@ -1279,6 +1301,22 @@
         <item quantity="other">"Multiple Choice requires %d cards"</item>
     </plurals>
 
+    <plurals name="timed_session_summary_minutes">
+        <item quantity="one">%1$d minute</item>
+        <item quantity="other">%1$d minutes</item>
+    </plurals>
+    <plurals name="time_up_session_msg_format">
+        <item quantity="one">You attempted %1$d of %2$d card before time ran out.</item>
+        <item quantity="other">You attempted %1$d of %2$d cards before time ran out.</item>
+    </plurals>
+    <plurals name="timed_session_display_frequency_summary_seconds">
+        <item quantity="one">Updates every %1$d second</item>
+        <item quantity="other">Updates every %1$d seconds</item>
+    </plurals>
+    <plurals name="timed_session_display_frequency_summary_minutes">
+        <item quantity="one">Updates every %1$d minute</item>
+        <item quantity="other">Updates every %1$d minutes</item>
+    </plurals>
     <plurals name="cards_count">
         <item quantity="one">%1$d Card</item>
         <item quantity="other">%1$d Cards</item>
@@ -1287,7 +1325,7 @@
         <item quantity="one">Includes %1$d set</item>
         <item quantity="other">Includes %1$d sets</item>
     </plurals>
-    <plurals name="import_sets_overwrite_summary">
+    <plurals name="import_sets_overwrite_summary" tools:ignore="MissingTranslation">
         <item quantity="one">This will also overwrite %1$d of %2$d set</item>
         <item quantity="other">This will also overwrite %1$d of %2$d sets</item>
     </plurals>

@@ -141,7 +141,13 @@ fun <T> ExpressiveDropdownMenuField(
     /** Optional built-in field label, e.g. "Front"/"Back" for a language picker. Every other
      * caller leaves this null, which keeps their dropdown exactly as it was. */
     label: String? = null,
-    enabled: Boolean = true
+    enabled: Boolean = true,
+    /** False (default) rotates each option through [expressiveSwatchColors] by position - fine for
+     *  a handful of unrelated categorical choices (Theme, Card Order…), but wrong for an ordinal
+     *  list like a unit picker (Seconds/Minutes/Hours), where every option is the same kind of
+     *  thing and a different color per row reads as meaningful when it isn't. True gives every
+     *  option the same accent (the first swatch color) instead. */
+    monochromeAccent: Boolean = false
 ) {
     var expanded by remember { mutableStateOf(false) }
     val swatchColors = expressiveSwatchColors()
@@ -176,7 +182,7 @@ fun <T> ExpressiveDropdownMenuField(
         ) {
             options.forEachIndexed { index, option ->
                 val isSelected = option == selectedOption
-                val color = swatchColors[index % swatchColors.size]
+                val color = if (monochromeAccent) swatchColors[0] else swatchColors[index % swatchColors.size]
                 DropdownMenuItem(
                     text = { Text(optionLabel(option)) },
                     trailingIcon = if (isSelected) {

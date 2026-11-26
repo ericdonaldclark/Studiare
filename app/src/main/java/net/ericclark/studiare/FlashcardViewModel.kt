@@ -9,8 +9,11 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.mutableStateSetOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
+import androidx.lifecycle.ProcessLifecycleOwner
 import androidx.lifecycle.viewModelScope
 import androidx.room.withTransaction
 import net.ericclark.studiare.screens.Dialogs.pendingVoiceLanguagesFor
@@ -745,6 +748,32 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         // Initialize Theme & Preferences
         hasStartedLoading = true
         initializeDynamicFirebase()
+
+        // Time Tracking: pause/resume the active session's clock with the whole app's foreground
+        // state, so backgrounded time isn't counted as time spent studying - same
+        // ProcessLifecycleOwner pattern AuthAndSyncManager uses for its own ON_START/ON_STOP hook.
+        // Same hook also starts/stops TimedSessionNotificationService: leaving the app with a Timed
+        // Session running (and "pause outside session" off) keeps its countdown visible via a
+        // notification instead of just going silent, matching the app bar pill.
+        try {
+            ProcessLifecycleOwner.get().lifecycle.addObserver(LifecycleEventObserver { _, event ->
+                when (event) {
+                    Lifecycle.Event.ON_STOP -> {
+                        studySessionManager.pauseSessionClock()
+                        studySessionManager.timedSessionNotificationSnapshot()?.let { snapshot ->
+                            TimedSessionNotificationService.start(getApplication(), snapshot)
+                        }
+                    }
+                    Lifecycle.Event.ON_START -> {
+                        studySessionManager.resumeSessionClock()
+                        TimedSessionNotificationService.stop(getApplication())
+                    }
+                    else -> {}
+                }
+            })
+        } catch (e: Exception) {
+            AppLogger.e(TAG, "ProcessLifecycleOwner not found.", e)
+        }
         viewModelScope.launch {
             _selectedCollectionId.value = preferenceManager.selectedCollectionIdFlow.first()
         }
@@ -1419,13 +1448,13 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
     // --- Delegation to StudySessionManager (Study Logic) ---
 
     fun startStudySession(
-        parentDeck: DeckWithCards, mode: SessionMode, isWeighted: Boolean, numCards: Int, quizPromptSide: CardSide,
+        parentDeck: DeckWithCards, mode: SessionMode, category: StudyCategory, isWeighted: Boolean, numCards: Int, quizPromptSide: CardSide,
         numAnswers: Int, showCorrectLetters: Boolean, limitAnswerPool: Boolean, isGraded: Boolean,
         allowMultipleGuesses: Boolean,
         maxMemoryTiles: Int, gridDensity: Int, config: AutoSetConfig, freeformLayoutVertical: Boolean,
         onSessionCreated: () -> Unit
     ) {
-        studySessionManager.startStudySession(parentDeck, mode, isWeighted, numCards, quizPromptSide, numAnswers,
+        studySessionManager.startStudySession(parentDeck, mode, category, isWeighted, numCards, quizPromptSide, numAnswers,
             showCorrectLetters, limitAnswerPool, isGraded, allowMultipleGuesses,
             maxMemoryTiles, gridDensity, freeformLayoutVertical, config,
             onSessionCreated = onSessionCreated)
@@ -1437,14 +1466,14 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
      * preset" (`CreateStudySessionScreen`'s own dirty-tracking keys off this).
      */
     fun createPresetFromCurrentConfig(
-        deckId: String, name: String?, config: AutoSetConfig, sessionMode: SessionMode, isWeighted: Boolean,
+        deckId: String, name: String?, config: AutoSetConfig, sessionMode: SessionMode, category: StudyCategory, isWeighted: Boolean,
         numCards: Int, quizPromptSide: CardSide, numberOfAnswers: Int, showCorrectLetters: Boolean,
         limitAnswerPool: Boolean, isGraded: Boolean, allowMultipleGuesses: Boolean, maxMemoryTiles: Int,
         gridDensity: Int, freeformLayoutVertical: Boolean
     ): SessionPreset {
         val preset = sessionPresetFrom(
             id = java.util.UUID.randomUUID().toString(), deckId = deckId, name = name,
-            config = config, sessionMode = sessionMode, isWeighted = isWeighted, numCards = numCards,
+            config = config, sessionMode = sessionMode, category = category, isWeighted = isWeighted, numCards = numCards,
             quizPromptSide = quizPromptSide, numberOfAnswers = numberOfAnswers, showCorrectLetters = showCorrectLetters,
             limitAnswerPool = limitAnswerPool, isGraded = isGraded, allowMultipleGuesses = allowMultipleGuesses,
             maxMemoryTiles = maxMemoryTiles, gridDensity = gridDensity, freeformLayoutVertical = freeformLayoutVertical,
@@ -1457,14 +1486,14 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
     /** The reverse of [createPresetFromCurrentConfig] for an already-existing preset: keeps its
      * [SessionPreset.id]/[SessionPreset.name]/[SessionPreset.createdAt], updates everything else. */
     fun updatePresetInPlace(
-        preset: SessionPreset, config: AutoSetConfig, sessionMode: SessionMode, isWeighted: Boolean,
+        preset: SessionPreset, config: AutoSetConfig, sessionMode: SessionMode, category: StudyCategory, isWeighted: Boolean,
         numCards: Int, quizPromptSide: CardSide, numberOfAnswers: Int, showCorrectLetters: Boolean,
         limitAnswerPool: Boolean, isGraded: Boolean, allowMultipleGuesses: Boolean, maxMemoryTiles: Int,
         gridDensity: Int, freeformLayoutVertical: Boolean
     ): SessionPreset {
         val updated = sessionPresetFrom(
             id = preset.id, deckId = preset.deckId, name = preset.name,
-            config = config, sessionMode = sessionMode, isWeighted = isWeighted, numCards = numCards,
+            config = config, sessionMode = sessionMode, category = category, isWeighted = isWeighted, numCards = numCards,
             quizPromptSide = quizPromptSide, numberOfAnswers = numberOfAnswers, showCorrectLetters = showCorrectLetters,
             limitAnswerPool = limitAnswerPool, isGraded = isGraded, allowMultipleGuesses = allowMultipleGuesses,
             maxMemoryTiles = maxMemoryTiles, gridDensity = gridDensity, freeformLayoutVertical = freeformLayoutVertical,
@@ -1476,13 +1505,13 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
 
     /** Shared field-copy both [createPresetFromCurrentConfig] and [updatePresetInPlace] build from. */
     private fun sessionPresetFrom(
-        id: String, deckId: String, name: String?, config: AutoSetConfig, sessionMode: SessionMode,
+        id: String, deckId: String, name: String?, config: AutoSetConfig, sessionMode: SessionMode, category: StudyCategory,
         isWeighted: Boolean, numCards: Int, quizPromptSide: CardSide, numberOfAnswers: Int,
         showCorrectLetters: Boolean, limitAnswerPool: Boolean, isGraded: Boolean, allowMultipleGuesses: Boolean,
         maxMemoryTiles: Int, gridDensity: Int, freeformLayoutVertical: Boolean, createdAt: Long
     ): SessionPreset = SessionPreset(
         id = id, deckId = deckId, name = name,
-        sessionMode = sessionMode, isWeighted = isWeighted, numCards = numCards, quizPromptSide = quizPromptSide,
+        sessionMode = sessionMode, startedCategory = category, isWeighted = isWeighted, numCards = numCards, quizPromptSide = quizPromptSide,
         numberOfAnswers = numberOfAnswers, showCorrectLetters = showCorrectLetters, limitAnswerPool = limitAnswerPool,
         isGraded = isGraded, allowMultipleGuesses = allowMultipleGuesses, maxMemoryTiles = maxMemoryTiles,
         gridDensity = gridDensity, freeformLayoutVertical = freeformLayoutVertical,
@@ -1494,7 +1523,7 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         freeformSwipeNavigation = config.freeformSwipeNavigation, typingIgnoreFormatting = config.typingIgnoreFormatting,
         typingDisableAutocorrect = config.typingDisableAutocorrect, typingShowLengthHint = config.typingShowLengthHint,
         typedListenUseMultipleChoice = config.typedListenUseMultipleChoice, hearMatchAutoPlayAllOptions = config.hearMatchAutoPlayAllOptions,
-        hideDifficultySelection = config.hideDifficultySelection, flashcardAutoFlipSeconds = config.flashcardAutoFlipSeconds,
+        hideDifficultySelection = config.hideDifficultySelection, continuousSession = config.continuousSession, flashcardAutoFlipSeconds = config.flashcardAutoFlipSeconds,
         flashcardAutoFlip = config.flashcardAutoFlip, flashcardDoubleTapToFlip = config.flashcardDoubleTapToFlip,
         flashcardRandomizeFirstSide = config.flashcardRandomizeFirstSide, requireConfirmTap = config.requireConfirmTap,
         autoAdvance = config.autoAdvance, autoAdvanceDelaySeconds = config.autoAdvanceDelaySeconds, autoListen = config.autoListen,
@@ -1513,6 +1542,9 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         memoryWrongPairMs = config.memoryWrongPairMs, memoryCorrectPairMs = config.memoryCorrectPairMs,
         memorySubmitAnswer = config.memorySubmitAnswer, wordSearchHideFound = config.wordSearchHideFound,
         wordSearchHighlightColor = config.wordSearchHighlightColor,
+        timedSessionEnabled = config.timedSessionEnabled, timedSessionDurationSeconds = config.timedSessionDurationSeconds,
+        timedSessionPauseOutsideSession = config.timedSessionPauseOutsideSession,
+        timedSessionDisplayUpdateSecondsUnder60 = config.timedSessionDisplayUpdateSecondsUnder60, timedSessionDisplayUpdateSecondsOver60 = config.timedSessionDisplayUpdateSecondsOver60,
         sortMode = config.sortMode, sortDirection = config.sortDirection, sortSide = config.sortSide,
         alphabetStart = config.alphabetStart, alphabetEnd = config.alphabetEnd, filterSide = config.filterSide,
         cardOrderStart = config.cardOrderStart, cardOrderEnd = config.cardOrderEnd, timeValue = config.timeValue,
@@ -1541,7 +1573,7 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
             freeformSwipeNavigation = preset.freeformSwipeNavigation, typingIgnoreFormatting = preset.typingIgnoreFormatting,
             typingDisableAutocorrect = preset.typingDisableAutocorrect, typingShowLengthHint = preset.typingShowLengthHint,
             typedListenUseMultipleChoice = preset.typedListenUseMultipleChoice, hearMatchAutoPlayAllOptions = preset.hearMatchAutoPlayAllOptions,
-            hideDifficultySelection = preset.hideDifficultySelection, flashcardAutoFlipSeconds = preset.flashcardAutoFlipSeconds,
+            hideDifficultySelection = preset.hideDifficultySelection, continuousSession = preset.continuousSession, flashcardAutoFlipSeconds = preset.flashcardAutoFlipSeconds,
             flashcardAutoFlip = preset.flashcardAutoFlip, flashcardDoubleTapToFlip = preset.flashcardDoubleTapToFlip,
             flashcardRandomizeFirstSide = preset.flashcardRandomizeFirstSide, requireConfirmTap = preset.requireConfirmTap,
             autoAdvance = preset.autoAdvance, autoAdvanceDelaySeconds = preset.autoAdvanceDelaySeconds, autoListen = preset.autoListen,
@@ -1560,6 +1592,9 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
             memoryWrongPairMs = preset.memoryWrongPairMs, memoryCorrectPairMs = preset.memoryCorrectPairMs,
             memorySubmitAnswer = preset.memorySubmitAnswer, wordSearchHideFound = preset.wordSearchHideFound,
             wordSearchHighlightColor = preset.wordSearchHighlightColor,
+            timedSessionEnabled = preset.timedSessionEnabled, timedSessionDurationSeconds = preset.timedSessionDurationSeconds,
+            timedSessionPauseOutsideSession = preset.timedSessionPauseOutsideSession,
+            timedSessionDisplayUpdateSecondsUnder60 = preset.timedSessionDisplayUpdateSecondsUnder60, timedSessionDisplayUpdateSecondsOver60 = preset.timedSessionDisplayUpdateSecondsOver60,
             sortMode = preset.sortMode, sortDirection = preset.sortDirection, sortSide = preset.sortSide,
             alphabetStart = preset.alphabetStart, alphabetEnd = preset.alphabetEnd, filterSide = preset.filterSide,
             cardOrderStart = preset.cardOrderStart, cardOrderEnd = preset.cardOrderEnd, timeValue = preset.timeValue,
@@ -1568,7 +1603,7 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
             scoreDirection = preset.scoreDirection, schedulingMode = preset.schedulingMode
         )
         startStudySession(
-            parentDeck = parentDeck, mode = preset.sessionMode, isWeighted = preset.isWeighted, numCards = preset.numCards,
+            parentDeck = parentDeck, mode = preset.sessionMode, category = preset.startedCategory, isWeighted = preset.isWeighted, numCards = preset.numCards,
             quizPromptSide = preset.quizPromptSide, numAnswers = preset.numberOfAnswers, showCorrectLetters = preset.showCorrectLetters,
             limitAnswerPool = preset.limitAnswerPool, isGraded = preset.isGraded, allowMultipleGuesses = preset.allowMultipleGuesses,
             maxMemoryTiles = preset.maxMemoryTiles, gridDensity = preset.gridDensity, config = config,
@@ -1625,6 +1660,12 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         studySessionManager.restartWithMissedCardsOnly(pin, name, onSessionStarted)
     }
     fun resumeStudySession(session: ActiveSession) { studySessionManager.resumeStudySession(session) }
+    // Same pause/resume the ProcessLifecycleOwner hook in init{} uses for whole-app
+    // backgrounding - also called per-screen (see StudySessionScreenLifecycle in MainActivity.kt)
+    // so navigating away from the active study screen within the app excludes that time too,
+    // not just backgrounding the whole app.
+    fun pauseSessionClock() { studySessionManager.pauseSessionClock() }
+    fun resumeSessionClock() { studySessionManager.resumeSessionClock() }
     fun endStudySession() { studySessionManager.endStudySession() }
     fun deleteCurrentStudySession() { studySessionManager.deleteCurrentStudySession() }
     fun deleteSession(session: ActiveSession) { studySessionManager.deleteSession(session) }

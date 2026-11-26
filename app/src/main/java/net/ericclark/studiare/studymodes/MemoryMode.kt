@@ -179,7 +179,7 @@ fun MemoryScreen(
                 CustomTopAppBar(
                     viewModel = viewModel,
                     screenId = ShortcutScreen.MEMORY,
-                    title = { AdaptiveSessionTitle(state.deckWithCards.deck.name, state.studyMode.asString()) },
+                    title = { AdaptiveSessionTitle(state) },
                     navigationIcon = {
                         TooltipIconButton(description = getText(R.string.back), onClick = { viewModel.endStudySession(); navController.popBackStack() }) {
                             Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = getText(R.string.back))

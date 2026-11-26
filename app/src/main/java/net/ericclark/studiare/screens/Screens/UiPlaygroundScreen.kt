@@ -545,6 +545,10 @@ private fun StudyCompletionPlayground() {
                     buttonLayout = buttonLayout,
                     showAccuracy = showAccuracy,
                     accuracyPercent = accuracyPercent.roundToInt(),
+                    elapsedSeconds = 754L, // Playground sample only (12:34) - no slider for this yet.
+                    endedByTimeout = false,
+                    attemptedCount = 0,
+                    totalCount = 0,
                     showMissedCardsButton = showMissedCardsButton,
                     missedCardsCount = missedCardsCount.roundToInt(),
                     keep = keep,

@@ -191,23 +191,11 @@ enum class SessionMode(override val labelResId: Int) : StringResourceEnum {
     HEAR_MATCH(R.string.mode_hear_match);
 }
 
-private val gameSessionModes = listOf(
-    SessionMode.ANAGRAM, SessionMode.CROSSWORD, SessionMode.HANGMAN, SessionMode.MEMORY, SessionMode.WORD_SEARCH
-)
-private val learnSessionModes = listOf(SessionMode.TYPING, SessionMode.FREEFORM, SessionMode.AUDIO)
-
-/**
- * Which tab a saved session belongs to, for display purposes (Recents/session-drawer badges) —
- * now that several modes no longer vary their own name by practice/quiz (Learn/Practice/Quiz/
- * Games/Smart reorg), this is how those surfaces communicate which one a session is.
- */
-fun ActiveSession.displayCategory(): StudyCategory = when {
-    schedulingMode == SchedulingMode.FSRS -> StudyCategory.GUIDED
-    mode in gameSessionModes -> StudyCategory.GAMES
-    mode in learnSessionModes -> StudyCategory.LEARN
-    isGraded -> StudyCategory.QUIZ
-    else -> StudyCategory.PRACTICE
-}
+/** Which tab a saved session belongs to, for display purposes (Recents/session-drawer badges,
+ *  Study Hub's grouped sections) - just [ActiveSession.startedCategory] now (see its own doc
+ *  comment for why this used to be guessed from mode/isGraded/schedulingMode instead, and couldn't
+ *  tell an ungraded Flashcard session's Learn and Practice starts apart). */
+fun ActiveSession.displayCategory(): StudyCategory = startedCategory
 
 /**
  * A saved session's own field values, reshaped into the same [ModeDefaultSettings] shape the
@@ -243,6 +231,7 @@ fun ActiveSession.toModeDefaultSettings(): ModeDefaultSettings = ModeDefaultSett
     typedListenUseMultipleChoice = typedListenUseMultipleChoice,
     hearMatchAutoPlayAllOptions = hearMatchAutoPlayAllOptions,
     hideDifficultySelection = hideDifficultySelection,
+    continuousSession = continuousSession,
     flashcardAutoFlipSeconds = flashcardAutoFlipSeconds,
     flashcardAutoFlip = flashcardAutoFlip,
     flashcardDoubleTapToFlip = flashcardDoubleTapToFlip,
@@ -280,7 +269,12 @@ fun ActiveSession.toModeDefaultSettings(): ModeDefaultSettings = ModeDefaultSett
     memoryCorrectPairMs = memoryCorrectPairMs,
     memorySubmitAnswer = memorySubmitAnswer,
     wordSearchHideFound = wordSearchHideFound,
-    wordSearchHighlightColor = wordSearchHighlightColor
+    wordSearchHighlightColor = wordSearchHighlightColor,
+    timedSessionEnabled = timedSessionEnabled,
+    timedSessionDurationSeconds = timedSessionDurationSeconds,
+    timedSessionPauseOutsideSession = timedSessionPauseOutsideSession,
+    timedSessionDisplayUpdateSecondsUnder60 = timedSessionDisplayUpdateSecondsUnder60,
+    timedSessionDisplayUpdateSecondsOver60 = timedSessionDisplayUpdateSecondsOver60
 )
 
 /**
@@ -314,6 +308,7 @@ fun ActiveSession.applyModeDefaults(values: ModeDefaultSettings): ActiveSession 
     typedListenUseMultipleChoice = values.typedListenUseMultipleChoice ?: typedListenUseMultipleChoice,
     hearMatchAutoPlayAllOptions = values.hearMatchAutoPlayAllOptions ?: hearMatchAutoPlayAllOptions,
     hideDifficultySelection = values.hideDifficultySelection ?: hideDifficultySelection,
+    continuousSession = values.continuousSession ?: continuousSession,
     flashcardAutoFlipSeconds = values.flashcardAutoFlipSeconds ?: flashcardAutoFlipSeconds,
     flashcardAutoFlip = values.flashcardAutoFlip ?: flashcardAutoFlip,
     flashcardDoubleTapToFlip = values.flashcardDoubleTapToFlip ?: flashcardDoubleTapToFlip,
@@ -351,17 +346,16 @@ fun ActiveSession.applyModeDefaults(values: ModeDefaultSettings): ActiveSession 
     memoryCorrectPairMs = values.memoryCorrectPairMs ?: memoryCorrectPairMs,
     memorySubmitAnswer = values.memorySubmitAnswer ?: memorySubmitAnswer,
     wordSearchHideFound = values.wordSearchHideFound ?: wordSearchHideFound,
-    wordSearchHighlightColor = values.wordSearchHighlightColor ?: wordSearchHighlightColor
+    wordSearchHighlightColor = values.wordSearchHighlightColor ?: wordSearchHighlightColor,
+    timedSessionEnabled = values.timedSessionEnabled ?: timedSessionEnabled,
+    timedSessionDurationSeconds = values.timedSessionDurationSeconds ?: timedSessionDurationSeconds,
+    timedSessionPauseOutsideSession = values.timedSessionPauseOutsideSession ?: timedSessionPauseOutsideSession,
+    timedSessionDisplayUpdateSecondsUnder60 = values.timedSessionDisplayUpdateSecondsUnder60 ?: timedSessionDisplayUpdateSecondsUnder60,
+    timedSessionDisplayUpdateSecondsOver60 = values.timedSessionDisplayUpdateSecondsOver60 ?: timedSessionDisplayUpdateSecondsOver60
 )
 
-/** [ActiveSession.displayCategory]'s mirror for [SessionPreset] — same three inputs, same logic. */
-fun SessionPreset.displayCategory(): StudyCategory = when {
-    schedulingMode == SchedulingMode.FSRS -> StudyCategory.GUIDED
-    sessionMode in gameSessionModes -> StudyCategory.GAMES
-    sessionMode in learnSessionModes -> StudyCategory.LEARN
-    isGraded -> StudyCategory.QUIZ
-    else -> StudyCategory.PRACTICE
-}
+/** [ActiveSession.displayCategory]'s mirror for [SessionPreset] - just [SessionPreset.startedCategory] now. */
+fun SessionPreset.displayCategory(): StudyCategory = startedCategory
 
 /**
  * [ActiveSession.toModeDefaultSettings]'s mirror for [SessionPreset] — feeds [SessionPresetCard]'s
@@ -393,6 +387,7 @@ fun SessionPreset.toModeDefaultSettings(): ModeDefaultSettings = ModeDefaultSett
     typedListenUseMultipleChoice = typedListenUseMultipleChoice,
     hearMatchAutoPlayAllOptions = hearMatchAutoPlayAllOptions,
     hideDifficultySelection = hideDifficultySelection,
+    continuousSession = continuousSession,
     flashcardAutoFlipSeconds = flashcardAutoFlipSeconds,
     flashcardAutoFlip = flashcardAutoFlip,
     flashcardDoubleTapToFlip = flashcardDoubleTapToFlip,
@@ -430,7 +425,12 @@ fun SessionPreset.toModeDefaultSettings(): ModeDefaultSettings = ModeDefaultSett
     memoryCorrectPairMs = memoryCorrectPairMs,
     memorySubmitAnswer = memorySubmitAnswer,
     wordSearchHideFound = wordSearchHideFound,
-    wordSearchHighlightColor = wordSearchHighlightColor
+    wordSearchHighlightColor = wordSearchHighlightColor,
+    timedSessionEnabled = timedSessionEnabled,
+    timedSessionDurationSeconds = timedSessionDurationSeconds,
+    timedSessionPauseOutsideSession = timedSessionPauseOutsideSession,
+    timedSessionDisplayUpdateSecondsUnder60 = timedSessionDisplayUpdateSecondsUnder60,
+    timedSessionDisplayUpdateSecondsOver60 = timedSessionDisplayUpdateSecondsOver60
 )
 
 /**
@@ -448,25 +448,11 @@ fun modesForCategory(category: StudyCategory): List<SessionMode> = when (categor
     StudyCategory.GUIDED -> listOf(SessionMode.FLASHCARD, SessionMode.HEAR_MATCH, SessionMode.LISTEN_TYPE, SessionMode.MULTIPLE_CHOICE, SessionMode.LIST, SessionMode.SEE_SPEAK, SessionMode.TYPING_SCORED)
 }
 
-/**
- * The category a running session belongs to — not stored directly on [StudyState], but always
- * recoverable: games/learn-exclusive modes map to exactly one category each (see [modesForCategory]),
- * and the rest (Practice vs Quiz vs Guided) are told apart by
- * [StudyState.schedulingMode]/[StudyState.isGraded], the same distinction `CreateStudySessionScreen`
- * used to build the session in the first place. Flashcard is offered under Learn too, but since
- * Learn-Flashcard and Practice-Flashcard are both ungraded there's no stored field to tell them apart
- * — it resolves to Practice, which is harmless because every option that differs between the two
- * (DifficultyWeighting) is start-only and never shown mid-session.
- */
-private val learnExclusiveModes = listOf(SessionMode.AUDIO, SessionMode.FREEFORM, SessionMode.TYPING)
-
-fun StudyState.currentCategory(): StudyCategory = when {
-    studyMode in modesForCategory(StudyCategory.GAMES) -> StudyCategory.GAMES
-    studyMode in learnExclusiveModes -> StudyCategory.LEARN
-    schedulingMode == SchedulingMode.FSRS -> StudyCategory.GUIDED
-    isGraded -> StudyCategory.QUIZ
-    else -> StudyCategory.PRACTICE
-}
+/** The category a running session belongs to - just [StudyState.startedCategory], the category
+ *  button actually tapped to start it. (Previously derived/guessed from mode+isGraded+schedulingMode,
+ *  which couldn't tell an ungraded Flashcard session's Learn and Practice starts apart - see
+ *  [startedCategory]'s own doc comment.) */
+fun StudyState.currentCategory(): StudyCategory = startedCategory
 
 /** Difficulty weighting's starting counts: 1 card of difficulty 1, 2 of difficulty 2, and so on. Index 0 = difficulty 1. */
 val DEFAULT_DIFFICULTY_COUNTS: List<Int> = ModeOptionDefaults.DIFFICULTY_COUNTS
@@ -503,6 +489,7 @@ data class ModeDefaultSettings(
     val typedListenUseMultipleChoice: Boolean? = null,
     val hearMatchAutoPlayAllOptions: Boolean? = null,
     val hideDifficultySelection: Boolean? = null,
+    val continuousSession: Boolean? = null,
     val flashcardAutoFlipSeconds: Int? = null,
     val flashcardAutoFlip: Boolean? = null,
     val flashcardDoubleTapToFlip: Boolean? = null,
@@ -540,7 +527,12 @@ data class ModeDefaultSettings(
     val memoryCorrectPairMs: Int? = null,
     val memorySubmitAnswer: Boolean? = null,
     val wordSearchHideFound: Boolean? = null,
-    val wordSearchHighlightColor: Int? = null
+    val wordSearchHighlightColor: Int? = null,
+    val timedSessionEnabled: Boolean? = null,
+    val timedSessionDurationSeconds: Int? = null,
+    val timedSessionPauseOutsideSession: Boolean? = null,
+    val timedSessionDisplayUpdateSecondsUnder60: Int? = null,
+    val timedSessionDisplayUpdateSecondsOver60: Int? = null
 ) {
     /** Only the non-null fields, as one JSON object (one leaf of the Settings → Mode Defaults store). */
     fun toJson(): JSONObject = JSONObject().apply {
@@ -566,6 +558,7 @@ data class ModeDefaultSettings(
         typedListenUseMultipleChoice?.let { put("typedListenUseMultipleChoice", it) }
         hearMatchAutoPlayAllOptions?.let { put("hearMatchAutoPlayAllOptions", it) }
         hideDifficultySelection?.let { put("hideDifficultySelection", it) }
+        continuousSession?.let { put("continuousSession", it) }
         flashcardAutoFlipSeconds?.let { put("flashcardAutoFlipSeconds", it) }
         flashcardAutoFlip?.let { put("flashcardAutoFlip", it) }
         flashcardDoubleTapToFlip?.let { put("flashcardDoubleTapToFlip", it) }
@@ -604,6 +597,11 @@ data class ModeDefaultSettings(
         memorySubmitAnswer?.let { put("memorySubmitAnswer", it) }
         wordSearchHideFound?.let { put("wordSearchHideFound", it) }
         wordSearchHighlightColor?.let { put("wordSearchHighlightColor", it) }
+        timedSessionEnabled?.let { put("timedSessionEnabled", it) }
+        timedSessionDurationSeconds?.let { put("timedSessionDurationSeconds", it) }
+        timedSessionPauseOutsideSession?.let { put("timedSessionPauseOutsideSession", it) }
+        timedSessionDisplayUpdateSecondsUnder60?.let { put("timedSessionDisplayUpdateSecondsUnder60", it) }
+        timedSessionDisplayUpdateSecondsOver60?.let { put("timedSessionDisplayUpdateSecondsOver60", it) }
     }
 
     /** Non-null fields of [other] win; null fields of [other] keep this value. */
@@ -632,6 +630,7 @@ data class ModeDefaultSettings(
             typedListenUseMultipleChoice = other.typedListenUseMultipleChoice ?: typedListenUseMultipleChoice,
             hearMatchAutoPlayAllOptions = other.hearMatchAutoPlayAllOptions ?: hearMatchAutoPlayAllOptions,
             hideDifficultySelection = other.hideDifficultySelection ?: hideDifficultySelection,
+            continuousSession = other.continuousSession ?: continuousSession,
             flashcardAutoFlipSeconds = other.flashcardAutoFlipSeconds ?: flashcardAutoFlipSeconds,
             flashcardAutoFlip = other.flashcardAutoFlip ?: flashcardAutoFlip,
             flashcardDoubleTapToFlip = other.flashcardDoubleTapToFlip ?: flashcardDoubleTapToFlip,
@@ -669,7 +668,12 @@ data class ModeDefaultSettings(
             memoryCorrectPairMs = other.memoryCorrectPairMs ?: memoryCorrectPairMs,
             memorySubmitAnswer = other.memorySubmitAnswer ?: memorySubmitAnswer,
             wordSearchHideFound = other.wordSearchHideFound ?: wordSearchHideFound,
-            wordSearchHighlightColor = other.wordSearchHighlightColor ?: wordSearchHighlightColor
+            wordSearchHighlightColor = other.wordSearchHighlightColor ?: wordSearchHighlightColor,
+            timedSessionEnabled = other.timedSessionEnabled ?: timedSessionEnabled,
+            timedSessionDurationSeconds = other.timedSessionDurationSeconds ?: timedSessionDurationSeconds,
+            timedSessionPauseOutsideSession = other.timedSessionPauseOutsideSession ?: timedSessionPauseOutsideSession,
+            timedSessionDisplayUpdateSecondsUnder60 = other.timedSessionDisplayUpdateSecondsUnder60 ?: timedSessionDisplayUpdateSecondsUnder60,
+            timedSessionDisplayUpdateSecondsOver60 = other.timedSessionDisplayUpdateSecondsOver60 ?: timedSessionDisplayUpdateSecondsOver60
         )
     }
 
@@ -698,6 +702,7 @@ data class ModeDefaultSettings(
             typedListenUseMultipleChoice = if (leaf.has("typedListenUseMultipleChoice")) leaf.getBoolean("typedListenUseMultipleChoice") else null,
             hearMatchAutoPlayAllOptions = if (leaf.has("hearMatchAutoPlayAllOptions")) leaf.getBoolean("hearMatchAutoPlayAllOptions") else null,
             hideDifficultySelection = if (leaf.has("hideDifficultySelection")) leaf.getBoolean("hideDifficultySelection") else null,
+            continuousSession = if (leaf.has("continuousSession")) leaf.getBoolean("continuousSession") else null,
             flashcardAutoFlipSeconds = if (leaf.has("flashcardAutoFlipSeconds")) leaf.getInt("flashcardAutoFlipSeconds") else null,
             flashcardAutoFlip = if (leaf.has("flashcardAutoFlip")) leaf.getBoolean("flashcardAutoFlip") else null,
             flashcardDoubleTapToFlip = if (leaf.has("flashcardDoubleTapToFlip")) leaf.getBoolean("flashcardDoubleTapToFlip") else null,
@@ -735,7 +740,12 @@ data class ModeDefaultSettings(
             memoryCorrectPairMs = if (leaf.has("memoryCorrectPairMs")) leaf.getInt("memoryCorrectPairMs") else null,
             memorySubmitAnswer = if (leaf.has("memorySubmitAnswer")) leaf.getBoolean("memorySubmitAnswer") else null,
             wordSearchHideFound = if (leaf.has("wordSearchHideFound")) leaf.getBoolean("wordSearchHideFound") else null,
-            wordSearchHighlightColor = if (leaf.has("wordSearchHighlightColor")) leaf.getInt("wordSearchHighlightColor") else null
+            wordSearchHighlightColor = if (leaf.has("wordSearchHighlightColor")) leaf.getInt("wordSearchHighlightColor") else null,
+            timedSessionEnabled = if (leaf.has("timedSessionEnabled")) leaf.getBoolean("timedSessionEnabled") else null,
+            timedSessionDurationSeconds = if (leaf.has("timedSessionDurationSeconds")) leaf.getInt("timedSessionDurationSeconds") else null,
+            timedSessionPauseOutsideSession = if (leaf.has("timedSessionPauseOutsideSession")) leaf.getBoolean("timedSessionPauseOutsideSession") else null,
+            timedSessionDisplayUpdateSecondsUnder60 = if (leaf.has("timedSessionDisplayUpdateSecondsUnder60")) leaf.getInt("timedSessionDisplayUpdateSecondsUnder60") else null,
+            timedSessionDisplayUpdateSecondsOver60 = if (leaf.has("timedSessionDisplayUpdateSecondsOver60")) leaf.getInt("timedSessionDisplayUpdateSecondsOver60") else null
         )
     }
 }

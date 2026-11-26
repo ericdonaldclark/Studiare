@@ -12,6 +12,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
@@ -718,6 +719,23 @@ fun AppNavigation(
     }
 }
 
+/**
+ * Pauses/resumes Time Tracking's clock (see [FlashcardViewModel.pauseSessionClock]/
+ * [FlashcardViewModel.resumeSessionClock]) with each study-mode route's own composition lifecycle,
+ * so navigating away from the active session within the app - not just backgrounding the whole app
+ * (the separate ProcessLifecycleOwner hook in FlashcardViewModel's init{}) - excludes that time from
+ * what counts as time spent studying. Both functions are idempotent (safe even if the two triggers
+ * ever fire back to back), so this needs no extra guarding here. Called once at the top of every
+ * study-mode route below.
+ */
+@Composable
+private fun StudySessionScreenLifecycle(viewModel: FlashcardViewModel) {
+    DisposableEffect(Unit) {
+        viewModel.resumeSessionClock()
+        onDispose { viewModel.pauseSessionClock() }
+    }
+}
+
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun StudiareNavGraph(
@@ -999,6 +1017,7 @@ fun StudiareNavGraph(
                 }
                 composable("flashcardStudy") {
                     CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides this@composable) {
+                        StudySessionScreenLifecycle(viewModel)
                         net.ericclark.studiare.studymodes.FlashcardScreen(
                             navController = navController,
                             viewModel = viewModel
@@ -1007,6 +1026,7 @@ fun StudiareNavGraph(
                 }
                 composable("flashcardQuizStudy") {
                     CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides this@composable) {
+                        StudySessionScreenLifecycle(viewModel)
                         net.ericclark.studiare.studymodes.FlashcardQuizScreen(
                             navController = navController,
                             viewModel = viewModel
@@ -1015,6 +1035,7 @@ fun StudiareNavGraph(
                 }
                 composable("mcStudy") {
                     CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides this@composable) {
+                        StudySessionScreenLifecycle(viewModel)
                         net.ericclark.studiare.studymodes.MultipleChoiceScreen(
                             navController = navController,
                             viewModel = viewModel
@@ -1023,6 +1044,7 @@ fun StudiareNavGraph(
                 }
                 composable("typingScoredStudy") {
                     CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides this@composable) {
+                        StudySessionScreenLifecycle(viewModel)
                         net.ericclark.studiare.studymodes.TypingScoredScreen(
                             navController = navController,
                             viewModel = viewModel
@@ -1031,6 +1053,7 @@ fun StudiareNavGraph(
                 }
                 composable("matchingStudy") {
                     CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides this@composable) {
+                        StudySessionScreenLifecycle(viewModel)
                         net.ericclark.studiare.studymodes.MatchingScreen(
                             navController = navController,
                             viewModel = viewModel
@@ -1039,6 +1062,7 @@ fun StudiareNavGraph(
                 }
                 composable("typingStudy") {
                     CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides this@composable) {
+                        StudySessionScreenLifecycle(viewModel)
                         net.ericclark.studiare.studymodes.TypingScreen(
                             navController = navController,
                             viewModel = viewModel
@@ -1055,6 +1079,7 @@ fun StudiareNavGraph(
                 }
                 composable("audioStudy") {
                     CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides this@composable) {
+                        StudySessionScreenLifecycle(viewModel)
                         net.ericclark.studiare.studymodes.AudioStudyScreen(
                             navController = navController,
                             viewModel = viewModel
@@ -1063,6 +1088,7 @@ fun StudiareNavGraph(
                 }
                 composable("typedListenStudy") {
                     CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides this@composable) {
+                        StudySessionScreenLifecycle(viewModel)
                         net.ericclark.studiare.studymodes.TypedListenScreen(
                             navController = navController,
                             viewModel = viewModel
@@ -1071,6 +1097,7 @@ fun StudiareNavGraph(
                 }
                 composable("spokenListenStudy") {
                     CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides this@composable) {
+                        StudySessionScreenLifecycle(viewModel)
                         net.ericclark.studiare.studymodes.SpokenListenScreen(
                             navController = navController,
                             viewModel = viewModel
@@ -1079,6 +1106,7 @@ fun StudiareNavGraph(
                 }
                 composable("hearMatchStudy") {
                     CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides this@composable) {
+                        StudySessionScreenLifecycle(viewModel)
                         net.ericclark.studiare.studymodes.HearMatchScreen(
                             navController = navController,
                             viewModel = viewModel
@@ -1087,6 +1115,7 @@ fun StudiareNavGraph(
                 }
                 composable("anagramStudy") {
                     CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides this@composable) {
+                        StudySessionScreenLifecycle(viewModel)
                         net.ericclark.studiare.studymodes.AnagramScreen(
                             navController = navController,
                             viewModel = viewModel
@@ -1095,6 +1124,7 @@ fun StudiareNavGraph(
                 }
                 composable("hangmanStudy") {
                     CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides this@composable) {
+                        StudySessionScreenLifecycle(viewModel)
                         net.ericclark.studiare.studymodes.HangmanScreen(
                             navController = navController,
                             viewModel = viewModel
@@ -1103,6 +1133,7 @@ fun StudiareNavGraph(
                 }
                 composable("memoryStudy") {
                     CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides this@composable) {
+                        StudySessionScreenLifecycle(viewModel)
                         net.ericclark.studiare.studymodes.MemoryScreen(
                             navController = navController,
                             viewModel = viewModel
@@ -1111,6 +1142,7 @@ fun StudiareNavGraph(
                 }
                 composable("crosswordStudy") {
                     CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides this@composable) {
+                        StudySessionScreenLifecycle(viewModel)
                         net.ericclark.studiare.studymodes.CrosswordScreen(
                             navController = navController,
                             viewModel = viewModel
@@ -1119,6 +1151,7 @@ fun StudiareNavGraph(
                 }
                 composable("wordSearchStudy") {
                     CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides this@composable) {
+                        StudySessionScreenLifecycle(viewModel)
                         net.ericclark.studiare.studymodes.WordSearchMode(
                             navController = navController,
                             viewModel = viewModel
@@ -1127,6 +1160,7 @@ fun StudiareNavGraph(
                 }
                 composable("freeformStudy") {
                     CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides this@composable) {
+                        StudySessionScreenLifecycle(viewModel)
                         net.ericclark.studiare.studymodes.FreeformScreen(
                             navController = navController,
                             viewModel = viewModel

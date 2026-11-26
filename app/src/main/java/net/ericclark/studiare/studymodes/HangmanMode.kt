@@ -196,7 +196,7 @@ fun HangmanScreen(
                 CustomTopAppBar(
                     viewModel = viewModel,
                     screenId = ShortcutScreen.HANGMAN,
-                    title = { AdaptiveSessionTitle(state.deckWithCards.deck.name, state.studyMode.asString()) },
+                    title = { AdaptiveSessionTitle(state) },
                     navigationIcon = {
                         TooltipIconButton(description = getText(R.string.back), onClick = { viewModel.endStudySession(); navController.popBackStack() }) {
                             Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = getText(R.string.back))
@@ -310,6 +310,7 @@ fun PortraitHangmanLayout(state: net.ericclark.studiare.data.StudyState, viewMod
                     viewModel = viewModel,
                     modifier = Modifier.fillMaxSize(),
                     showNavigation = false,
+                    showIndex = !state.continuousSession,
                     tags = cardTags
                 )
             }
@@ -451,7 +452,8 @@ fun LandscapeHangmanLayout(
                         state = state,
                         viewModel = viewModel,
                         modifier = Modifier.fillMaxSize(),
-                        showNavigation = false
+                        showNavigation = false,
+                        showIndex = !state.continuousSession
                     )
                 }
                 /*

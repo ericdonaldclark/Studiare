@@ -68,3 +68,12 @@ fun emptyStateBadgeShape(): Shape = MaterialShapes.SoftBurst.toShape()
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun completionAccuracyBadgeShape(): Shape = MaterialShapes.Cookie9Sided.toShape()
+
+/**
+ * Shape for Study Completion's time badge - a different cookie preset than
+ * [completionAccuracyBadgeShape] so the two are visually distinct when both sit either side of the
+ * trophy (score on the left, time on the right).
+ */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+fun completionTimeBadgeShape(): Shape = MaterialShapes.Cookie6Sided.toShape()

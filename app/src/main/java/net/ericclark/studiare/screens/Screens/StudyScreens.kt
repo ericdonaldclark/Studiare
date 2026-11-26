@@ -131,13 +131,13 @@ fun StudyModeSelectionScreen(
     val snackbarHostState = remember { SnackbarHostState() }
 
     val sections = listOf(
-        // Flashcard is also offered as a Learn mode (modesForCategory), but an ungraded Flashcard
-        // ActiveSession has no stored field saying which screen it was started from (see
-        // StudyState.currentCategory's comment in data/Values.kt) - so this necessarily shows the
-        // same sessions as flashcards_practice below. Harmless duplication, same tradeoff already
-        // accepted there.
-        SessionSection("flashcards_learn", stringResource(R.string.section_flashcards_learn), StudyCategory.LEARN) { it.mode == SessionMode.FLASHCARD && !it.isGraded },
-        SessionSection("flashcards_practice", stringResource(R.string.section_flashcards_practice), StudyCategory.PRACTICE) { it.mode == SessionMode.FLASHCARD && !it.isGraded },
+        // Flashcard is also offered as a Learn mode (modesForCategory) - an ungraded Flashcard
+        // session used to have no stored field saying which screen it was started from, so these
+        // two necessarily showed the exact same sessions (deleting one via its tile made both
+        // disappear, since there was really only ever one underlying session). Now disambiguated
+        // by ActiveSession.startedCategory, the category button actually tapped to start it.
+        SessionSection("flashcards_learn", stringResource(R.string.section_flashcards_learn), StudyCategory.LEARN) { it.mode == SessionMode.FLASHCARD && !it.isGraded && it.startedCategory == StudyCategory.LEARN },
+        SessionSection("flashcards_practice", stringResource(R.string.section_flashcards_practice), StudyCategory.PRACTICE) { it.mode == SessionMode.FLASHCARD && !it.isGraded && it.startedCategory == StudyCategory.PRACTICE },
         SessionSection("flashcards_quiz", stringResource(R.string.section_flashcards_quiz), StudyCategory.QUIZ) { it.mode == SessionMode.FLASHCARD && it.isGraded },
         SessionSection("freeform", stringResource(R.string.section_freeform), StudyCategory.LEARN) { it.mode == SessionMode.FREEFORM },
         SessionSection("picking_practice", stringResource(R.string.section_picking_practice), StudyCategory.PRACTICE) { it.mode == SessionMode.LIST && !it.isGraded },
