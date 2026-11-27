@@ -52,7 +52,6 @@ import net.ericclark.studiare.screens.Dialogs.CreateSetOptionsDialog
 import net.ericclark.studiare.screens.Dialogs.ManualSetEditorDialog
 import net.ericclark.studiare.screens.Dialogs.SetCreationAction
 import net.ericclark.studiare.screens.Dialogs.SetCreationDialogHost
-import net.ericclark.studiare.screens.Dialogs.createStudySessionRoute
 import net.ericclark.studiare.screens.Dialogs.studyRouteFor
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -120,7 +119,7 @@ fun DrawerDeckHierarchyNode(
     if (showDeleteConfirm) {
         val isTopLevel = deckWithCards.deck.parentDeckId == null
         if (isTopLevel) {
-            AnimatedDialog(onDismissRequest = { showDeleteConfirm = false }) {
+            AnimatedDialog(onDismissRequest = { showDeleteConfirm = false }, dismissOnScrimClick = false) {
                 val dimensions = LocalStudiareDimensions.current
                 Surface(
                     shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
@@ -216,10 +215,8 @@ fun DrawerDeckHierarchyNode(
 
     LaunchedEffect(showNewSessionDialog) {
         if (!showNewSessionDialog) return@LaunchedEffect
-        // Create Study Session is its own screen now (it creates something new and navigates to
-        // it, unlike every other dialog here), so this just navigates there instead of showing
-        // dialog state. Falls back to the same last-used category the Study Hub's own FAB defaults to.
-        navController.navigate(createStudySessionRoute(deckWithCards.deck.id, viewModel.lastStudyCategory.value))
+        // Falls back to the same last-used category the Study Hub's own FAB defaults to.
+        viewModel.requestCreateSession(deckWithCards, viewModel.lastStudyCategory.value)
         showNewSessionDialog = false
     }
 

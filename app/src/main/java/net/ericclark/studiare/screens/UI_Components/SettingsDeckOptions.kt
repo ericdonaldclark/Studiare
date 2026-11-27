@@ -290,7 +290,7 @@ private fun DeckOptionsConfirmDialog(
         else allDecks
     val cardCount = previewCardCount(targets, options)
 
-    AnimatedDialog(onDismissRequest = onDismiss) {
+    AnimatedDialog(onDismissRequest = onDismiss, dismissOnScrimClick = false) {
         Surface(
             modifier = Modifier.widthIn(min = 280.dp, max = 560.dp),
             shape = RoundedCornerShape(dimensions.cornerRadiusMedium),

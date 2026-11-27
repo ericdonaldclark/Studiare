@@ -989,32 +989,6 @@ fun StudiareNavGraph(
                         }
                     }
                 }
-                composable(
-                    route = "createStudySession/{deckId}?category={category}&presetId={presetId}",
-                    arguments = listOf(
-                        navArgument("deckId") { type = NavType.StringType },
-                        navArgument("category") { type = NavType.StringType },
-                        navArgument("presetId") { type = NavType.StringType; nullable = true; defaultValue = null }
-                    )
-                ) { backStackEntry ->
-                    CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides this@composable) {
-                        val deckId = backStackEntry.arguments?.getString("deckId")!!
-                        val category = net.ericclark.studiare.data.StudyCategory.valueOf(
-                            backStackEntry.arguments?.getString("category")!!
-                        )
-                        val presetId = backStackEntry.arguments?.getString("presetId")
-                        val deck = decks.find { it.deck.id == deckId }
-                        if (deck != null) {
-                            net.ericclark.studiare.screens.Screens.CreateStudySessionScreen(
-                                navController = navController,
-                                deck = deck,
-                                viewModel = viewModel,
-                                initialCategory = category,
-                                presetId = presetId
-                            )
-                        }
-                    }
-                }
                 composable("flashcardStudy") {
                     CompositionLocalProvider(LocalNavAnimatedVisibilityScope provides this@composable) {
                         StudySessionScreenLifecycle(viewModel)
@@ -1197,6 +1171,21 @@ fun StudiareNavGraph(
                         viewModel = viewModel
                     )
                 }
+            }
+
+            // A plain overlay (a Dialog opens its own Android Window regardless of where it's
+            // declared in the Compose tree, so this doesn't need its own Box/z-order handling),
+            // not a NavHost destination - whatever's actually on screen underneath stays composed
+            // and visibly dimmed behind it, instead of the dialog depending on how long the
+            // previous destination's own content happens to stay composed during a nav transition.
+            viewModel.pendingCreateSession?.let { pending ->
+                net.ericclark.studiare.screens.Dialogs.CreateStudySessionDialog(
+                    navController = navController,
+                    deck = pending.deck,
+                    viewModel = viewModel,
+                    initialCategory = pending.category,
+                    presetId = pending.presetId
+                )
             }
         }
     }

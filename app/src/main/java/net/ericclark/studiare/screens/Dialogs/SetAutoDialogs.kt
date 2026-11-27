@@ -286,7 +286,8 @@ fun AutomaticSetCreatorDialog(
                     state = selectionState,
                     actions = selectionActions,
                     isExpanded = selectionExpanded,
-                    onToggleExpand = { selectionExpanded = !selectionExpanded }
+                    onToggleExpand = { selectionExpanded = !selectionExpanded },
+                    alphabetical = true
                 )
 
                 // 3. Sort Mode Section
@@ -298,7 +299,8 @@ fun AutomaticSetCreatorDialog(
                     sortSide = sortSide,
                     onSortSideChange = { sortSide = it },
                     sortExpanded = sortExpanded,
-                    onToggleExpand = { sortExpanded = !sortExpanded }
+                    onToggleExpand = { sortExpanded = !sortExpanded },
+                    alphabetical = true
                 )
 
                 // 4. Quantities Section

@@ -3,9 +3,17 @@ package net.ericclark.studiare.data
 /**
  * Builds a hand-authored, fixed-id "tutorial deck" — each card's front names a specific app
  * feature and its back explains it, with the card itself configured to demonstrate that feature
- * (a tag, a flag, rich text, a pin, a difficulty rating, etc.) rather than being generic study
- * content. Fixed ids mean tapping "Import Sample Deck" (Settings → About → Help) more than once
- * updates the same rows in place instead of duplicating them.
+ * (a flag, rich text, a pin, a difficulty rating, etc.) rather than being generic study content.
+ * Fixed ids mean tapping "Import Sample Deck" (Settings → About → Help) more than once updates
+ * the same rows in place instead of duplicating them.
+ *
+ * Deliberately doesn't demonstrate tags: a card's `tags` field only stores raw name strings, with
+ * no `TagDefinition` row of its own (the separate, user-created `tags` table that gives a tag its
+ * color) - so a tag assigned here would show in Simple Editor's list (which falls back to a
+ * generic gray for an unregistered name) but silently vanish everywhere that resolves tags against
+ * that table instead (the per-card tag editor, the Bulk Editor), since both filter out any name
+ * with no matching definition. Demonstrating tags properly would mean this provider also inserting
+ * real `TagDefinition` rows via `TagDao`, which isn't worth doing just for the sample deck.
  */
 object SampleDeckProvider {
 
@@ -67,28 +75,27 @@ object SampleDeckProvider {
                 "This is a sample deck, not a translation deck — every card here explains one of " +
                     "the app's features, and the card itself is set up to demonstrate it. Flip " +
                     "through them like a normal study session, or open each card in the editor to " +
-                    "see exactly how it's configured. Delete this deck anytime from the Decks screen.",
-                tags = listOf("Getting Started")),
+                    "see exactly how it's configured. Delete this deck anytime from the Decks screen."),
 
             sampleCard("sample-card-tags", ROOT_DECK_ID, now,
-                "Tags",
-                "This card is tagged \"Getting Started\" and \"Organization\" — tags group related " +
-                    "cards across a deck so you can filter a study session down to just a topic, or " +
-                    "find cards quickly in Manage Tags.",
-                tags = listOf("Getting Started", "Organization")),
+                "Adding Tags",
+                "Open this card in the editor (Simple or Bulk) and look for the tag row below the " +
+                    "card content — tap \"Add Tag\" to pick an existing tag or create a new one with " +
+                    "its own name and color. Tags group related cards across a deck so you can " +
+                    "filter a study session down to just a topic, or manage every tag at once from " +
+                    "Settings → Tags & Templates."),
 
             sampleCard("sample-card-flags", ROOT_DECK_ID, now,
                 "Colored Flags",
                 "This card has a blue flag set. Flags are a free-form marker — red for \"needs " +
                     "fixing,\" blue for \"interesting,\" or whatever meaning you give them — and you " +
                     "can filter a study session to just the cards carrying one.",
-                tags = listOf("Organization"), flag = CardFlag.BLUE),
+                flag = CardFlag.BLUE),
 
             sampleCard("sample-card-richtext", ROOT_DECK_ID, now,
                 "Rich Text Formatting",
                 "Plain text answer, but check this card's front — it's not plain. Cards can use " +
                     "<b>bold</b>, <i>italic</i>, and other HTML formatting instead of plain text.",
-                tags = listOf("Content"),
                 frontRichText = "This front uses <b>bold</b> and <i>italic</i> HTML formatting."),
 
             sampleCard("sample-card-notefield", ROOT_DECK_ID, now,
@@ -96,7 +103,6 @@ object SampleDeckProvider {
                 "Open this card in the editor and look for an \"Example Sentence\" field below the " +
                     "front/back — decks can define extra per-card fields like that (plain text, " +
                     "rich text, audio, images) via the Template Editor in Deck Settings.",
-                tags = listOf("Content"),
                 frontNotes = listOf(NoteField(
                     name = "Example Sentence",
                     content = "<i>This whole field only exists because this deck's template defines it.</i>",
@@ -108,49 +114,45 @@ object SampleDeckProvider {
                 "Notice the pin on this card — pinned cards can be sorted to the front of the " +
                     "Simple/Bulk Editor and show up on the Pinned screen, so the ones you care about " +
                     "most are always easy to find.",
-                tags = listOf("Organization"), isPinned = true),
+                isPinned = true),
 
             sampleCard("sample-card-known", ROOT_DECK_ID, now,
                 "Known Cards",
                 "This card is marked \"Known.\" Mark cards you've already mastered so study sessions " +
                     "can optionally skip or de-prioritize them.",
-                tags = listOf("Study"), isKnown = true),
+                isKnown = true),
 
             sampleCard("sample-card-difficulty", ROOT_DECK_ID, now,
                 "Difficulty Ratings",
                 "This card's difficulty is set to 4 out of 5. Rate cards by difficulty to drive " +
                     "weighted study (harder cards appear more often) or to filter a session to just " +
                     "a difficulty range.",
-                tags = listOf("Study"), difficulty = DifficultySetting.FOUR),
+                difficulty = DifficultySetting.FOUR),
 
             sampleCard("sample-card-language", ROOT_DECK_ID, now,
                 "Language Settings",
                 "This deck has a front and back language set (both English here) — Deck Settings " +
                     "lets each side have its own, which drives text-to-speech pronunciation and " +
-                    "voice-input matching in audio-based study modes.",
-                tags = listOf("Organization")),
+                    "voice-input matching in audio-based study modes."),
 
             sampleCard("sample-card-sort", ROOT_DECK_ID, now,
                 "Card Order & Case Normalization",
                 "This deck's Card Order is set to alphabetical (A–Z), and Case Normalization " +
                     "capitalizes the first letter of typed answers automatically — both live in " +
-                    "Deck Settings, alongside the prompt-side and daily-limit settings.",
-                tags = listOf("Organization")),
+                    "Deck Settings, alongside the prompt-side and daily-limit settings."),
 
             sampleCard("sample-card-sets", ROOT_DECK_ID, now,
                 "Nested Sets",
                 "Open Set Manager for this deck and you'll find \"Idioms & Expressions\" nested " +
                     "underneath it — decks can contain child Sets, each with their own cards and " +
-                    "settings, to group a big deck into smaller chunks without leaving the deck.",
-                tags = listOf("Organization")),
+                    "settings, to group a big deck into smaller chunks without leaving the deck."),
 
             sampleCard("sample-card-presets", ROOT_DECK_ID, now,
                 "Session Presets",
                 "Open this deck's Study Hub and look at the Presets carousel at the top — this deck " +
                     "ships with three saved presets (Quick Flashcard Review, Spaced Repetition/FSRS, " +
                     "and a Matching Game) so you can jump straight into a pre-configured study " +
-                    "session with one tap instead of setting one up from scratch.",
-                tags = listOf("Study"))
+                    "session with one tap instead of setting one up from scratch.")
     )
 
     private fun buildSetCards(now: Long) = listOf(
@@ -159,14 +161,12 @@ object SampleDeckProvider {
                 "This set's Deck Settings only partially link back to its parent deck — its card " +
                     "data and card order are independent, but its field configuration stays in " +
                     "sync. Each set controls exactly what it shares with its parent via its own " +
-                    "Linkage Settings.",
-                tags = listOf("Organization")),
+                    "Linkage Settings."),
 
             sampleCard("sample-card-idiom-example", SET_ID, now,
                 "Piece of cake",
                 "Pan comido — an ordinary content card living inside the nested set, to show sets " +
-                    "hold real cards just like any other deck.",
-                tags = listOf("Idioms"))
+                    "hold real cards just like any other deck.")
     )
 
     /** A few saved [SessionPreset]s pointed at the showcase deck, covering different modes/scheduling.

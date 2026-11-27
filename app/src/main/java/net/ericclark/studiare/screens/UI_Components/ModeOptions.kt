@@ -52,7 +52,7 @@ import net.ericclark.studiare.components.getText
 import net.ericclark.studiare.FlashcardViewModel
 import net.ericclark.studiare.data.*
 import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
-import net.ericclark.studiare.screens.Screens.CreateStudySessionScreen
+import net.ericclark.studiare.screens.Dialogs.CreateStudySessionDialog
 
 /*
  * Mode options: every user-facing option a session mode can have, declared once here and rendered by
@@ -116,6 +116,16 @@ abstract class ModeOption(
     /** Subtitle for the dialog section while collapsed. */
     @Composable
     open fun summary(values: ModeDefaultSettings, context: ModeOptionContext): String? = null
+
+    /**
+     * A static explainer for [dialogSection] options (Difficulty Weighting, Timed Session,
+     * Continuous Session) - shown directly under the title in [DialogSection]'s own header
+     * (tightly, in the same column as the title, exactly like [SwitchModeOption]'s title+description
+     * pair) by [ModeOptionDialogSections], and explicitly by Settings → Mode Defaults, which renders
+     * [Control] with no [DialogSection] wrapper at all. Not read anywhere [Control] renders its own
+     * description already (every non-dialogSection option) - null for those.
+     */
+    open val explainerRes: Int? = null
 
     /**
      * Whether this option should be shown at all, given the other current option values — e.g. an
@@ -182,6 +192,17 @@ private fun ModeSwitchRow(title: String, description: String, checked: Boolean, 
     }
 }
 
+/** Title directly above its description, no gap between them - same sizing/positioning as
+ *  [ModeSwitchRow]'s own title+description pair, for every non-switch option's Control() that
+ *  needs the same "name, then explainer" header before its own picker/stepper/slider. */
+@Composable
+private fun ModeOptionHeader(title: String, description: String) {
+    Column {
+        Text(title)
+        Text(description, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
 /**
  * -/+ stepper with a tonal value indicator, shared by the stepper options. The value pill
  * ([EditableStepperPill], shared with [CountPicker] and Settings' backup-interval stepper) can
@@ -234,7 +255,7 @@ object NumberOfAnswers : ModeOption(R.string.answers, sessionEdit = SessionEdit.
             modifier = Modifier.fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(LocalStudiareDimensions.current.spacingSmall)
         ) {
-            Text(getText(labelRes))
+            ModeOptionHeader(getText(labelRes), getText(R.string.answers_desc))
             ValueStepper(
                 valueText = answers.toString(),
                 canDecrease = answers > ModeOptionDefaults.NUMBER_OF_ANSWERS_MIN,
@@ -276,7 +297,7 @@ object MaxMemoryTiles : ModeOption(R.string.memory_tiles, sessionEdit = SessionE
             modifier = Modifier.fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(LocalStudiareDimensions.current.spacingSmall)
         ) {
-            Text(getText(labelRes))
+            ModeOptionHeader(getText(labelRes), getText(R.string.memory_tiles_desc))
             ValueStepper(
                 valueText = "$tiles Tiles",
                 canDecrease = tiles > ModeOptionDefaults.MAX_MEMORY_TILES_MIN,
@@ -301,7 +322,7 @@ object GridDensity : ModeOption(R.string.grid_density, sessionEdit = SessionEdit
             1 -> getText(R.string.sparse); 2 -> getText(R.string.balanced); else -> getText(R.string.compact)
         }
         Column(modifier = Modifier.fillMaxWidth()) {
-            Text(getText(labelRes) + ": $densityLabel")
+            ModeOptionHeader(getText(labelRes) + ": $densityLabel", getText(R.string.grid_density_desc))
             Slider(
                 value = density.toFloat(),
                 onValueChange = { onChange(values.copy(gridDensity = it.roundToInt())) },
@@ -346,7 +367,7 @@ object PromptSide : ModeOption(R.string.prompt_side) {
             modifier = Modifier.fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(LocalStudiareDimensions.current.spacingSmall)
         ) {
-            Text(getText(labelRes))
+            ModeOptionHeader(getText(labelRes), getText(R.string.prompt_side_desc))
             if (context.deckDefaultPromptSide != null) {
                 ExpressiveDropdownMenuField(
                     options = concreteOptions,
@@ -405,6 +426,7 @@ object DifficultyWeighting : ModeOption(R.string.difficulty_weighting, dialogSec
     override fun headerSwitchValue(values: ModeDefaultSettings): Boolean = isWeighted(values)
     override fun withHeaderSwitchValue(values: ModeDefaultSettings, context: ModeOptionContext, enabled: Boolean): ModeDefaultSettings =
         values.copy(difficultyWeighted = enabled)
+    override val explainerRes = R.string.difficulty_weighting_desc
 
     @Composable
     override fun Control(values: ModeDefaultSettings, context: ModeOptionContext, onChange: (ModeDefaultSettings) -> Unit) {
@@ -413,12 +435,14 @@ object DifficultyWeighting : ModeOption(R.string.difficulty_weighting, dialogSec
         Column(modifier = Modifier.fillMaxWidth()) {
             // The on/off switch itself lives in the section header now - see headerSwitchValue above.
             // Everything below configures the weighting regardless of whether it's currently on, same
-            // as Timed Session's duration picker.
+            // as Timed Session's duration picker. The static explainer itself is [explainerRes], shown
+            // by the caller (DialogSection's header, or Settings → Mode Defaults directly).
             TypedChipRow(
                 items = DifficultySetting.entries,
                 selected = DifficultySetting.fromInt(selectedDifficulty),
                 labelFor = { it.value.toString() },
-                onSelected = { selectedDifficulty = it.value }
+                onSelected = { selectedDifficulty = it.value },
+                centered = true
             )
             val count = effectiveCountFor(values, selectedDifficulty, context)
             CountPicker(
@@ -485,6 +509,8 @@ object TimedSession : ModeOption(R.string.timed_session, dialogSection = true, s
             pluralStringResource(R.plurals.timed_session_summary_minutes, minutes, minutes)
         } else getText(R.string.timed_session_off)
 
+    override val explainerRes = R.string.timed_session_desc
+
     @Composable
     override fun Control(values: ModeDefaultSettings, context: ModeOptionContext, onChange: (ModeDefaultSettings) -> Unit) {
         val dimensions = LocalStudiareDimensions.current
@@ -493,7 +519,8 @@ object TimedSession : ModeOption(R.string.timed_session, dialogSection = true, s
 
         // The on/off switch itself lives in the section header now - see headerSwitchValue above.
         // Everything below configures the duration/pause/display-frequency settings regardless of
-        // whether Timed Session is currently on.
+        // whether Timed Session is currently on. The static explainer itself is [explainerRes],
+        // shown by the caller (DialogSection's header, or Settings → Mode Defaults directly).
         Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)) {
             UnitValueEditor(
                 units = TimedSessionUnit.entries,
@@ -588,6 +615,7 @@ private fun DisplayFrequencyRow(values: ModeDefaultSettings, onChange: (ModeDefa
     ) {
         Column(modifier = Modifier.weight(1f)) {
             Text(getText(R.string.timed_session_display_frequency), style = MaterialTheme.typography.bodyLarge)
+            Text(getText(R.string.timed_session_display_frequency_desc), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Text(displayFrequencySummaryText(under60, over60), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         TextButton(onClick = { showDialog = true }) { Text(getText(R.string.edit)) }
@@ -808,7 +836,7 @@ object AudioPlaybackSpeed : ModeOption(R.string.audio_playback_speed) {
     @Composable
     override fun Control(values: ModeDefaultSettings, context: ModeOptionContext, onChange: (ModeDefaultSettings) -> Unit) {
         SpeedStepper(
-            labelRes, valueIn(values),
+            labelRes, R.string.audio_playback_speed_desc, valueIn(values),
             min = ModeOptionDefaults.AUDIO_PLAYBACK_SPEED_MIN, max = ModeOptionDefaults.AUDIO_PLAYBACK_SPEED_MAX,
             step = ModeOptionDefaults.AUDIO_PLAYBACK_SPEED_STEP
         ) { onChange(values.copy(audioPlaybackSpeed = it)) }
@@ -826,7 +854,7 @@ object AudioReplayCount : ModeOption(R.string.audio_replay_count) {
             modifier = Modifier.fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(LocalStudiareDimensions.current.spacingSmall)
         ) {
-            Text(getText(labelRes))
+            ModeOptionHeader(getText(labelRes), getText(R.string.audio_replay_count_desc))
             ValueStepper(
                 valueText = plays.toString(),
                 canDecrease = plays > ModeOptionDefaults.AUDIO_REPLAY_COUNT_MIN,
@@ -842,12 +870,12 @@ object AudioReplayCount : ModeOption(R.string.audio_replay_count) {
 
 /** Seconds stepper; the range and step come from the mode-options YAML via the caller. */
 @Composable
-private fun SecondsStepper(label: String, seconds: Double, min: Double, max: Double, step: Double, onChange: (Double) -> Unit) {
+private fun SecondsStepper(label: String, description: String, seconds: Double, min: Double, max: Double, step: Double, onChange: (Double) -> Unit) {
     Column(
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(LocalStudiareDimensions.current.spacingSmall)
     ) {
-        Text(label)
+        ModeOptionHeader(label, description)
         ValueStepper(
             valueText = stringResource(R.string.time_seconds_format, seconds),
             canDecrease = seconds > min, onDecrease = { onChange((seconds - step).coerceAtLeast(min)) },
@@ -867,7 +895,7 @@ object AudioAnswerDelay : ModeOption(R.string.answer_delay) {
     @Composable
     override fun Control(values: ModeDefaultSettings, context: ModeOptionContext, onChange: (ModeDefaultSettings) -> Unit) {
         SecondsStepper(
-            getText(labelRes), valueIn(values),
+            getText(labelRes), getText(R.string.answer_delay_desc), valueIn(values),
             min = ModeOptionDefaults.AUDIO_ANSWER_DELAY_SECONDS_MIN, max = ModeOptionDefaults.AUDIO_ANSWER_DELAY_SECONDS_MAX,
             step = ModeOptionDefaults.AUDIO_ANSWER_DELAY_SECONDS_STEP
         ) { onChange(values.copy(audioAnswerDelaySeconds = it)) }
@@ -882,7 +910,7 @@ object AudioNextCardDelay : ModeOption(R.string.next_card_delay) {
     @Composable
     override fun Control(values: ModeDefaultSettings, context: ModeOptionContext, onChange: (ModeDefaultSettings) -> Unit) {
         SecondsStepper(
-            getText(labelRes), valueIn(values),
+            getText(labelRes), getText(R.string.next_card_delay_desc), valueIn(values),
             min = ModeOptionDefaults.AUDIO_NEXT_CARD_DELAY_SECONDS_MIN, max = ModeOptionDefaults.AUDIO_NEXT_CARD_DELAY_SECONDS_MAX,
             step = ModeOptionDefaults.AUDIO_NEXT_CARD_DELAY_SECONDS_STEP
         ) { onChange(values.copy(audioNextCardDelaySeconds = it)) }
@@ -909,8 +937,7 @@ object FreeformSwipeNavigation : ModeOption(R.string.freeform_swipe_navigation) 
             modifier = Modifier.fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(LocalStudiareDimensions.current.spacingSmall)
         ) {
-            Text(getText(labelRes))
-            Text(getText(R.string.freeform_swipe_navigation_desc), style = MaterialTheme.typography.bodyMedium)
+            ModeOptionHeader(getText(labelRes), getText(R.string.freeform_swipe_navigation_desc))
             ConnectedButtonGroup(
                 items = listOf(SWIPE, BUTTON, BOTH),
                 selected = mode,
@@ -985,15 +1012,12 @@ object ContinuousSession : ModeOption(R.string.continuous_session, dialogSection
     override fun headerSwitchValue(values: ModeDefaultSettings): Boolean = isEnabled(values)
     override fun withHeaderSwitchValue(values: ModeDefaultSettings, context: ModeOptionContext, enabled: Boolean): ModeDefaultSettings =
         values.copy(continuousSession = enabled)
+    override val explainerRes = R.string.continuous_session_desc
 
+    // Nothing to configure once it's on - the static explainer itself is [explainerRes], shown by
+    // the caller (DialogSection's header, or Settings → Mode Defaults directly).
     @Composable
-    override fun Control(values: ModeDefaultSettings, context: ModeOptionContext, onChange: (ModeDefaultSettings) -> Unit) {
-        Text(
-            getText(R.string.continuous_session_desc),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-    }
+    override fun Control(values: ModeDefaultSettings, context: ModeOptionContext, onChange: (ModeDefaultSettings) -> Unit) {}
 }
 
 /** Flashcard: flip the card by itself after this many seconds on the first side (0 = off). */
@@ -1016,7 +1040,10 @@ object FlashcardAutoFlip : ModeOption(R.string.flashcard_auto_flip) {
                 modifier = Modifier.fillMaxWidth().clickable { onChange(values.copy(flashcardAutoFlip = !enabled)) }
                     .padding(vertical = dimensions.paddingSmall)
             ) {
-                Text(getText(labelRes), style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(getText(labelRes), style = MaterialTheme.typography.bodyLarge)
+                    Text(getText(R.string.flashcard_auto_flip_desc), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
                 StudiareSwitch(
                     checked = enabled,
                     onCheckedChange = { on -> onChange(values.copy(flashcardAutoFlip = on)) }
@@ -1068,7 +1095,7 @@ object HangmanMaxMistakes : ModeOption(R.string.hangman_max_mistakes, sessionEdi
     override fun Control(values: ModeDefaultSettings, context: ModeOptionContext, onChange: (ModeDefaultSettings) -> Unit) {
         val guesses = valueIn(values)
         Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(LocalStudiareDimensions.current.spacingSmall)) {
-            Text(getText(labelRes))
+            ModeOptionHeader(getText(labelRes), getText(R.string.hangman_max_mistakes_desc))
             ValueStepper(
                 valueText = guesses.toString(),
                 canDecrease = guesses > ModeOptionDefaults.HANGMAN_MAX_MISTAKES_MIN,
@@ -1100,7 +1127,7 @@ object MemoryPeek : ModeOption(R.string.memory_peek, sessionEdit = SessionEdit.S
     override fun Control(values: ModeDefaultSettings, context: ModeOptionContext, onChange: (ModeDefaultSettings) -> Unit) {
         val seconds = valueIn(values)
         Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(LocalStudiareDimensions.current.spacingSmall)) {
-            Text(getText(labelRes))
+            ModeOptionHeader(getText(labelRes), getText(R.string.memory_peek_desc))
             ValueStepper(
                 valueText = if (seconds == 0) getText(R.string.flashcard_auto_flip_off) else "${seconds}s",
                 canDecrease = seconds > ModeOptionDefaults.MEMORY_PEEK_SECONDS_MIN,
@@ -1122,7 +1149,7 @@ object MemoryGridColumnsPortrait : ModeOption(R.string.memory_grid_columns_portr
     override fun Control(values: ModeDefaultSettings, context: ModeOptionContext, onChange: (ModeDefaultSettings) -> Unit) {
         val columns = valueIn(values)
         Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(LocalStudiareDimensions.current.spacingSmall)) {
-            Text(getText(labelRes))
+            ModeOptionHeader(getText(labelRes), getText(R.string.memory_grid_columns_portrait_desc))
             ValueStepper(
                 valueText = "$columns",
                 canDecrease = columns > ModeOptionDefaults.MEMORY_GRID_COLUMNS_PORTRAIT_MIN,
@@ -1144,7 +1171,7 @@ object MemoryGridColumnsLandscape : ModeOption(R.string.memory_grid_columns_land
     override fun Control(values: ModeDefaultSettings, context: ModeOptionContext, onChange: (ModeDefaultSettings) -> Unit) {
         val columns = valueIn(values)
         Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(LocalStudiareDimensions.current.spacingSmall)) {
-            Text(getText(labelRes))
+            ModeOptionHeader(getText(labelRes), getText(R.string.memory_grid_columns_landscape_desc))
             ValueStepper(
                 valueText = "$columns",
                 canDecrease = columns > ModeOptionDefaults.MEMORY_GRID_COLUMNS_LANDSCAPE_MIN,
@@ -1166,7 +1193,7 @@ object MemoryWrongPair : ModeOption(R.string.memory_wrong_pair) {
     override fun Control(values: ModeDefaultSettings, context: ModeOptionContext, onChange: (ModeDefaultSettings) -> Unit) {
         val ms = valueIn(values)
         Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(LocalStudiareDimensions.current.spacingSmall)) {
-            Text(getText(labelRes))
+            ModeOptionHeader(getText(labelRes), getText(R.string.memory_wrong_pair_desc))
             ValueStepper(
                 valueText = if (ms == 0) getText(R.string.flashcard_auto_flip_off) else "${ms} ms",
                 canDecrease = ms > ModeOptionDefaults.MEMORY_WRONG_PAIR_MS_MIN,
@@ -1190,7 +1217,7 @@ object MemoryCorrectPair : ModeOption(R.string.memory_correct_pair) {
     override fun Control(values: ModeDefaultSettings, context: ModeOptionContext, onChange: (ModeDefaultSettings) -> Unit) {
         val ms = valueIn(values)
         Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(LocalStudiareDimensions.current.spacingSmall)) {
-            Text(getText(labelRes))
+            ModeOptionHeader(getText(labelRes), getText(R.string.memory_correct_pair_desc))
             ValueStepper(
                 valueText = if (ms == 0) getText(R.string.flashcard_auto_flip_off) else "${ms} ms",
                 canDecrease = ms > ModeOptionDefaults.MEMORY_CORRECT_PAIR_MS_MIN,
@@ -1228,7 +1255,7 @@ object WordSearchHighlightColor : ModeOption(R.string.word_search_highlight_colo
         val dimensions = LocalStudiareDimensions.current
         val selected = valueIn(values)
         Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)) {
-            Text(getText(labelRes))
+            ModeOptionHeader(getText(labelRes), getText(R.string.word_search_highlight_color_desc))
             Row(horizontalArrangement = Arrangement.spacedBy(dimensions.spacingMedium)) {
                 WORD_SEARCH_HIGHLIGHT_COLORS.forEach { color ->
                     Box(
@@ -1291,7 +1318,7 @@ object AutoAdvanceDelay : ModeOption(R.string.auto_advance_delay) {
     @Composable
     override fun Control(values: ModeDefaultSettings, context: ModeOptionContext, onChange: (ModeDefaultSettings) -> Unit) {
         SecondsStepper(
-            getText(labelRes), valueIn(values),
+            getText(labelRes), getText(R.string.auto_advance_delay_desc), valueIn(values),
             min = ModeOptionDefaults.AUTO_ADVANCE_DELAY_SECONDS_MIN, max = ModeOptionDefaults.AUTO_ADVANCE_DELAY_SECONDS_MAX,
             step = ModeOptionDefaults.AUTO_ADVANCE_DELAY_SECONDS_STEP
         ) { onChange(values.copy(autoAdvanceDelaySeconds = it)) }
@@ -1306,7 +1333,7 @@ object MatchingWrongDelay : ModeOption(R.string.matching_wrong_delay) {
     override fun Control(values: ModeDefaultSettings, context: ModeOptionContext, onChange: (ModeDefaultSettings) -> Unit) {
         val ms = valueIn(values)
         Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(LocalStudiareDimensions.current.spacingSmall)) {
-            Text(getText(labelRes))
+            ModeOptionHeader(getText(labelRes), getText(R.string.matching_wrong_delay_desc))
             ValueStepper(
                 valueText = "${ms} ms",
                 canDecrease = ms > ModeOptionDefaults.MATCHING_WRONG_DELAY_MS_MIN,
@@ -1329,7 +1356,7 @@ object MatchingCorrectHighlight : ModeOption(R.string.matching_correct_highlight
     override fun Control(values: ModeDefaultSettings, context: ModeOptionContext, onChange: (ModeDefaultSettings) -> Unit) {
         val ms = valueIn(values)
         Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(LocalStudiareDimensions.current.spacingSmall)) {
-            Text(getText(labelRes))
+            ModeOptionHeader(getText(labelRes), getText(R.string.matching_correct_highlight_desc))
             ValueStepper(
                 valueText = "${ms} ms",
                 canDecrease = ms > ModeOptionDefaults.MATCHING_CORRECT_HIGHLIGHT_MS_MIN,
@@ -1350,7 +1377,7 @@ object MatchingHighlight : ModeOption(R.string.matching_highlight) {
     @Composable
     override fun Control(values: ModeDefaultSettings, context: ModeOptionContext, onChange: (ModeDefaultSettings) -> Unit) {
         Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(LocalStudiareDimensions.current.spacingSmall)) {
-            Text(getText(labelRes))
+            ModeOptionHeader(getText(labelRes), getText(R.string.matching_highlight_desc))
             ConnectedButtonGroup(
                 items = listOf("FILL", "BORDER"),
                 selected = valueIn(values),
@@ -1436,7 +1463,7 @@ object SpeakingFrontSpeed : ModeOption(R.string.speaking_front_speed) {
     @Composable
     override fun Control(values: ModeDefaultSettings, context: ModeOptionContext, onChange: (ModeDefaultSettings) -> Unit) {
         SpeedStepper(
-            labelRes, valueIn(values),
+            labelRes, R.string.speaking_front_speed_desc, valueIn(values),
             min = ModeOptionDefaults.SPEAKING_FRONT_SPEED_MIN, max = ModeOptionDefaults.SPEAKING_FRONT_SPEED_MAX,
             step = ModeOptionDefaults.SPEAKING_FRONT_SPEED_STEP
         ) { onChange(values.copy(speakingFrontSpeed = it)) }
@@ -1450,7 +1477,7 @@ object SpeakingBackSpeed : ModeOption(R.string.speaking_back_speed) {
     @Composable
     override fun Control(values: ModeDefaultSettings, context: ModeOptionContext, onChange: (ModeDefaultSettings) -> Unit) {
         SpeedStepper(
-            labelRes, valueIn(values),
+            labelRes, R.string.speaking_back_speed_desc, valueIn(values),
             min = ModeOptionDefaults.SPEAKING_BACK_SPEED_MIN, max = ModeOptionDefaults.SPEAKING_BACK_SPEED_MAX,
             step = ModeOptionDefaults.SPEAKING_BACK_SPEED_STEP
         ) { onChange(values.copy(speakingBackSpeed = it)) }
@@ -1482,9 +1509,9 @@ private fun speedLabel(speed: Float): String = (if (speed % 1f == 0f) speed.toIn
 
 /** Speed stepper for the audio and speaking speed options; the range and step come from the mode-options YAML via the caller. */
 @Composable
-private fun SpeedStepper(labelRes: Int, speed: Float, min: Float, max: Float, step: Float, onChange: (Float) -> Unit) {
+private fun SpeedStepper(labelRes: Int, descriptionRes: Int, speed: Float, min: Float, max: Float, step: Float, onChange: (Float) -> Unit) {
     Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(LocalStudiareDimensions.current.spacingSmall)) {
-        Text(getText(labelRes))
+        ModeOptionHeader(getText(labelRes), getText(descriptionRes))
         ValueStepper(
             valueText = speedLabel(speed),
             canDecrease = speed > min, onDecrease = { onChange((speed - step).coerceAtLeast(min)) },
@@ -1733,27 +1760,28 @@ fun ModeOptionsInline(
     }
 }
 
-/** The options that render as their own collapsible dialog sections for [mode] under [category]. */
+/** The options that render as their own dialog sections for [mode] under [category] - the Session
+ *  Options tab's content (Difficulty Weighting / Timed Session / Continuous Session). Always fully
+ *  expanded now (CreateStudySessionScreen's tabbed layout has no collapsible sections anywhere) -
+ *  each still has its own on/off switch in the header via [ModeOption.headerSwitchValue]. */
 @Composable
 fun ModeOptionDialogSections(
     category: StudyCategory,
     mode: SessionMode,
     values: ModeDefaultSettings,
     context: ModeOptionContext,
-    onChange: (ModeDefaultSettings) -> Unit,
-    expandedIds: SnapshotStateList<String>
+    onChange: (ModeDefaultSettings) -> Unit
 ) {
     // Guided (FSRS) picks its own cards, so difficulty weighting isn't listed under GUIDED_* at all.
     val options = modeOptionsFor(category, mode).filter { it.dialogSection && it.isVisible(values) }
     options.forEachIndexed { index, option ->
-        val expanded = option.id in expandedIds
         DialogSection(
             title = getText(option.labelRes),
-            subtitle = option.summary(values, context).orEmpty(),
-            isExpanded = expanded,
-            onToggle = { if (expanded) expandedIds.remove(option.id) else expandedIds.add(option.id) },
-            // The last section's own trailing divider would double up with the panel's divider
-            // pinned above its footer (Number of Cards / Cancel+Start) in the session dialog.
+            // Shown tight under the title (see DialogSection's own non-collapsible subtitle
+            // handling) - same sizing/positioning as every other option's title+description pair.
+            subtitle = option.explainerRes?.let { getText(it) },
+            // The last section's own trailing divider would double up with the tab's own divider
+            // pinned above its footer in the session dialog.
             showDivider = index != options.lastIndex,
             switchChecked = option.headerSwitchValue(values),
             onSwitchChange = { onChange(option.withHeaderSwitchValue(values, context, it)) }

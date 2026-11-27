@@ -1456,7 +1456,7 @@ fun DeckListScreen(
     }
 
     showDeleteDialog?.let { deckToDelete ->
-        AnimatedDialog(onDismissRequest = { showDeleteDialog = null }) {
+        AnimatedDialog(onDismissRequest = { showDeleteDialog = null }, dismissOnScrimClick = false) {
             Surface(
                 shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
                 color = MaterialTheme.colorScheme.surfaceContainerHigh,
@@ -1489,7 +1489,7 @@ fun DeckListScreen(
     }
 
     showBulkDeleteDialog?.let { toDelete ->
-        AnimatedDialog(onDismissRequest = { showBulkDeleteDialog = null }) {
+        AnimatedDialog(onDismissRequest = { showBulkDeleteDialog = null }, dismissOnScrimClick = false) {
             Surface(
                 shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
                 color = MaterialTheme.colorScheme.surfaceContainerHigh,

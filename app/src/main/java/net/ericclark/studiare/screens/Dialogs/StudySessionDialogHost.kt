@@ -27,13 +27,17 @@ fun studyRouteFor(mode: SessionMode): String = when (mode) {
 }
 
 /**
- * Route for [CreateStudySessionScreen] (`CreateStudySessionDialog.kt`) for the given deck/category.
- * Create Study Session is a real NavHost destination, not a dialog — it creates something new and
- * navigates to it, unlike every other dialog in the app (which edits the screen it's on and returns
- * to it) — so every entry point navigates here instead of showing dialog state locally.
+ * What [CreateStudySessionDialog] (`CreateStudySessionDialog.kt`) needs to show itself for a given
+ * deck/category - set on [FlashcardViewModel.pendingCreateSession] instead of navigating to a
+ * route, so the screen the user was already on stays composed (and visibly dimmed) behind the
+ * dialog, same as every other dialog in the app. [presetId] is non-null when arriving via a
+ * [SessionPreset]'s settings-cog button, pre-populating the dialog from that preset.
  */
-fun createStudySessionRoute(deckId: String, category: StudyCategory, presetId: String? = null): String =
-    "createStudySession/$deckId?category=${category.name}" + (presetId?.let { "&presetId=$it" } ?: "")
+data class PendingCreateSession(
+    val deck: DeckWithCards,
+    val category: StudyCategory,
+    val presetId: String? = null
+)
 
 /** Whether a session in [this] mode reads cards aloud with the per-language voices (the first-run prompt applies). */
 internal fun SessionMode.usesVoices(): Boolean =

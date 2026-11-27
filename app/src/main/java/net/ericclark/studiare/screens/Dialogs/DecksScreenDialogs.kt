@@ -391,7 +391,11 @@ fun DuplicateWarningDialog(
     onConfirmSaveAnyway: () -> Unit
 ) {
     val dimensions = net.ericclark.studiare.ui.theme.LocalStudiareDimensions.current
-    AnimatedDialog(onDismissRequest = onDismiss, properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)) {
+    AnimatedDialog(
+        onDismissRequest = onDismiss,
+        properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false),
+        dismissOnScrimClick = false
+    ) {
         Surface(
             shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
             color = MaterialTheme.colorScheme.surfaceContainerHigh,

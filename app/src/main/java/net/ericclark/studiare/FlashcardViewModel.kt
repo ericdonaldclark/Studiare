@@ -38,7 +38,8 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import net.ericclark.studiare.screens.Dialogs.AnkiMappingConfig
-import net.ericclark.studiare.screens.Screens.CreateStudySessionScreen
+import net.ericclark.studiare.screens.Dialogs.CreateStudySessionDialog
+import net.ericclark.studiare.screens.Dialogs.PendingCreateSession
 import androidx.work.BackoffPolicy
 import androidx.work.Constraints
 import androidx.work.ExistingPeriodicWorkPolicy
@@ -424,6 +425,24 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
 
     var studyState by mutableStateOf<StudyState?>(null)
         private set
+
+    // CreateStudySessionDialog is a plain overlay (shown by AppNavigation, a sibling of the
+    // NavHost, not one of its destinations) rather than its own nav destination, so whatever
+    // screen was already on screen stays composed and visible - and dimmed - behind it, instead of
+    // the dialog depending on how long the previous destination's own content happens to stay
+    // composed during a nav transition (which, on top of being fragile, stopped working reliably
+    // after a Compose library bump: see the chip-grid/dialog-scrim memory notes). Every entry point
+    // sets this instead of navigating to a route; AppNavigation renders the dialog when non-null.
+    var pendingCreateSession by mutableStateOf<PendingCreateSession?>(null)
+        private set
+
+    fun requestCreateSession(deck: DeckWithCards, category: StudyCategory, presetId: String? = null) {
+        pendingCreateSession = PendingCreateSession(deck, category, presetId)
+    }
+
+    fun clearPendingCreateSession() {
+        pendingCreateSession = null
+    }
 
     var isLoading by mutableStateOf(true)
         private set
