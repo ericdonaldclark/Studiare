@@ -34,6 +34,7 @@ object MaterialSymbols {
     const val SETTINGS = ''
     const val CHECK_CIRCLE = ''
     const val PRELIMINARY = ''
+    const val SIDE_NAVIGATION = '\ue9e2'
 }
 
 /**

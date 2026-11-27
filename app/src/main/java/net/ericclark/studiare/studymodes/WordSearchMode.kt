@@ -36,6 +36,8 @@ import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import net.ericclark.studiare.AdaptiveSessionTitle
 import net.ericclark.studiare.CustomTopAppBar
+import net.ericclark.studiare.LocalWindowWidthSizeClass
+import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import net.ericclark.studiare.data.asString
 import net.ericclark.studiare.FlashcardViewModel
 import net.ericclark.studiare.autoFocusable
@@ -85,6 +87,7 @@ fun WordSearchMode(
     var keyboardSelectionStart by remember { mutableStateOf<Pair<Int, Int>?>(null) }
 
     val sortedWords = remember(state.wordSearchWords) { state.wordSearchWords.sortedBy { it.clue.lowercase() } }
+    var sheetTab by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf<net.ericclark.studiare.screens.UI_Components.SessionSheetTab?>(null) }
 
     if (state.isComplete) {
         StudyCompletionScreen(
@@ -100,7 +103,8 @@ fun WordSearchMode(
             CustomTopAppBar(
                 viewModel = viewModel,
                 screenId = ShortcutScreen.WORD_SEARCH,
-                title = { AdaptiveSessionTitle(state) },
+                title = { AdaptiveSessionTitle(state, suppressTimerPill = sheetTab != null && LocalWindowWidthSizeClass.current >= WindowWidthSizeClass.Expanded) },
+                onOpenSessionSheet = { sheetTab = it },
                 navigationIcon = {
                     TooltipIconButton(description = getText(R.string.back), onClick = { viewModel.endStudySession(); navController.popBackStack() }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = getText(R.string.back))
@@ -119,6 +123,15 @@ fun WordSearchMode(
             )
         }
     ) { padding ->
+        net.ericclark.studiare.screens.UI_Components.SessionSheetHost(
+            state = state,
+            viewModel = viewModel,
+            screenId = ShortcutScreen.WORD_SEARCH,
+            sheetTab = sheetTab,
+            onTabChange = { sheetTab = it },
+            onDismiss = { sheetTab = null },
+            padding = padding
+        ) { padding ->
         AnimatedVisibility(
             visible = mainContentReady,
             enter = fadeIn(),
@@ -338,6 +351,7 @@ fun WordSearchMode(
                     }
                 }
             }
+        }
         }
         }
     }

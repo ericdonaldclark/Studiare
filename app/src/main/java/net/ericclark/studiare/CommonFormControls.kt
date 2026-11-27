@@ -84,7 +84,11 @@ fun CustomTopAppBar(
     modifier: Modifier = Modifier,
     screenId: ShortcutScreen = ShortcutScreen.OTHER,
     navigationIcon: @Composable () -> Unit = {},
-    actions: @Composable RowScope.() -> Unit = {}
+    actions: @Composable RowScope.() -> Unit = {},
+    // Non-null only on screens hosting the study-session side sheet (SessionSheetHost) - redirects
+    // the gear/keyboard buttons below to open a tab of that sheet instead of their own standalone
+    // dialogs. Null (the default) on every other screen, where behavior is unchanged.
+    onOpenSessionSheet: ((net.ericclark.studiare.screens.UI_Components.SessionSheetTab) -> Unit)? = null
 ) {
     var showShortcutsDialog by remember { mutableStateOf(false) }
     val configuration = androidx.compose.ui.platform.LocalConfiguration.current
@@ -96,7 +100,10 @@ fun CustomTopAppBar(
         modifier = modifier,
         navigationIcon = navigationIcon,
         actions = {
-            if (hasHardwareKeyboard && showShortcutsButton) {
+            // On a session screen (onOpenSessionSheet != null) this button is redundant - the
+            // session sheet's own Keyboard tab, reachable via the gear/side-nav icon below, covers
+            // the same shortcuts list - so it's left out there entirely rather than duplicating it.
+            if (onOpenSessionSheet == null && hasHardwareKeyboard && showShortcutsButton) {
                 TooltipIconButton(
                     description = getText(R.string.keyboard_shortcuts),
                     onClick = { showShortcutsDialog = true },
@@ -105,7 +112,7 @@ fun CustomTopAppBar(
                     Icon(Icons.Default.Keyboard, contentDescription = getText(R.string.keyboard_shortcuts))
                 }
             }
-            SessionOptionsAction(viewModel, screenId)
+            SessionOptionsAction(viewModel, screenId, onOpenSessionSheet)
             actions()
         },
         colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
@@ -130,13 +137,15 @@ fun CustomTopAppBar(
  * drops first (to deck-name-only, then disappears entirely) when space runs short.
  */
 @Composable
-fun AdaptiveSessionTitle(state: StudyState) {
+fun AdaptiveSessionTitle(state: StudyState, suppressTimerPill: Boolean = false) {
     val deckName = state.deckWithCards.deck.name
     val modeLabel = state.studyMode.asString()
     val full = "$deckName - $modeLabel"
     val textMeasurer = rememberTextMeasurer()
     val style = LocalTextStyle.current
-    val remainingSeconds = state.timedSessionRemainingSeconds()
+    // Suppressed while the standard (docked) side sheet is open and showing its own
+    // DetailedTimedSessionCard, so the countdown never renders twice at once.
+    val remainingSeconds = if (suppressTimerPill) null else state.timedSessionRemainingSeconds()
 
     Row(verticalAlignment = Alignment.CenterVertically) {
         BoxWithConstraints(modifier = Modifier.weight(1f, fill = false)) {
@@ -205,6 +214,113 @@ private fun TimedSessionPill(state: StudyState, initialRemainingSeconds: Long) {
             style = MaterialTheme.typography.labelLarge,
             color = MaterialTheme.colorScheme.onTertiaryContainer
         )
+    }
+}
+
+/**
+ * The Progress tab's bigger, more detailed timer — a countdown with a real determinate
+ * [LinearProgressIndicator] when [StudyState.timedSessionEnabled], or a plain ticking elapsed-time
+ * row otherwise. Unlike [TimedSessionPill], this never caches the displayed number in a
+ * remembered var seeded once from the initial [state] - [tick] (bumped once a second by the
+ * [LaunchedEffect] below) only forces a recomposition; the number shown is always read fresh from
+ * [state] at that moment via `remember(tick) { ... }`. That matters here specifically because the
+ * side sheet this card lives in is torn down and recreated each time it's closed and reopened
+ * (unlike the always-on app bar pill), so a value seeded once at first composition would reopen
+ * showing whatever [state] happened to be at that exact instant rather than staying live.
+ */
+@Composable
+fun DetailedTimedSessionCard(state: StudyState) {
+    val dimensions = LocalStudiareDimensions.current
+    val currentState = rememberUpdatedState(state)
+    var tick by remember { mutableIntStateOf(0) }
+
+    if (state.timedSessionEnabled) {
+        LaunchedEffect(state.sessionId) {
+            while (true) {
+                val s = currentState.value
+                val r = s.timedSessionRemainingSeconds() ?: break
+                if (r <= 0) break
+                delay(timedSessionTickDelaySeconds(r, s.timedSessionDisplayUpdateSecondsUnder60, s.timedSessionDisplayUpdateSecondsOver60) * 1000)
+                tick++
+            }
+        }
+        val remaining = remember(tick) { state.timedSessionRemainingSeconds() } ?: 0L
+        val progress = if (state.timedSessionDurationSeconds > 0) {
+            1f - (remaining.toFloat() / state.timedSessionDurationSeconds)
+        } else 0f
+
+        Surface(
+            shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+            color = MaterialTheme.colorScheme.inverseSurface,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall),
+                modifier = Modifier.padding(dimensions.paddingMedium)
+            ) {
+                Icon(
+                    Icons.Default.Timer,
+                    contentDescription = getText(R.string.timed_session),
+                    tint = MaterialTheme.colorScheme.inverseOnSurface
+                )
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = formatCountdown(remaining),
+                        style = MaterialTheme.typography.headlineSmall,
+                        color = MaterialTheme.colorScheme.inverseOnSurface
+                    )
+                    Text(
+                        text = getText(R.string.timed_session),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.inverseOnSurface
+                    )
+                    Spacer(Modifier.height(dimensions.spacingSmall))
+                    LinearProgressIndicator(
+                        progress = { progress.coerceIn(0f, 1f) },
+                        modifier = Modifier.fillMaxWidth(),
+                        color = MaterialTheme.colorScheme.inversePrimary,
+                        trackColor = MaterialTheme.colorScheme.inverseOnSurface.copy(alpha = 0.3f)
+                    )
+                }
+            }
+        }
+    } else {
+        // Not a timed session — a plain, live-ticking elapsed-time row instead of the countdown
+        // card above; formatCountdown's "M:SS"/"H:MM:SS" clock style fits a live-ticking display
+        // better than StudyCompletion's single-dominant-unit summary format (which is meant for a
+        // frozen final total, not something updating every second).
+        LaunchedEffect(state.sessionId, state.isComplete) {
+            while (!currentState.value.isComplete) {
+                delay(1000)
+                tick++
+            }
+        }
+        val elapsed = remember(tick) { state.elapsedSeconds() }
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall),
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(MaterialTheme.colorScheme.secondaryContainer, RoundedCornerShape(dimensions.cornerRadiusMedium))
+                .padding(dimensions.paddingMedium)
+        ) {
+            Icon(
+                Icons.Default.Timer,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSecondaryContainer
+            )
+            Text(
+                text = formatCountdown(elapsed),
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSecondaryContainer
+            )
+            Text(
+                text = getText(R.string.elapsed_time_label),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSecondaryContainer
+            )
+        }
     }
 }
 

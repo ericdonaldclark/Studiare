@@ -120,6 +120,7 @@ fun MemoryScreen(
     val toastMessage = viewModel.toastMessage
     // Used to be its own option (MemoryFlipAnimation); removed in favor of the global Reduce Motion setting.
     val reduceMotion by viewModel.reduceMotion.collectAsState()
+    var sheetTab by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf<net.ericclark.studiare.screens.UI_Components.SessionSheetTab?>(null) }
 
     // A wrong pair flips back by itself, and a correct pair locks in by itself, after their chosen
     // delay (0 = stays until the user taps/submits). Neither auto-resolves when MemorySubmitAnswer
@@ -179,7 +180,8 @@ fun MemoryScreen(
                 CustomTopAppBar(
                     viewModel = viewModel,
                     screenId = ShortcutScreen.MEMORY,
-                    title = { AdaptiveSessionTitle(state) },
+                    title = { AdaptiveSessionTitle(state, suppressTimerPill = sheetTab != null && windowWidthSizeClass >= WindowWidthSizeClass.Expanded) },
+                    onOpenSessionSheet = { sheetTab = it },
                     navigationIcon = {
                         TooltipIconButton(description = getText(R.string.back), onClick = { viewModel.endStudySession(); navController.popBackStack() }) {
                             Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = getText(R.string.back))
@@ -198,6 +200,15 @@ fun MemoryScreen(
 
 
     ) { padding ->
+        net.ericclark.studiare.screens.UI_Components.SessionSheetHost(
+            state = state,
+            viewModel = viewModel,
+            screenId = ShortcutScreen.MEMORY,
+            sheetTab = sheetTab,
+            onTabChange = { sheetTab = it },
+            onDismiss = { sheetTab = null },
+            padding = padding
+        ) { padding ->
         val activeIds = state.memoryActiveCardIds
         val cards = remember(activeIds, state.deckWithCards.cards) { state.deckWithCards.cards.filter { it.id in activeIds } }
 
@@ -470,6 +481,7 @@ fun MemoryScreen(
                     }
                 }
             }
+        }
         }
         }
     }

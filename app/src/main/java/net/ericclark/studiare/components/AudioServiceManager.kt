@@ -7,6 +7,7 @@ import android.content.ServiceConnection
 import android.os.IBinder
 import android.widget.Toast
 import androidx.core.app.NotificationCompat
+import net.ericclark.studiare.data.CardSide
 import net.ericclark.studiare.data.DeckWithCards
 import net.ericclark.studiare.*
 import net.ericclark.studiare.data.StudyState
@@ -78,6 +79,7 @@ class AudioServiceManager(
                         backLanguage = state.deckWithCards.deck.backLanguage,
                         startIndex = state.currentCardIndex,
                         promptSide = state.quizPromptSide,
+                        resolvedAutoByDeckSide = state.resolvedAutoByDeckSide,
                         playbackSpeed = state.audioPlaybackSpeed,
                         replayCount = state.audioReplayCount,
                         autoAdvance = state.audioAutoAdvance,
@@ -173,6 +175,16 @@ class AudioServiceManager(
     fun updateAudioDelays(answerDelaySeconds: Double, nextCardDelaySeconds: Double) {
         audioService?.answerDelayMs = (answerDelaySeconds * 1000).toLong()
         audioService?.nextCardDelayMs = (nextCardDelaySeconds * 1000).toLong()
+    }
+
+    // Session Options can change Prompt Side mid-session - without this, a running/already-bound
+    // service kept using whatever promptSide initializeSession saw at session start, since
+    // onServiceConnected only re-initializes an idle/fresh service (see its own comment above).
+    // Only takes effect from the next flip decision onward (skip/next-card/resume), same as every
+    // other live-updated setting here - it doesn't retroactively correct whatever's already playing.
+    fun setAudioPromptSide(promptSide: CardSide, resolvedAutoByDeckSide: CardSide) {
+        audioService?.promptSide = promptSide
+        audioService?.resolvedAutoByDeckSide = resolvedAutoByDeckSide
     }
 
     // --- HD Audio / Sherpa-Onnx Support ---

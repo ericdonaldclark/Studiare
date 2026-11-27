@@ -85,6 +85,11 @@ class AudioStudyService : android.app.Service() {
     var backLanguageStr: String = Locale.getDefault().language
 
     var promptSide: CardSide = CardSide.FRONT
+    // AUTO_BY_DECK/AUTO_BY_CARD never resolve to a real side by themselves - every comparison
+    // against promptSide below goes through resolvePromptSide(promptSide, card, resolvedAutoByDeckSide)
+    // instead of comparing promptSide directly, so Auto actually resolves per card instead of
+    // silently behaving as "not front" (i.e. always back-first) for every Auto session.
+    var resolvedAutoByDeckSide: CardSide = CardSide.FRONT
 
     // Delays in Milliseconds
     var answerDelayMs: Long = 2000L
@@ -139,7 +144,7 @@ class AudioStudyService : android.app.Service() {
 
         if (_currentCardIndex.value < cards.size - 1) {
             _currentCardIndex.value += 1
-            _isFlipped.value = (promptSide == CardSide.BACK)
+            _isFlipped.value = resolvePromptSide(promptSide, cards[_currentCardIndex.value], resolvedAutoByDeckSide) == CardSide.BACK
             _feedbackMessage.value = null
 
             if (_isPlaying.value || continuousPlay) {
@@ -166,7 +171,7 @@ class AudioStudyService : android.app.Service() {
             _currentCardIndex.value -= 1
         }
 
-        _isFlipped.value = (promptSide == CardSide.BACK)
+        _isFlipped.value = resolvePromptSide(promptSide, cards[_currentCardIndex.value], resolvedAutoByDeckSide) == CardSide.BACK
         _feedbackMessage.value = null
 
         if (_isPlaying.value || continuousPlay) {
@@ -182,6 +187,7 @@ class AudioStudyService : android.app.Service() {
         backLanguage: String,
         startIndex: Int,
         promptSide: CardSide,
+        resolvedAutoByDeckSide: CardSide = CardSide.FRONT,
         playbackSpeed: Float = 1f,
         replayCount: Int = 1,
         autoAdvance: Boolean = true,
@@ -193,13 +199,16 @@ class AudioStudyService : android.app.Service() {
         backLanguageStr = backLanguage
         _currentCardIndex.value = startIndex
         this.promptSide = promptSide
+        this.resolvedAutoByDeckSide = resolvedAutoByDeckSide
         this.playbackSpeed = playbackSpeed
         this.replayCount = replayCount
         continuousPlay = autoAdvance
         answerDelayMs = (answerDelaySeconds * 1000).toLong()
         nextCardDelayMs = (nextCardDelaySeconds * 1000).toLong()
 
-        _isFlipped.value = (promptSide == CardSide.BACK)
+        _isFlipped.value = sessionCards.getOrNull(startIndex)
+            ?.let { resolvePromptSide(promptSide, it, resolvedAutoByDeckSide) == CardSide.BACK }
+            ?: false
 
         startForeground(1, buildNotification(getString(R.string.audio_status_ready_to_study)))
     }
@@ -311,7 +320,7 @@ class AudioStudyService : android.app.Service() {
         while (_isPlaying.value && _currentCardIndex.value < cards.size) {
             val card = cards[_currentCardIndex.value]
 
-            val isFrontFirst = promptSide == CardSide.FRONT
+            val isFrontFirst = resolvePromptSide(promptSide, card, resolvedAutoByDeckSide) == CardSide.FRONT
 
             val firstText = if (isFrontFirst) card.front else card.back
             val firstNotesList = if (isFrontFirst) card.frontNotes else card.backNotes

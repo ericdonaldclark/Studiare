@@ -162,6 +162,7 @@ fun MatchingScreen(
     val focusRequester = remember { FocusRequester() }
     var focusedIndex by remember { mutableStateOf(0) }
     var focusedSide by remember { mutableStateOf("front") }
+    var sheetTab by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf<net.ericclark.studiare.screens.UI_Components.SessionSheetTab?>(null) }
 
     LaunchedEffect(state.matchingCardsOnScreen) {
         if (state.matchingCardsOnScreen.isNotEmpty()) {
@@ -182,7 +183,8 @@ fun MatchingScreen(
             CustomTopAppBar(
                 viewModel = viewModel,
                 screenId = ShortcutScreen.MATCHING,
-                title = { AdaptiveSessionTitle(state) },
+                title = { AdaptiveSessionTitle(state, suppressTimerPill = sheetTab != null && windowWidthSizeClass >= WindowWidthSizeClass.Expanded) },
+                onOpenSessionSheet = { sheetTab = it },
                 navigationIcon = {
                     TooltipIconButton(description = getText(R.string.back), onClick = {
                         viewModel.endStudySession()
@@ -199,6 +201,15 @@ fun MatchingScreen(
             )
         }
     ) { padding ->
+        net.ericclark.studiare.screens.UI_Components.SessionSheetHost(
+            state = state,
+            viewModel = viewModel,
+            screenId = ShortcutScreen.MATCHING,
+            sheetTab = sheetTab,
+            onTabChange = { sheetTab = it },
+            onDismiss = { sheetTab = null },
+            padding = padding
+        ) { padding ->
         AnimatedVisibility(
             visible = mainContentReady,
             enter = fadeIn(),
@@ -359,6 +370,7 @@ fun MatchingScreen(
                     shape = RoundedCornerShape(dimensions.cornerRadiusButton)
                 ) { Text(getText(R.string.get_answer)) }
             }
+        }
         }
         }
     }

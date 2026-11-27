@@ -83,6 +83,9 @@ import androidx.compose.material3.windowsizeclass.WindowHeightSizeClass
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import net.ericclark.studiare.screens.Screens.EditCardDialog
 import net.ericclark.studiare.screens.Screens.StudyCompletionScreen
+import androidx.compose.runtime.saveable.rememberSaveable
+import net.ericclark.studiare.screens.UI_Components.SessionSheetHost
+import net.ericclark.studiare.screens.UI_Components.SessionSheetTab
 
 /**
  * The main screen for the Flashcard study mode.
@@ -107,6 +110,7 @@ fun FlashcardScreen(
     }
     val mainContentReady = rememberMainContentReady()
     var showEditDialog by remember { mutableStateOf(false) }
+    var sheetTab by rememberSaveable { mutableStateOf<SessionSheetTab?>(null) }
 
     ApplyAutoAdvance(state, viewModel)
 
@@ -144,7 +148,8 @@ fun FlashcardScreen(
             CustomTopAppBar(
                 viewModel = viewModel,
                 screenId = ShortcutScreen.FLASHCARD,
-                title = { AdaptiveSessionTitle(state) },
+                title = { AdaptiveSessionTitle(state, suppressTimerPill = sheetTab != null && windowWidthSizeClass >= WindowWidthSizeClass.Expanded) },
+                onOpenSessionSheet = { sheetTab = it },
                 navigationIcon = {
                     TooltipIconButton(description = getText(R.string.back), onClick = {
                         viewModel.endStudySession()
@@ -166,6 +171,15 @@ fun FlashcardScreen(
             )
         }
     ) { padding ->
+        SessionSheetHost(
+            state = state,
+            viewModel = viewModel,
+            screenId = ShortcutScreen.FLASHCARD,
+            sheetTab = sheetTab,
+            onTabChange = { sheetTab = it },
+            onDismiss = { sheetTab = null },
+            padding = padding
+        ) { padding ->
         val focusRequester = remember { FocusRequester() }
 
         val currentCard = state.shuffledCards.getOrNull(state.currentCardIndex)
@@ -249,6 +263,7 @@ fun FlashcardScreen(
                 }
             }
         }
+        }
     }
 }
 
@@ -268,7 +283,7 @@ fun PortraitFlashcardLayout(state: StudyState, viewModel: FlashcardViewModel) {
         allTags.filter { it.name in card.tags }
     }
 
-    val shownFlipped = state.isFlipped != (state.flashcardRandomizeFirstSide && flashcardStartsOnBack(state.sessionId, card.id))
+    val shownFlipped = flashcardShownFlipped(state, card)
     val frontText = if (shownFlipped) card.backRichText?.takeIf { it.isNotBlank() } ?: card.back else card.frontRichText?.takeIf { it.isNotBlank() } ?: card.front
     val frontNotes = if (shownFlipped) card.backNotes else card.frontNotes
     val backText = if (shownFlipped) card.frontRichText?.takeIf { it.isNotBlank() } ?: card.front else card.backRichText?.takeIf { it.isNotBlank() } ?: card.back
@@ -363,7 +378,7 @@ fun LandscapeFlashcardLayout(state: StudyState, viewModel: FlashcardViewModel) {
         allTags.filter { it.name in card.tags }
     }
 
-    val shownFlipped = state.isFlipped != (state.flashcardRandomizeFirstSide && flashcardStartsOnBack(state.sessionId, card.id))
+    val shownFlipped = flashcardShownFlipped(state, card)
     val frontText = if (shownFlipped) card.backRichText?.takeIf { it.isNotBlank() } ?: card.back else card.frontRichText?.takeIf { it.isNotBlank() } ?: card.front
     val frontNotes = if (shownFlipped) card.backNotes else card.frontNotes
     val backText = if (shownFlipped) card.frontRichText?.takeIf { it.isNotBlank() } ?: card.front else card.backRichText?.takeIf { it.isNotBlank() } ?: card.back
@@ -643,3 +658,19 @@ fun FlashcardActionButtons(
  */
 fun flashcardStartsOnBack(sessionId: String, cardId: String): Boolean =
     kotlin.random.Random((sessionId + cardId).hashCode().toLong()).nextBoolean()
+
+/**
+ * Whether [card]'s back face is the one currently shown as the "front"/first-seen side - i.e.
+ * whether `frontText`/`backText` need to be swapped from their literal `card.front`/`card.back`.
+ * Combines three independent toggles, each able to flip the pair on its own: the session's Prompt
+ * Side setting ([StudyState.quizPromptSide] via [resolvePromptSide] - previously never consulted
+ * here at all, which was the actual bug: Session Options could say "Back" and Flashcard mode would
+ * still always open on the front), [StudyState.flashcardRandomizeFirstSide]'s per-card random
+ * flip, and the user's own manual flip ([StudyState.isFlipped]). `!=` on [Boolean] is XOR, and XOR
+ * chains associatively, so this reads left-to-right as "flip, then flip again, then flip again."
+ */
+fun flashcardShownFlipped(state: StudyState, card: Card): Boolean {
+    val promptIsBack = resolvePromptSide(state.quizPromptSide, card, state.resolvedAutoByDeckSide) == CardSide.BACK
+    val randomFlip = state.flashcardRandomizeFirstSide && flashcardStartsOnBack(state.sessionId, card.id)
+    return promptIsBack != randomFlip != state.isFlipped
+}

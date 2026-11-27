@@ -96,6 +96,7 @@ fun MultipleChoiceScreen(
     ApplyAutoAdvance(state, viewModel)
     var showEditDialog by remember { mutableStateOf(false) }
     val windowWidthSizeClass = LocalWindowWidthSizeClass.current
+    var sheetTab by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf<net.ericclark.studiare.screens.UI_Components.SessionSheetTab?>(null) }
 
     // Ensure options are generated
     LaunchedEffect(state.currentCardIndex, state.sessionId) {
@@ -142,7 +143,8 @@ fun MultipleChoiceScreen(
             CustomTopAppBar(
                 viewModel = viewModel,
                 screenId = ShortcutScreen.MULTIPLE_CHOICE,
-                title = { AdaptiveSessionTitle(state) },
+                title = { AdaptiveSessionTitle(state, suppressTimerPill = sheetTab != null && windowWidthSizeClass >= WindowWidthSizeClass.Expanded) },
+                onOpenSessionSheet = { sheetTab = it },
                 navigationIcon = {
                     TooltipIconButton(description = getText(R.string.back), onClick = {
                         viewModel.endStudySession()
@@ -161,6 +163,15 @@ fun MultipleChoiceScreen(
             )
         }
     ) { padding ->
+        net.ericclark.studiare.screens.UI_Components.SessionSheetHost(
+            state = state,
+            viewModel = viewModel,
+            screenId = ShortcutScreen.MULTIPLE_CHOICE,
+            sheetTab = sheetTab,
+            onTabChange = { sheetTab = it },
+            onDismiss = { sheetTab = null },
+            padding = padding
+        ) { padding ->
         val focusRequester = remember { FocusRequester() }
 
         // Gated on mainContentReady so this screen's first composition happens after, not during,
@@ -227,6 +238,7 @@ fun MultipleChoiceScreen(
             } else {
                 PortraitMCLayout(state, viewModel, displayOptions)
             }
+        }
         }
         }
     }

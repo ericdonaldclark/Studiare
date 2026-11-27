@@ -626,6 +626,32 @@
 
     <!-- StudySessionDialog: Timed Session -->
     <string name="timed_session">Timed Session</string>
+    <string name="elapsed_time_label">elapsed</string>
+
+    <!-- Study session side sheet -->
+    <string name="session_sheet_title">Study Session</string>
+    <string name="session_sheet_tab_progress">Progress</string>
+    <string name="session_sheet_tab_options">Options</string>
+    <string name="session_sheet_tab_keyboard">Keyboard</string>
+    <string name="session_sheet_correct">Correct</string>
+    <string name="session_sheet_incorrect">Incorrect</string>
+    <string name="session_sheet_remaining">Remaining</string>
+    <string name="session_sheet_completed">Completed</string>
+    <string name="session_sheet_accuracy">accuracy</string>
+    <string name="session_sheet_avg_time_per_card">Avg. time / card</string>
+    <string name="session_sheet_deck_size">In this session</string>
+    <string name="session_sheet_known_in_deck">Known in deck</string>
+    <string name="session_sheet_first_try">First try / retried</string>
+    <string name="session_sheet_next_review">Next review</string>
+    <string name="session_sheet_words_solved">Words solved</string>
+    <string name="session_sheet_words_found">Words found</string>
+    <string name="session_sheet_pairs_matched">Pairs matched</string>
+    <string name="session_sheet_guesses_left">Guesses left</string>
+    <string name="session_sheet_difficulty_breakdown">Difficulty</string>
+    <string name="session_sheet_previous_card">Previous</string>
+    <string name="session_sheet_next_card">Next</string>
+    <string name="session_sheet_show_more">Show more</string>
+    <string name="session_sheet_show_less">Show less</string>
     <string name="timed_session_desc">Set a time limit for the session - it ends automatically when time runs out.</string>
     <string name="timed_session_duration">Duration</string>
     <string name="timed_session_duration_desc">How long the session has to be completed.</string>

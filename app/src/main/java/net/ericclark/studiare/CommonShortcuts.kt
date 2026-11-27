@@ -75,6 +75,50 @@ fun KeyboardShortcutsDialog(
     currentScreen: ShortcutScreen
 ) {
     val dimensions = LocalStudiareDimensions.current
+
+    AnimatedDialog(onDismissRequest = onDismiss, properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)) {
+        Surface(
+            shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
+            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+            tonalElevation = 6.dp,
+            modifier = Modifier.widthIn(min = 280.dp, max = 560.dp)
+        ) {
+            Column(modifier = Modifier.padding(dimensions.paddingLarge)) {
+                Text(getText(R.string.keyboard_shortcuts), style = MaterialTheme.typography.headlineSmall)
+                Spacer(Modifier.height(dimensions.spacingMedium))
+
+                KeyboardShortcutsContent(
+                    viewModel = viewModel,
+                    currentScreen = currentScreen,
+                    listMaxHeight = 420.dp // Cap height to prevent dialog overflow; scrolls beyond that.
+                )
+
+                Spacer(Modifier.height(dimensions.spacingLarge))
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                    TextButton(onClick = onDismiss, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
+                        Text(getText(R.string.close_capitalized))
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * The "current screen only" switch, category chips, and shortcut list — the body of
+ * [KeyboardShortcutsDialog], factored out so the Shortcuts tab of the study-session side sheet
+ * ([net.ericclark.studiare.screens.UI_Components.SessionSheetTabs]) can host the same content
+ * without a second copy of this filtering logic. [listMaxHeight] lets each caller cap the
+ * scrollable list to whatever vertical space it actually has (the dialog's fixed cap vs. the
+ * side sheet's available height).
+ */
+@Composable
+fun KeyboardShortcutsContent(
+    viewModel: FlashcardViewModel,
+    currentScreen: ShortcutScreen,
+    listMaxHeight: androidx.compose.ui.unit.Dp
+) {
+    val dimensions = LocalStudiareDimensions.current
     val currentScreenOnly by viewModel.shortcutsCurrentScreenOnly.collectAsState()
     val remaps by viewModel.shortcutRemaps.collectAsState()
 
@@ -95,73 +139,54 @@ fun KeyboardShortcutsDialog(
         if (currentScreenOnly) displayedShortcuts.groupBy { it.category } else emptyMap()
     }
 
-    AnimatedDialog(onDismissRequest = onDismiss, properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)) {
-        Surface(
-            shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
-            color = MaterialTheme.colorScheme.surfaceContainerHigh,
-            tonalElevation = 6.dp,
-            modifier = Modifier.widthIn(min = 280.dp, max = 560.dp)
+    Column {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Column(modifier = Modifier.padding(dimensions.paddingLarge)) {
-                Text(getText(R.string.keyboard_shortcuts), style = MaterialTheme.typography.headlineSmall)
-                Spacer(Modifier.height(dimensions.spacingMedium))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(getText(R.string.current_screen_only), style = MaterialTheme.typography.bodyMedium)
+                Text(
+                    "Only show shortcuts that work here",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            StudiareSwitch(
+                checked = currentScreenOnly,
+                onCheckedChange = { viewModel.setShortcutsCurrentScreenOnly(it) }
+            )
+        }
 
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(getText(R.string.current_screen_only), style = MaterialTheme.typography.bodyMedium)
-                        Text(
-                            "Only show shortcuts that work here",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                    StudiareSwitch(
-                        checked = currentScreenOnly,
-                        onCheckedChange = { viewModel.setShortcutsCurrentScreenOnly(it) }
-                    )
+        Spacer(Modifier.height(dimensions.spacingMedium))
+        HorizontalDivider()
+        Spacer(Modifier.height(dimensions.spacingMedium))
+
+        // Tabs only make sense when browsing everything; filtered-to-this-screen mode
+        // is already a short, flat list with nothing to switch between.
+        if (!currentScreenOnly) {
+            ShortcutCategoryChips(
+                categories = categories,
+                selectedCategory = selectedCategory,
+                onCategorySelected = { selectedCategory = it }
+            )
+            Spacer(Modifier.height(dimensions.spacingMedium))
+        }
+
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(max = listMaxHeight)
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)
+        ) {
+            if (currentScreenOnly) {
+                groupedForCurrentScreen.forEach { (category, entries) ->
+                    ShortcutSection(category)
+                    entries.forEach { ShortcutItem(it.action, it.displayKeys(remaps)) }
                 }
-
-                Spacer(Modifier.height(dimensions.spacingMedium))
-                HorizontalDivider()
-                Spacer(Modifier.height(dimensions.spacingMedium))
-
-                // Tabs only make sense when browsing everything; filtered-to-this-screen mode
-                // is already a short, flat list with nothing to switch between.
-                if (!currentScreenOnly) {
-                    ShortcutCategoryChips(
-                        categories = categories,
-                        selectedCategory = selectedCategory,
-                        onCategorySelected = { selectedCategory = it }
-                    )
-                    Spacer(Modifier.height(dimensions.spacingMedium))
-                }
-
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(max = 420.dp) // Cap height to prevent dialog overflow; scrolls beyond that.
-                        .verticalScroll(rememberScrollState()),
-                    verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)
-                ) {
-                    if (currentScreenOnly) {
-                        groupedForCurrentScreen.forEach { (category, entries) ->
-                            ShortcutSection(category)
-                            entries.forEach { ShortcutItem(it.action, it.displayKeys(remaps)) }
-                        }
-                    } else {
-                        displayedShortcuts.forEach { ShortcutItem(it.action, it.displayKeys(remaps)) }
-                    }
-                }
-
-                Spacer(Modifier.height(dimensions.spacingLarge))
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                    TextButton(onClick = onDismiss, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
-                        Text(getText(R.string.close_capitalized))
-                    }
-                }
+            } else {
+                displayedShortcuts.forEach { ShortcutItem(it.action, it.displayKeys(remaps)) }
             }
         }
     }

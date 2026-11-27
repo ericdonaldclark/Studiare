@@ -104,6 +104,7 @@ fun CrosswordScreen(
     val state = viewModel.studyState ?: return
     val mainContentReady = rememberMainContentReady()
     val inputController = net.ericclark.studiare.components.rememberLetterInputController()
+    var sheetTab by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf<net.ericclark.studiare.screens.UI_Components.SessionSheetTab?>(null) }
 
     val isCompact = windowWidthSizeClass == WindowWidthSizeClass.Compact || windowHeightSizeClass == WindowHeightSizeClass.Compact
     val isImeVisible = WindowInsets.isImeVisible
@@ -154,7 +155,8 @@ fun CrosswordScreen(
             CustomTopAppBar(
                 viewModel = viewModel,
                 screenId = ShortcutScreen.CROSSWORD,
-                title = { AdaptiveSessionTitle(state) },
+                title = { AdaptiveSessionTitle(state, suppressTimerPill = sheetTab != null && windowWidthSizeClass >= WindowWidthSizeClass.Expanded) },
+                onOpenSessionSheet = { sheetTab = it },
                 navigationIcon = {
                     TooltipIconButton(description = getText(R.string.back), onClick = { viewModel.endStudySession(); navController.popBackStack() }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = getText(R.string.back))
@@ -173,6 +175,15 @@ fun CrosswordScreen(
             )
         }
     ) { padding ->
+        net.ericclark.studiare.screens.UI_Components.SessionSheetHost(
+            state = state,
+            viewModel = viewModel,
+            screenId = ShortcutScreen.CROSSWORD,
+            sheetTab = sheetTab,
+            onTabChange = { sheetTab = it },
+            onDismiss = { sheetTab = null },
+            padding = padding
+        ) { padding ->
         AnimatedVisibility(
             visible = mainContentReady,
             enter = fadeIn(),
@@ -527,6 +538,7 @@ fun CrosswordScreen(
                     }
                 }
             }
+        }
         }
         }
     }

@@ -102,6 +102,7 @@ fun AudioStudyScreen(
     val state = viewModel.studyState ?: return
     val mainContentReady = rememberMainContentReady()
     var showEditDialog by remember { mutableStateOf(false) }
+    var sheetTab by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf<net.ericclark.studiare.screens.UI_Components.SessionSheetTab?>(null) }
 
     DisposableEffect(Unit) {
         viewModel.bindAudioService()
@@ -114,11 +115,15 @@ fun AudioStudyScreen(
     val feedbackMessage by viewModel.audioFeedback.collectAsState()
 
     // Audio options come from the session (chosen at start, changeable from the session settings button).
-    LaunchedEffect(state.audioAnswerDelaySeconds, state.audioNextCardDelaySeconds, state.audioAutoAdvance, state.audioPlaybackSpeed, state.audioReplayCount) {
+    LaunchedEffect(
+        state.audioAnswerDelaySeconds, state.audioNextCardDelaySeconds, state.audioAutoAdvance,
+        state.audioPlaybackSpeed, state.audioReplayCount, state.quizPromptSide, state.resolvedAutoByDeckSide
+    ) {
         viewModel.updateAudioDelays(state.audioAnswerDelaySeconds, state.audioNextCardDelaySeconds)
         viewModel.setAudioContinuousPlay(state.audioAutoAdvance)
         viewModel.setAudioPlaybackSpeed(state.audioPlaybackSpeed)
         viewModel.setAudioReplayCount(state.audioReplayCount)
+        viewModel.setAudioPromptSide(state.quizPromptSide, state.resolvedAutoByDeckSide)
     }
 
     val currentCard = state.shuffledCards.getOrNull(currentIndex)
@@ -147,7 +152,8 @@ fun AudioStudyScreen(
             CustomTopAppBar(
                 viewModel = viewModel,
                 screenId = ShortcutScreen.AUDIO,
-                title = { AdaptiveSessionTitle(state) },
+                title = { AdaptiveSessionTitle(state, suppressTimerPill = sheetTab != null && windowWidthSizeClass >= WindowWidthSizeClass.Expanded) },
+                onOpenSessionSheet = { sheetTab = it },
                 navigationIcon = {
                     TooltipIconButton(description = getText(R.string.back), onClick = {
                         viewModel.endStudySession()
@@ -163,6 +169,15 @@ fun AudioStudyScreen(
             )
         }
     ) { padding ->
+        net.ericclark.studiare.screens.UI_Components.SessionSheetHost(
+            state = state,
+            viewModel = viewModel,
+            screenId = ShortcutScreen.AUDIO,
+            sheetTab = sheetTab,
+            onTabChange = { sheetTab = it },
+            onDismiss = { sheetTab = null },
+            padding = padding
+        ) { padding ->
         val focusRequester = remember { FocusRequester() }
 
         // Re-request focus whenever the card changes
@@ -251,6 +266,7 @@ fun AudioStudyScreen(
                     }
                 }
             }
+        }
         }
         }
     }

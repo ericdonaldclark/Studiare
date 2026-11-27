@@ -1799,18 +1799,31 @@ val sessionOptionScreens: Set<ShortcutScreen> = setOf(
     ShortcutScreen.AUDIO, ShortcutScreen.LISTEN_TYPE, ShortcutScreen.SEE_SPEAK, ShortcutScreen.HEAR_MATCH
 )
 
-/** Top-bar settings button for a running session; opens [SessionOptionsDialog] for the session's mode. */
+/**
+ * Top-bar settings button for a running session. Opens [SessionOptionsDialog] for the session's
+ * mode, unless [onOpenSessionSheet] is given (the screen hosts the study-session side sheet via
+ * SessionSheetHost) — then it opens that sheet's Progress tab instead, which is the sheet's own
+ * entry point and already contains the Mode Options tab this button used to open directly.
+ */
 @Composable
-fun SessionOptionsAction(viewModel: FlashcardViewModel, screenId: ShortcutScreen) {
+fun SessionOptionsAction(
+    viewModel: FlashcardViewModel,
+    screenId: ShortcutScreen,
+    onOpenSessionSheet: ((SessionSheetTab) -> Unit)? = null
+) {
     val state = viewModel.studyState
     if (state == null || screenId !in sessionOptionScreens) return
     var showDialog by remember { mutableStateOf(false) }
+    val onClick = { if (onOpenSessionSheet != null) onOpenSessionSheet(SessionSheetTab.PROGRESS) else showDialog = true }
     TooltipIconButton(
         description = getText(R.string.session_options),
-        onClick = { showDialog = true },
-        modifier = Modifier.withShortcut(Key.O, "O", id = "session.options") { showDialog = true }
+        onClick = onClick,
+        modifier = Modifier.withShortcut(Key.O, "O", id = "session.options") { onClick() }
     ) {
-        Icon(Icons.Default.Settings, getText(R.string.session_options))
+        net.ericclark.studiare.components.MaterialSymbol(
+            codepoint = net.ericclark.studiare.components.MaterialSymbols.SIDE_NAVIGATION,
+            contentDescription = getText(R.string.session_options)
+        )
     }
     if (showDialog) {
         SessionOptionsDialog(

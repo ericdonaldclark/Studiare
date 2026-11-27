@@ -991,7 +991,6 @@ PromptSide:
     GAMES_ANAGRAM: true
     GAMES_CROSSWORD: true
     GAMES_HANGMAN: true
-    GAMES_MEMORY: true
     LEARN_AUDIO: true
     LEARN_FREEFORM: true
     LEARN_TYPING: true
@@ -1002,8 +1001,6 @@ PromptSide:
     PRACTICE_LIST: true
     QUIZ_LIST: true
     GUIDED_LIST: true
-    PRACTICE_MATCHING: true
-    QUIZ_MATCHING: true
     PRACTICE_MULTIPLE_CHOICE: true
     QUIZ_MULTIPLE_CHOICE: true
     GUIDED_MULTIPLE_CHOICE: true

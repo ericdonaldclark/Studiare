@@ -58,6 +58,7 @@ import net.ericclark.studiare.R
 import net.ericclark.studiare.screens.Screens.EditCardDialog
 import net.ericclark.studiare.components.getText
 import net.ericclark.studiare.screens.Screens.StudyCompletionScreen
+import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 
 @OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
 @Composable
@@ -81,6 +82,7 @@ fun FreeformScreen(
     val revealed = remember { mutableStateMapOf<Int, Boolean>() }
     val revealKey = resolveShortcutKey(LocalShortcutRemaps.current, "freeform.reveal", Key.Spacebar)
     var showEditDialog by remember { mutableStateOf(false) }
+    var sheetTab by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf<net.ericclark.studiare.screens.UI_Components.SessionSheetTab?>(null) }
 
     if (showEditDialog) {
         cards.getOrNull(pagerState.currentPage)?.let { card ->
@@ -108,7 +110,8 @@ fun FreeformScreen(
             CustomTopAppBar(
                 viewModel = viewModel,
                 screenId = ShortcutScreen.FREEFORM,
-                title = { AdaptiveSessionTitle(state) },
+                title = { AdaptiveSessionTitle(state, suppressTimerPill = sheetTab != null && LocalWindowWidthSizeClass.current >= WindowWidthSizeClass.Expanded) },
+                onOpenSessionSheet = { sheetTab = it },
                 navigationIcon = {
                     TooltipIconButton(description = getText(R.string.back), onClick = { navController.popBackStack() }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = getText(R.string.back))
@@ -128,6 +131,15 @@ fun FreeformScreen(
             )
         }
     ) { padding ->
+        net.ericclark.studiare.screens.UI_Components.SessionSheetHost(
+            state = state,
+            viewModel = viewModel,
+            screenId = ShortcutScreen.FREEFORM,
+            sheetTab = sheetTab,
+            onTabChange = { sheetTab = it },
+            onDismiss = { sheetTab = null },
+            padding = padding
+        ) { padding ->
         val focusRequester = remember { FocusRequester() }
         val coroutineScope = rememberCoroutineScope()
 
@@ -340,6 +352,7 @@ fun FreeformScreen(
                     ) { Icon(nextIcon, getText(R.string.next_card)) }
                 }
             }
+        }
         }
         }
     }

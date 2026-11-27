@@ -1,6 +1,8 @@
 package net.ericclark.studiare
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
@@ -24,6 +26,8 @@ import androidx.compose.ui.graphics.Color
 import net.ericclark.studiare.components.getText
 import kotlinx.coroutines.delay
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.MutableTransitionState
 import net.ericclark.studiare.ui.theme.pressSquish
 import androidx.compose.animation.fadeIn
@@ -59,6 +63,46 @@ fun rememberCarouselIndicatorIndex(listState: LazyListState): State<Int> = remem
             val viewportEnd = layoutInfo.viewportEndOffset
             visibleItemsInfo.firstOrNull { it.offset >= viewportStart && it.offset + it.size <= viewportEnd }?.index
                 ?: visibleItemsInfo.first().index
+        }
+    }
+}
+
+/**
+ * The row of dots below a `LazyRow`-based carousel (session tiles, presets, the session side
+ * sheet's stat cards, ...), driven by [rememberCarouselIndicatorIndex]. Extracted here once a
+ * third carousel needed the exact same row - callers still guard `itemCount > 1` themselves
+ * before showing it, since a single-item carousel has nothing to indicate.
+ */
+@Composable
+fun CarouselDotsIndicator(itemCount: Int, listState: LazyListState, modifier: Modifier = Modifier) {
+    val currentIndex by rememberCarouselIndicatorIndex(listState)
+    Row(
+        modifier = modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        repeat(itemCount) { index ->
+            val isSelected = index == currentIndex
+            val width by androidx.compose.animation.core.animateDpAsState(
+                targetValue = if (isSelected) 24.dp else 8.dp,
+                animationSpec = spring(
+                    dampingRatio = Spring.DampingRatioMediumBouncy,
+                    stiffness = Spring.StiffnessLow
+                ),
+                label = "dotWidth"
+            )
+            val color by animateColorAsState(
+                targetValue = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f),
+                label = "dotColor"
+            )
+
+            Box(
+                modifier = Modifier
+                    .padding(horizontal = 4.dp)
+                    .size(width = width, height = 8.dp)
+                    .clip(CircleShape)
+                    .background(color)
+            )
         }
     }
 }
@@ -198,11 +242,17 @@ fun AnimatedDialog(
     // Window level for the platform to detect a click outside on - every tap, even on the dimmed
     // scrim, is technically a tap inside this window's one and only content view.
     dismissOnScrimClick: Boolean = true,
+    // Edge-anchored presentations (the study-session side sheet's modal variant,
+    // SessionSheetModal) pass Alignment.CenterEnd + a slide transition instead of these centered-
+    // dialog defaults; every other caller is unaffected since both default to the original
+    // centered scale+fade.
+    contentAlignment: Alignment = Alignment.Center,
+    enter: EnterTransition = fadeIn(animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec()),
+    exit: ExitTransition = fadeOut(animationSpec = MaterialTheme.motionScheme.fastEffectsSpec()),
     content: @Composable () -> Unit
 ) {
     val visibleState = remember { MutableTransitionState(false) }
     visibleState.targetState = true
-    val motionScheme = MaterialTheme.motionScheme
 
     // Lets screens (see Modifier.autoFocusable) know not to reclaim keyboard focus for
     // themselves while a dialog is on top of them.
@@ -237,7 +287,7 @@ fun AnimatedDialog(
             } else {
                 Modifier.fillMaxSize()
             },
-            contentAlignment = Alignment.Center
+            contentAlignment = contentAlignment
         ) {
             AnimatedVisibility(
                 visibleState = visibleState,
@@ -273,10 +323,10 @@ fun AnimatedDialog(
                 // instead of settling). A plain fade has no layout-size component at all, so it can't
                 // conflict with any dialog's internal sizing logic — still not scale, just not
                 // spatial either, which M3 doesn't require.
-                enter = fadeIn(animationSpec = motionScheme.defaultEffectsSpec()),
+                enter = enter,
                 // Exit uses the fast spec (see MainActivity's NavHost transitions for why) so the
                 // dialog clears quickly instead of cross-fading at full duration against new content.
-                exit = fadeOut(animationSpec = motionScheme.fastEffectsSpec())
+                exit = exit
             ) {
                 // A tap anywhere in the Box above (the dimmed scrim) is a valid dismiss, but a tap
                 // that lands on the dialog's own real content is not - without something here to

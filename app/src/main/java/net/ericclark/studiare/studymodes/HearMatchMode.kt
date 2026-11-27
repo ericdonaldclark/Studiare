@@ -112,6 +112,7 @@ fun HearMatchScreen(navController: NavController, viewModel: FlashcardViewModel)
 
     var armedIndex by remember(state.currentCardIndex) { mutableStateOf<Int?>(null) }
     var showEditDialog by remember { mutableStateOf(false) }
+    var sheetTab by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf<net.ericclark.studiare.screens.UI_Components.SessionSheetTab?>(null) }
 
     if (showEditDialog) {
         card?.let { c -> EditCardDialog(cardToEdit = c, viewModel = viewModel, onDismiss = { showEditDialog = false }) }
@@ -149,7 +150,8 @@ fun HearMatchScreen(navController: NavController, viewModel: FlashcardViewModel)
             CustomTopAppBar(
                 viewModel = viewModel,
                 screenId = ShortcutScreen.HEAR_MATCH,
-                title = { AdaptiveSessionTitle(state) },
+                title = { AdaptiveSessionTitle(state, suppressTimerPill = sheetTab != null && LocalWindowWidthSizeClass.current >= WindowWidthSizeClass.Expanded) },
+                onOpenSessionSheet = { sheetTab = it },
                 navigationIcon = {
                     TooltipIconButton(description = getText(R.string.back), onClick = {
                         viewModel.endStudySession()
@@ -168,6 +170,15 @@ fun HearMatchScreen(navController: NavController, viewModel: FlashcardViewModel)
             )
         }
     ) { padding ->
+        net.ericclark.studiare.screens.UI_Components.SessionSheetHost(
+            state = state,
+            viewModel = viewModel,
+            screenId = ShortcutScreen.HEAR_MATCH,
+            sheetTab = sheetTab,
+            onTabChange = { sheetTab = it },
+            onDismiss = { sheetTab = null },
+            padding = padding
+        ) { padding ->
         val windowWidthSizeClass = LocalWindowWidthSizeClass.current
         val dimensions = LocalStudiareDimensions.current
 
@@ -245,6 +256,7 @@ fun HearMatchScreen(navController: NavController, viewModel: FlashcardViewModel)
                     MCFeedbackArea(state = state, viewModel = viewModel)
                 }
             }
+        }
         }
         }
     }
