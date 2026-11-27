@@ -261,7 +261,7 @@ fun SettingsScreen(
 
     // --- Dialogs (Conflict, Delete, Tags, Langs) ---
     if (showConflictDialog) {
-        AnimatedDialog(onDismissRequest = { /* Prevent dismissing without choice */ }) {
+        AnimatedDialog(onDismissRequest = { /* Prevent dismissing without choice */ }, dismissOnScrimClick = false) {
             Surface(
                 shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
                 color = MaterialTheme.colorScheme.surfaceContainerHigh,

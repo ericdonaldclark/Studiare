@@ -553,7 +553,7 @@ internal fun TreeChildRow(
 
     if (showDeleteConfirm) {
         if (isDeck) {
-            AnimatedDialog(onDismissRequest = { showDeleteConfirm = false }) {
+            AnimatedDialog(onDismissRequest = { showDeleteConfirm = false }, dismissOnScrimClick = false) {
                 val dimensions = LocalStudiareDimensions.current
                 Surface(
                     shape = RoundedCornerShape(dimensions.cornerRadiusMedium),

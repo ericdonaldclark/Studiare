@@ -119,7 +119,7 @@ fun DrawerDeckHierarchyNode(
     if (showDeleteConfirm) {
         val isTopLevel = deckWithCards.deck.parentDeckId == null
         if (isTopLevel) {
-            AnimatedDialog(onDismissRequest = { showDeleteConfirm = false }) {
+            AnimatedDialog(onDismissRequest = { showDeleteConfirm = false }, dismissOnScrimClick = false) {
                 val dimensions = LocalStudiareDimensions.current
                 Surface(
                     shape = RoundedCornerShape(dimensions.cornerRadiusMedium),

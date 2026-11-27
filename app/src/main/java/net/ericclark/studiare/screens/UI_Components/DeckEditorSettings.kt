@@ -485,7 +485,7 @@ fun DeckSettingsDialog(
     }
 
     if (showClearConfirm) {
-        AnimatedDialog(onDismissRequest = { showClearConfirm = false }) {
+        AnimatedDialog(onDismissRequest = { showClearConfirm = false }, dismissOnScrimClick = false) {
             Surface(
                 shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
                 color = MaterialTheme.colorScheme.surfaceContainer,

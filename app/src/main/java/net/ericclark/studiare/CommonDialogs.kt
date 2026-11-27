@@ -189,6 +189,15 @@ fun SelectableDialogItem(
 fun AnimatedDialog(
     onDismissRequest: () -> Unit,
     properties: DialogProperties = DialogProperties(),
+    // True for every dialog except confirmation/warning ones (ConfirmationDialog below passes
+    // false, as do the handful of hand-rolled yes/no dialogs that don't go through it) and the
+    // rare "must pick one of these options" dialog that already disables every other dismiss path
+    // too. Needed because DialogProperties.dismissOnClickOutside (the platform's own version of
+    // this) can't do the job here: the Box below already fills the whole Dialog window itself (see
+    // its own comment for why), so there's no "outside the content" region left at the Android
+    // Window level for the platform to detect a click outside on - every tap, even on the dimmed
+    // scrim, is technically a tap inside this window's one and only content view.
+    dismissOnScrimClick: Boolean = true,
     content: @Composable () -> Unit
 ) {
     val visibleState = remember { MutableTransitionState(false) }
@@ -217,8 +226,19 @@ fun AnimatedDialog(
         // fillMaxSize Box lets it share this dialog's window instead of needing its own —
         // contentAlignment = Center keeps real dialog content centered within that now-full-size
         // Box instead of defaulting to Box's own TopStart (see the wrapContentSize() note below
-        // for why the Box needs to be full-size at all).
-        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        // for why the Box needs to be full-size at all). This same full-size Box is also what a
+        // scrim click needs to land on - see dismissOnScrimClick above.
+        Box(
+            modifier = if (dismissOnScrimClick) {
+                Modifier.fillMaxSize().clickable(
+                    indication = null,
+                    interactionSource = remember { MutableInteractionSource() }
+                ) { visibleState.targetState = false } // same path back/outside-click already use
+            } else {
+                Modifier.fillMaxSize()
+            },
+            contentAlignment = Alignment.Center
+        ) {
             AnimatedVisibility(
                 visibleState = visibleState,
                 // wrapContentSize(): with `usePlatformDefaultWidth = false` (used by most dialogs
@@ -258,7 +278,23 @@ fun AnimatedDialog(
                 // dialog clears quickly instead of cross-fading at full duration against new content.
                 exit = fadeOut(animationSpec = motionScheme.fastEffectsSpec())
             ) {
-                content()
+                // A tap anywhere in the Box above (the dimmed scrim) is a valid dismiss, but a tap
+                // that lands on the dialog's own real content is not - without something here to
+                // consume it first, it would otherwise bubble out to that Box's own clickable
+                // (dispatched there regardless, since this content sits inside that Box's bounds)
+                // and dismiss the dialog from a tap on its own blank padding, not just outside it.
+                if (dismissOnScrimClick) {
+                    Box(
+                        modifier = Modifier.clickable(
+                            indication = null,
+                            interactionSource = remember { MutableInteractionSource() }
+                        ) {}
+                    ) {
+                        content()
+                    }
+                } else {
+                    content()
+                }
             }
             if (LocalShowSizeOverlay.current) {
                 WindowSizeOverlay(Modifier.align(Alignment.TopEnd))
@@ -288,7 +324,9 @@ fun ConfirmationDialog(
     }
 ) {
     val dimensions = LocalStudiareDimensions.current
-    AnimatedDialog(onDismissRequest = onDismiss) {
+    // A confirmation/warning dialog needs an explicit button tap, not an easy-to-trigger-by-accident
+    // scrim click, since its two choices usually aren't equally safe to land on by accident.
+    AnimatedDialog(onDismissRequest = onDismiss, dismissOnScrimClick = false) {
         Surface(
             shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
             color = MaterialTheme.colorScheme.surfaceContainerHigh,

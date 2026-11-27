@@ -177,7 +177,7 @@ fun SavedPreferencesDialog(viewModel: FlashcardViewModel, onDismiss: () -> Unit)
 
     if (confirmResetAll) {
         val dimensions = net.ericclark.studiare.ui.theme.LocalStudiareDimensions.current
-        net.ericclark.studiare.AnimatedDialog(onDismissRequest = { confirmResetAll = false }) {
+        net.ericclark.studiare.AnimatedDialog(onDismissRequest = { confirmResetAll = false }, dismissOnScrimClick = false) {
             Surface(
                 shape = androidx.compose.foundation.shape.RoundedCornerShape(dimensions.cornerRadiusMedium),
                 color = MaterialTheme.colorScheme.surfaceContainer,

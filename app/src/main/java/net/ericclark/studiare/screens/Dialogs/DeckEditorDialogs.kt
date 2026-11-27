@@ -235,7 +235,7 @@ fun CardEditDialog(
 @Composable
 fun UnsavedChangesDialog(onDismiss: () -> Unit, onDiscard: () -> Unit, onSave: () -> Unit) {
     val dimensions = LocalStudiareDimensions.current
-    AnimatedDialog(onDismissRequest = onDismiss) {
+    AnimatedDialog(onDismissRequest = onDismiss, dismissOnScrimClick = false) {
         Surface(
             shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
             color = MaterialTheme.colorScheme.surfaceContainer,
@@ -271,7 +271,7 @@ fun UnsavedChangesDialog(onDismiss: () -> Unit, onDiscard: () -> Unit, onSave: (
 @Composable
 fun ClearCardDataConfirmDialog(cardCount: Int, onDismiss: () -> Unit, onConfirm: () -> Unit) {
     val dimensions = LocalStudiareDimensions.current
-    AnimatedDialog(onDismissRequest = onDismiss) {
+    AnimatedDialog(onDismissRequest = onDismiss, dismissOnScrimClick = false) {
         Surface(
             shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
             color = MaterialTheme.colorScheme.surfaceContainer,
@@ -861,7 +861,7 @@ fun AdvancedDeckEditorDialog(
     }
 
     templateSetToDelete?.let { toDelete ->
-        AnimatedDialog(onDismissRequest = { templateSetToDelete = null }) {
+        AnimatedDialog(onDismissRequest = { templateSetToDelete = null }, dismissOnScrimClick = false) {
             Surface(
                 shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
                 color = MaterialTheme.colorScheme.surfaceContainer,
