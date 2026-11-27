@@ -5,9 +5,11 @@ import net.ericclark.studiare.components.getText
 import net.ericclark.studiare.R
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.expandHorizontally
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.clickable
@@ -301,48 +303,119 @@ internal fun <T> TypedChipGrid(
     selected: T,
     labelFor: @Composable (T) -> String,
     onSelected: (T) -> Unit,
-    /** Optional leading icon per item, shown regardless of selected state (unlike
-     * [ConnectedButtonGroup]'s default checkmark-when-selected) - replaced by the checkmark on the
-     * selected chip when [showCheckmarkWhenSelected] is on, same icon slot either way. */
+    /** Optional leading icon per item, shown regardless of selected state - stays in place (not
+     *  replaced) when [showCheckmarkWhenSelected] adds a checkmark to the left of it. */
     iconFor: (@Composable (T) -> androidx.compose.ui.graphics.vector.ImageVector)? = null,
-    /** True only for CreateStudySessionDialog.kt's Setup tab (Category/Mode): shows a checkmark
-     *  leading icon on the selected chip instead of relying on color alone, same as
-     *  [SequencedSelectionChip]'s filter/sort chips. A selected chip is wider than an unselected
-     *  one (the checkmark's icon + gap), which could otherwise push a later chip onto a new line
-     *  depending on which chip happens to be selected - so instead of reserving that width on
-     *  every chip, it's reserved once as trailing space on the whole row. That's only valid
-     *  because this grid is single-select: at most one chip ever carries a checkmark at a time, so
-     *  one row-wide buffer is always enough, on every line, no matter which chip is selected. If
-     *  this ever grows a multi-select grid, this buffer would need to become per-chip instead. */
+    /** True only for CreateStudySessionDialog.kt's Setup tab (Category/Mode): shows a checkmark to
+     *  the left of (Category's) icon or (Mode's, which has none) the label on the selected chip,
+     *  instead of relying on color alone, same as [SequencedSelectionChip]'s filter/sort chips. A
+     *  selected chip is wider than an unselected one (the checkmark's icon, plus a small gap when
+     *  there's also an [iconFor] icon to sit beside) - reserving that extra width (on the chip or
+     *  on the row) to keep every line's wrapping stable turned out not to hold up in practice, so
+     *  instead each line is decided purely from every chip's *unselected* width (which chip is
+     *  selected never changes which line it's assigned to), and rendered as its own horizontally
+     *  scrolling row - if the selected chip's growth would overflow its line, that line just
+     *  scrolls (or its last chip sits slightly past the edge) instead of anything reflowing. */
     showCheckmarkWhenSelected: Boolean = false
 ) {
     val dimensions = LocalStudiareDimensions.current
-    val checkmarkRowBuffer = if (showCheckmarkWhenSelected) FilterChipDefaults.IconSize + FilterChipDefaults.HorizontalSpacing else 0.dp
-    FlowRow(
-        modifier = Modifier.fillMaxWidth().padding(end = checkmarkRowBuffer),
-        horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall),
-        verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)
-    ) {
-        items.forEach { item ->
-            val isSelected = selected == item
-            FilterChip(
-                selected = isSelected,
-                onClick = { onSelected(item) },
-                label = { Text(labelFor(item), maxLines = 1, softWrap = false) },
-                leadingIcon = when {
-                    showCheckmarkWhenSelected && isSelected -> {
-                        { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(FilterChipDefaults.IconSize)) }
+
+    @Composable
+    fun ChipLeadingIcon(item: T, isSelected: Boolean) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            if (iconFor != null) {
+                // With an icon, this leadingIcon slot is non-null whether or not the chip is
+                // selected (the icon's always there), so M3's own enter/exit animation for the
+                // slot as a whole never fires here - the checkmark's appearance needs its own
+                // explicit animation instead, or it just snaps in/out.
+                AnimatedVisibility(
+                    visible = showCheckmarkWhenSelected && isSelected,
+                    enter = expandHorizontally(expandFrom = Alignment.Start) + fadeIn(),
+                    exit = shrinkHorizontally(shrinkTowards = Alignment.Start) + fadeOut()
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(FilterChipDefaults.IconSize))
+                        Spacer(Modifier.width(4.dp))
                     }
-                    iconFor != null -> {
-                        { Icon(iconFor(item), contentDescription = null, modifier = Modifier.size(FilterChipDefaults.IconSize)) }
+                }
+                Icon(iconFor(item), contentDescription = null, modifier = Modifier.size(FilterChipDefaults.IconSize))
+            } else if (showCheckmarkWhenSelected && isSelected) {
+                // No icon (Mode): this leadingIcon slot itself goes from null to non-null on
+                // selection, so M3's own AnimatedVisibility around the whole slot already animates
+                // this appearing/disappearing - wrapping it again here would double the animation.
+                Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(FilterChipDefaults.IconSize))
+            }
+        }
+    }
+
+    @Composable
+    fun Chip(item: T, isSelected: Boolean) {
+        FilterChip(
+            selected = isSelected,
+            onClick = { onSelected(item) },
+            label = { Text(labelFor(item), maxLines = 1, softWrap = false) },
+            leadingIcon = if (iconFor != null || (showCheckmarkWhenSelected && isSelected)) {
+                { ChipLeadingIcon(item, isSelected) }
+            } else null,
+            // M3 Expressive's filter-chip look (squared, not pill) only for the checkmark
+            // treatment - FilterChip's own default shape already gets this right, so there's
+            // nothing to override; every other caller keeps the original pill shape.
+            shape = if (showCheckmarkWhenSelected) FilterChipDefaults.shape else RoundedCornerShape(50)
+        )
+    }
+
+    if (!showCheckmarkWhenSelected || items.isEmpty()) {
+        FlowRow(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall),
+            verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)
+        ) {
+            items.forEach { item -> Chip(item, selected == item) }
+        }
+        return
+    }
+
+    SubcomposeLayout(modifier = Modifier.fillMaxWidth()) { constraints ->
+        // Every chip's own *unselected* width - never the currently-selected one's, so which chip
+        // happens to be selected can't change this partitioning, only re-measuring the actual
+        // items (a different filter/sort/deck, a locale change, etc.) can.
+        val naturalWidths = items.mapIndexed { index, item ->
+            subcompose("measure-$index") { Chip(item, isSelected = false) }
+                .first().measure(Constraints()).width
+        }
+        val spacingPx = dimensions.spacingSmall.roundToPx()
+
+        val rows = mutableListOf<MutableList<Int>>()
+        var currentRowWidth = 0
+        naturalWidths.forEachIndexed { index, width ->
+            val currentRow = rows.lastOrNull()
+            if (currentRow == null || currentRowWidth + spacingPx + width > constraints.maxWidth) {
+                rows.add(mutableListOf(index))
+                currentRowWidth = width
+            } else {
+                currentRow.add(index)
+                currentRowWidth += spacingPx + width
+            }
+        }
+
+        val contentPlaceable = subcompose("content") {
+            Column(verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)) {
+                rows.forEach { rowIndices ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)
+                    ) {
+                        rowIndices.forEach { index ->
+                            val item = items[index]
+                            Chip(item, selected == item)
+                        }
                     }
-                    else -> null
-                },
-                // M3 Expressive's filter-chip look (squared, not pill) only for the checkmark
-                // treatment - FilterChip's own default shape already gets this right, so there's
-                // nothing to override; every other caller keeps the original pill shape.
-                shape = if (showCheckmarkWhenSelected) FilterChipDefaults.shape else RoundedCornerShape(50)
-            )
+                }
+            }
+        }.first().measure(constraints)
+
+        layout(contentPlaceable.width, contentPlaceable.height) {
+            contentPlaceable.placeRelative(0, 0)
         }
     }
 }

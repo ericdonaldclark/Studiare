@@ -70,6 +70,8 @@ import net.ericclark.studiare.data.*
 import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.compose.material3.ExposedDropdownMenu
+import androidx.compose.material3.ExposedDropdownMenuAnchorType
 import androidx.compose.ui.res.stringResource
 import net.ericclark.studiare.R
 
@@ -169,7 +171,7 @@ fun <T> ExpressiveDropdownMenuField(
             },
             colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(),
             modifier = Modifier
-                .menuAnchor()
+                .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable)
                 .fillMaxWidth(),
             shape = RoundedCornerShape(dimensions.cornerRadiusMedium) // boxy, not the old full-pill CircleShape
         )

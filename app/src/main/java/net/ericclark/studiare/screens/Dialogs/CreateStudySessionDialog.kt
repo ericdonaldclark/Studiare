@@ -92,27 +92,13 @@ fun CreateStudySessionDialog(
     // from the preset's stored config, in an editing-this-preset mode.
     presetId: String? = null,
 ) {
-    // Defers this screen's genuinely expensive first composition (session-config state, the
-    // side-by-side/portrait form layout, all its sections) until after the NavHost transition
-    // into this screen visually settles, instead of it swallowing the transition whole — same
-    // proven pattern as DeckEditorScreen.kt/SimpleEditorScreen.kt. DEBUG-only: a release build's
-    // baseline profile already covers this screen's first composition cost, but a debug build is
-    // always JIT-interpreted regardless of the baseline profile, so the risk is still real there.
-    val navAnimatedVisibilityScope = LocalNavAnimatedVisibilityScope.current
-    var mainContentReady by remember { mutableStateOf(!BuildConfig.DEBUG || navAnimatedVisibilityScope == null) }
-    LaunchedEffect(navAnimatedVisibilityScope) {
-        if (!BuildConfig.DEBUG) return@LaunchedEffect
-        val transition = navAnimatedVisibilityScope?.transition ?: return@LaunchedEffect
-        snapshotFlow { transition.currentState }.first { it == EnterExitState.Visible }
-        mainContentReady = true
-    }
-
-    // This used to be a dialog (AnimatedDialog + Card) hosted by whatever screen launched it, with
-    // onDismiss/onStartSession/etc. passed in by that caller (see StudySessionDialogHost.kt, which
-    // still owns the usesVoices()/VoicePromptState/VoiceDownloadPrompts helpers used below).
-    // Starting a session is a "go somewhere new" action, not an in-place edit, so this is now its
-    // own NavHost destination instead — it owns all of that logic directly rather than receiving
-    // it as callbacks from a caller.
+    // A plain overlay shown by AppNavigation (a sibling of the NavHost, not one of its own
+    // destinations) rather than its own nav destination - so the screen that requested it stays
+    // composed and visibly dimmed behind it, same as every other dialog in the app
+    // (StudySessionDialogHost.kt still owns the usesVoices()/VoicePromptState/VoiceDownloadPrompts
+    // helpers used below). Starting a session is a "go somewhere new" action though, unlike most of
+    // those dialogs, so onDismiss/onStartSession below still navigate/clear state directly rather
+    // than taking callbacks from a caller - there's only ever the one caller (AppNavigation).
     val allTagDefinitions by viewModel.tags.collectAsState()
     val availableTags by produceState(initialValue = emptyList<String>(), key1 = deck.deck.id) {
         value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
@@ -123,7 +109,7 @@ fun CreateStudySessionDialog(
     val notificationPromptShown = viewModel.notificationPromptShown.collectAsState().value
     val onNotificationPromptShown = { viewModel.markNotificationPromptShown() }
     val onCategoryChosen: (StudyCategory) -> Unit = { viewModel.setLastStudyCategory(it) }
-    val onDismiss: () -> Unit = { navController.popBackStack() }
+    val onDismiss: () -> Unit = { viewModel.clearPendingCreateSession() }
 
     val voicePrompt = rememberVoicePromptState()
     VoiceDownloadPrompts(state = voicePrompt, viewModel = viewModel)
@@ -174,9 +160,9 @@ fun CreateStudySessionDialog(
                 config = config,
                 freeformLayoutVertical = freeformVerticalLayout
             ) {
-                // Replace, not stack: back from the study screen should return to wherever the
-                // user was before opening this screen, not to this now-stale form.
-                navController.popBackStack()
+                // Dismiss the overlay and navigate forward from whatever screen was already
+                // underneath it - that screen was never pushed over, so there's nothing to pop.
+                viewModel.clearPendingCreateSession()
                 navController.navigate(route)
             }
         }
@@ -555,15 +541,6 @@ fun CreateStudySessionDialog(
     }
 
     AnimatedDialog(onDismissRequest = onDismiss, properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)) {
-        // Gated on mainContentReady (see its declaration above) so this form's genuinely expensive
-        // first composition happens after, not during, the NavHost transition into this screen - a
-        // plain fade covers its otherwise-abrupt appearance. DEBUG-only; see mainContentReady's own
-        // declaration for why.
-        AnimatedVisibility(
-            visible = mainContentReady,
-            enter = fadeIn(),
-            exit = ExitTransition.None
-        ) {
         Card(
             modifier = Modifier.widthIn(min = 280.dp, max = 560.dp).fillMaxHeight(0.9f),
             shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
@@ -697,7 +674,6 @@ fun CreateStudySessionDialog(
                     StartSessionButton(onStart = startSession, enabled = isButtonEnabled, dimensions = dimensions)
                 }
             }
-        }
         }
     }
 }

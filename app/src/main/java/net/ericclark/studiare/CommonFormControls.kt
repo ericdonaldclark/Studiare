@@ -9,6 +9,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.layout.SubcomposeLayout
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -36,8 +38,6 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.ui.graphics.graphicsLayer
 import net.ericclark.studiare.components.getText
 import kotlinx.coroutines.delay
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.spring
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
@@ -258,16 +258,71 @@ fun DifficultySlider(
 
 /**
  * A [FilterChip] for one option in a mutually-exclusive, same-row selection group (e.g. a chip
- * inside a [androidx.compose.foundation.layout.FlowRow] of sibling mode/sort options). Its leading
- * checkmark drives [Modifier.animateContentSize] width changes, same as a plain `FilterChip` with a
- * conditional `leadingIcon` — but when [selected] flips from one sibling chip to another, this
- * delays the newly-selected chip's checkmark (and the growth it triggers) until the deselected
- * chip's own shrink has settled, instead of letting both run at once. Two uncoordinated width
- * animations otherwise cause the row's total width to briefly exceed its available space, bumping
- * the row's last chip onto the next line before it snaps back once both finish. The resting
- * appearance (icon shown exactly when [selected]) and the growth animation itself are unchanged;
- * only the growing chip's icon is staggered behind the shrinking chip's.
+ * inside a [StableWrapChipRows] grid of sibling mode/sort options). A plain conditional
+ * `leadingIcon` - M3 animates that slot's own appearance/disappearance (expand + fade) whenever it
+ * goes from null to non-null or back, which is what every chip here actually relies on.
  */
+/**
+ * Wraps [items] into rows, deciding each row's membership from every item's own
+ * *unselected*-state width (measured by calling [chip] with `isSelected = false` in a throwaway
+ * subcomposition) rather than its real, current selection state - so which item happens to be
+ * selected can never change which row it lands on. Each row is then rendered with [chip]'s real
+ * selection state inside its own horizontally-scrolling [Row], so a selected chip that grows
+ * wider (e.g. [SequencedSelectionChip] gaining its checkmark) just scrolls, or spills partway past
+ * that row's edge, instead of pushing a sibling chip onto a different line. Same technique as
+ * `CreateStudySessionDialog`'s Category/Mode chips (`TypedChipGrid` in `SettingsComponents.kt`) -
+ * a reserved-width buffer (per-chip, then row-level guessed, then row-level measured) was tried
+ * there three different ways first and kept failing in practice before this one held up.
+ */
+@Composable
+internal fun <T> StableWrapChipRows(
+    items: List<T>,
+    isSelected: (T) -> Boolean,
+    chip: @Composable (item: T, isSelected: Boolean) -> Unit
+) {
+    val dimensions = LocalStudiareDimensions.current
+    SubcomposeLayout(modifier = Modifier.fillMaxWidth()) { constraints ->
+        val naturalWidths = items.mapIndexed { index, item ->
+            subcompose("measure-$index") { chip(item, false) }
+                .first().measure(Constraints()).width
+        }
+        val spacingPx = dimensions.spacingSmall.roundToPx()
+
+        val rows = mutableListOf<MutableList<Int>>()
+        var currentRowWidth = 0
+        naturalWidths.forEachIndexed { index, width ->
+            val currentRow = rows.lastOrNull()
+            if (currentRow == null || currentRowWidth + spacingPx + width > constraints.maxWidth) {
+                rows.add(mutableListOf(index))
+                currentRowWidth = width
+            } else {
+                currentRow.add(index)
+                currentRowWidth += spacingPx + width
+            }
+        }
+
+        val contentPlaceable = subcompose("content") {
+            Column(verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)) {
+                rows.forEach { rowIndices ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)
+                    ) {
+                        rowIndices.forEach { index ->
+                            val item = items[index]
+                            chip(item, isSelected(item))
+                        }
+                    }
+                }
+            }
+        }.first().measure(constraints)
+
+        layout(contentPlaceable.width, contentPlaceable.height) {
+            contentPlaceable.placeRelative(0, 0)
+        }
+    }
+}
+
 @Composable
 fun SequencedSelectionChip(
     selected: Boolean,
@@ -276,27 +331,22 @@ fun SequencedSelectionChip(
     modifier: Modifier = Modifier,
     enabled: Boolean = true
 ) {
-    var showIcon by remember { mutableStateOf(selected) }
-    LaunchedEffect(selected) {
-        if (selected) {
-            delay(250)
-            showIcon = true
-        } else {
-            showIcon = false
-        }
-    }
+    // Used to stagger the newly-selected chip's checkmark 250ms behind the deselected chip's own
+    // shrink (plus a manual animateContentSize spring) specifically to stop two uncoordinated
+    // width animations from briefly overflowing the row and bumping its last chip onto the next
+    // line. That's now handled structurally instead (every call site lays these out via
+    // StableWrapChipRows, which decides row membership from unselected widths alone, so nothing
+    // can ever reflow regardless of animation timing) - letting leadingIcon toggle directly, with
+    // no artificial delay, uses M3's own built-in expand+fade for the icon appearing/disappearing
+    // (confirmed smooth after the Material3 1.5.0 stable upgrade), matching TypedChipGrid's Mode
+    // chips instead of fighting it with a second, uncoordinated animation of our own.
     FilterChip(
         selected = selected,
         onClick = onClick,
-        modifier = modifier.animateContentSize(
-            animationSpec = spring(
-                dampingRatio = Spring.DampingRatioNoBouncy,
-                stiffness = Spring.StiffnessMedium
-            )
-        ),
+        modifier = modifier,
         label = label,
         enabled = enabled,
-        leadingIcon = if (showIcon) {
+        leadingIcon = if (selected) {
             { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(FilterChipDefaults.IconSize)) }
         } else null
     )
@@ -325,20 +375,17 @@ fun SortModeDialogSection(
         showDivider = showDivider
     ) {
         Column {
-            FlowRow(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall),
-                verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)
-            ) {
-                val sortOptionLabels = SortMode.entries.associateWith { it.asString() }
-                val sortOptions = if (alphabetical) SortMode.entries.sortedBy { sortOptionLabels[it] } else SortMode.entries
-                sortOptions.forEach { option ->
-                    SequencedSelectionChip(
-                        selected = sortMode == option,
-                        onClick = { onSortModeChange(option) },
-                        label = { Text(option.asString(), maxLines = 1, softWrap = false) }
-                    )
-                }
+            val sortOptionLabels = SortMode.entries.associateWith { it.asString() }
+            val sortOptions = if (alphabetical) SortMode.entries.sortedBy { sortOptionLabels[it] } else SortMode.entries
+            StableWrapChipRows(
+                items = sortOptions,
+                isSelected = { it == sortMode }
+            ) { option, isSelected ->
+                SequencedSelectionChip(
+                    selected = isSelected,
+                    onClick = { onSortModeChange(option) },
+                    label = { Text(option.asString(), maxLines = 1, softWrap = false) }
+                )
             }
 
             if (sortMode != SortMode.RANDOM) {
@@ -753,25 +800,22 @@ fun SelectionModeDialogSection(
             )
             val selectionOptionLabels = selectionOptionsInPriorityOrder.associateWith { it.asString() }
             val selectionOptions = if (alphabetical) selectionOptionsInPriorityOrder.sortedBy { selectionOptionLabels[it] } else selectionOptionsInPriorityOrder
-            FlowRow(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall),
-                verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)
-            ) {
-                selectionOptions.forEach { option ->
-                    val isEnabled = if (option == SelectionMode.REVIEW_COUNT) state.maxDeckReviews > 0 else true
-                    SequencedSelectionChip(
-                        selected = state.selectionMode == option,
-                        onClick = {
-                            actions.onModeChange(option)
-                            // Defaults logic
-                            if (option == SelectionMode.REVIEW_DATE) actions.onFilterTypeChange(FilterType.EXCLUDE)
-                            if (option == SelectionMode.INCORRECT_DATE) actions.onFilterTypeChange(FilterType.INCLUDE)
-                        },
-                        label = { Text(option.asString(), maxLines = 1, softWrap = false) },
-                        enabled = isEnabled
-                    )
-                }
+            StableWrapChipRows(
+                items = selectionOptions,
+                isSelected = { it == state.selectionMode }
+            ) { option, isSelected ->
+                val isEnabled = if (option == SelectionMode.REVIEW_COUNT) state.maxDeckReviews > 0 else true
+                SequencedSelectionChip(
+                    selected = isSelected,
+                    onClick = {
+                        actions.onModeChange(option)
+                        // Defaults logic
+                        if (option == SelectionMode.REVIEW_DATE) actions.onFilterTypeChange(FilterType.EXCLUDE)
+                        if (option == SelectionMode.INCORRECT_DATE) actions.onFilterTypeChange(FilterType.INCLUDE)
+                    },
+                    label = { Text(option.asString(), maxLines = 1, softWrap = false) },
+                    enabled = isEnabled
+                )
             }
 
             Spacer(Modifier.height(dimensions.spacingSmall))

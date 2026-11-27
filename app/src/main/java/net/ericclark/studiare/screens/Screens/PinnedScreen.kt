@@ -62,7 +62,6 @@ import net.ericclark.studiare.data.*
 import net.ericclark.studiare.screens.Dialogs.CardEditDialog
 import net.ericclark.studiare.screens.Dialogs.CardEditDialogMode
 import net.ericclark.studiare.screens.Dialogs.ClearCardDataConfirmDialog
-import net.ericclark.studiare.screens.Dialogs.createStudySessionRoute
 import net.ericclark.studiare.screens.Dialogs.studyRouteFor
 import net.ericclark.studiare.screens.UI_Components.DeckListItem
 import net.ericclark.studiare.screens.UI_Components.PinnedSortDialog
@@ -379,7 +378,7 @@ fun PinnedScreen(navController: NavController, viewModel: FlashcardViewModel) {
                                         }
                                     },
                                     onEditSettings = {
-                                        navController.navigate(createStudySessionRoute(preset.deckId, preset.displayCategory(), preset.id))
+                                        if (deck != null) viewModel.requestCreateSession(deck, preset.displayCategory(), preset.id)
                                     },
                                     onUnpin = { unpinPresetWithUndo(preset) },
                                     onRename = { newName -> viewModel.renamePreset(preset, newName) },

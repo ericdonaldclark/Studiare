@@ -51,7 +51,6 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.livedata.observeAsState
-import net.ericclark.studiare.screens.Dialogs.createStudySessionRoute
 import net.ericclark.studiare.screens.Dialogs.studyRouteFor
 import net.ericclark.studiare.screens.UI_Components.CategoryPickerContent
 import net.ericclark.studiare.screens.UI_Components.categoryIcon
@@ -86,11 +85,8 @@ fun StudyModeSelectionScreen(
     val windowWidthSizeClass = LocalWindowWidthSizeClass.current
 
     val dimensions = LocalStudiareDimensions.current
-    // Create Study Session is its own screen now (it creates something new and navigates to it,
-    // unlike every other dialog on this screen), so every entry point below navigates there
-    // instead of showing dialog state.
     val navigateToCreateSession: (StudyCategory) -> Unit = { category ->
-        navController.navigate(createStudySessionRoute(deck.deck.id, category))
+        viewModel.requestCreateSession(deck, category)
     }
     val allActiveSessionsOrNull by viewModel.allActiveSessionsOrNull.collectAsState()
     val sessionsLoaded = allActiveSessionsOrNull != null
@@ -473,7 +469,7 @@ fun StudyModeSelectionScreen(
                                     setName = sessionTileSetName,
                                     decks = allDecksState,
                                     onCreateSession = { preset -> viewModel.startSessionFromPreset(preset, deck) { navController.navigate(studyRouteFor(preset.sessionMode)) } },
-                                    onEditSettings = { preset -> navController.navigate(createStudySessionRoute(deck.deck.id, preset.displayCategory(), preset.id)) },
+                                    onEditSettings = { preset -> viewModel.requestCreateSession(deck, preset.displayCategory(), preset.id) },
                                     onUnpin = { preset -> showUnpinPresetDialog = preset },
                                     onRename = { preset, newName -> viewModel.renamePreset(preset, newName) },
                                     onChangeDeckStartSession = { preset, newDeckId ->
@@ -676,7 +672,7 @@ fun StudyModeSelectionScreen(
                                         // same direct-navigate pattern CreateStudySessionScreen's
                                         // own "Start Session" already uses.
                                         onCreateSession = { preset -> viewModel.startSessionFromPreset(preset, deck) { navController.navigate(studyRouteFor(preset.sessionMode)) } },
-                                        onEditSettings = { preset -> navController.navigate(createStudySessionRoute(deck.deck.id, preset.displayCategory(), preset.id)) },
+                                        onEditSettings = { preset -> viewModel.requestCreateSession(deck, preset.displayCategory(), preset.id) },
                                         onUnpin = { preset -> showUnpinPresetDialog = preset },
                                         onRename = { preset, newName -> viewModel.renamePreset(preset, newName) },
                                         onChangeDeckStartSession = { preset, newDeckId ->
