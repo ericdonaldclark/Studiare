@@ -27,14 +27,12 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.DriveFileMove
 import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Label
 import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.RestartAlt
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SelectAll
-import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.foundation.layout.offset
@@ -122,8 +120,6 @@ import net.ericclark.studiare.screens.Dialogs.AdvancedDeckEditorDialog
 import net.ericclark.studiare.screens.Dialogs.CardEditDialog
 import net.ericclark.studiare.screens.Dialogs.CardEditDialogMode
 import net.ericclark.studiare.screens.Dialogs.ClearCardDataConfirmDialog
-import net.ericclark.studiare.screens.UI_Components.DeckInfoDialog
-import net.ericclark.studiare.screens.UI_Components.DeckSettingsDialog
 import net.ericclark.studiare.screens.UI_Components.FlowRow
 import net.ericclark.studiare.screens.UI_Components.SelectableTileOverlay
 import net.ericclark.studiare.screens.UI_Components.SelectionAction
@@ -201,8 +197,9 @@ fun SimpleEditorScreen(
     var showTemplateEditor by remember { mutableStateOf(false) }
     var showExportDialog by remember { mutableStateOf(false) }
     var showFilterOverlay by remember { mutableStateOf(false) }
-    var showDeckInfo by remember { mutableStateOf(false) }
-    var showDeckOptions by remember { mutableStateOf(false) }
+    // Not open by default - only study sessions and the Bulk Editor default-open their side
+    // sheet; Simple Editor's always starts closed regardless of width.
+    var deckEditorSheetTab by remember { mutableStateOf<net.ericclark.studiare.screens.UI_Components.DeckEditorSheetTab?>(null) }
     val isChildSet = deckWithCards?.deck?.parentDeckId != null
     var showLinkageDialog by remember { mutableStateOf(false) }
     var filterQuery by remember { mutableStateOf("") }
@@ -377,6 +374,73 @@ fun SimpleEditorScreen(
         viewModel.applyTemplateToCards(deck, ids, templateSet)
     }
 
+    // The Statistics/Settings tabs' content for the side sheet below - built here since both close
+    // over this screen's own deck/template/linkage state.
+    val deckEditorStatisticsContent: @Composable () -> Unit = {
+        deckWithCards?.let { deck -> net.ericclark.studiare.screens.UI_Components.DeckStats(deckWithCards = deck) }
+    }
+    val deckEditorSortContent: @Composable () -> Unit = {
+        deckWithCards?.let { deck ->
+            net.ericclark.studiare.screens.UI_Components.DeckCardOrderContent(
+                currentSortMode = deck.deck.deckSortMode,
+                sortPinnedCardsFirst = deck.deck.sortPinnedCardsFirst,
+                onSortModeSelected = { newSort ->
+                    viewModel.updateDeckOptions(
+                        deck, deck.deck.name, deck.deck.normalizationType, newSort, deck.deck.sortPinnedCardsFirst,
+                        deck.deck.defaultPromptSide, deck.deck.frontLanguage, deck.deck.backLanguage, deck.deck.textCorrections
+                    )
+                },
+                onSortPinnedCardsFirstChange = { newPinnedFirst ->
+                    viewModel.updateDeckOptions(
+                        deck, deck.deck.name, deck.deck.normalizationType, deck.deck.deckSortMode, newPinnedFirst,
+                        deck.deck.defaultPromptSide, deck.deck.frontLanguage, deck.deck.backLanguage, deck.deck.textCorrections
+                    )
+                }
+            )
+        }
+    }
+    val deckEditorSettingsContent: @Composable () -> Unit = {
+        deckWithCards?.let { deck ->
+            net.ericclark.studiare.screens.UI_Components.DeckSettingsContent(
+                initialDeckName = deck.deck.name,
+                initialNormalizationType = deck.deck.normalizationType,
+                initialDeckSort = deck.deck.deckSortMode,
+                initialSortPinnedCardsFirst = deck.deck.sortPinnedCardsFirst,
+                initialDefaultPromptSide = deck.deck.defaultPromptSide,
+                initialFrontLanguage = deck.deck.frontLanguage,
+                initialBackLanguage = deck.deck.backLanguage,
+                initialTextCorrections = deck.deck.textCorrections,
+                onDismiss = { deckEditorSheetTab = null },
+                onSave = { newName, newNorm, newSort, newPinnedFirst, newPromptSide, newFrontLang, newBackLang, newCorrections ->
+                    viewModel.updateDeckOptions(deck, newName, newNorm, newSort, newPinnedFirst, newPromptSide, newFrontLang, newBackLang, newCorrections)
+                    deckEditorSheetTab = null
+                },
+                onOpenTemplateEditor = { _, _, _, _, _, _, _, _ ->
+                    // Same reasoning as the dialog version this replaced - this screen always
+                    // reflects the deck's actually persisted name/options (no separate in-progress
+                    // "creating a new deck" draft), so reopening the sheet already shows the right
+                    // values either way.
+                    deckEditorSheetTab = null
+                    showTemplateEditor = true
+                },
+                canOpenTemplateEditor = !(isChildSet && deck.deck.linkageSettings.linkFieldConfig),
+                canEditLanguage = !(isChildSet && deck.deck.linkageSettings.linkFieldConfig),
+                canEditNormalization = !(isChildSet && deck.deck.linkageSettings.linkNormalization),
+                onOpenLinkageSettings = if (isChildSet) {
+                    { deckEditorSheetTab = null; showLinkageDialog = true }
+                } else null,
+                onClearReviewData = {
+                    viewModel.clearDeckReviewData(deck.deck.id)
+                    deckEditorSheetTab = null
+                },
+                alwaysOpenBulkEditor = alwaysOpenBulkEditor,
+                onSetAlwaysOpenBulkEditor = { viewModel.setAlwaysOpenBulkEditor(it) },
+                showTitle = false,
+                showCardOrderSection = false
+            )
+        }
+    }
+
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         floatingActionButtonPosition = FabPosition.Center,
@@ -404,7 +468,13 @@ fun SimpleEditorScreen(
                     ) {
                         Text(getText(R.string.bulk_editor))
                     }
-                }
+                    net.ericclark.studiare.screens.UI_Components.DeckEditorSheetButton(
+                        onClick = {
+                            deckEditorSheetTab = if (deckEditorSheetTab != null) null else net.ericclark.studiare.screens.UI_Components.DeckEditorSheetTab.STATISTICS
+                        }
+                    )
+                },
+                suppressShortcutsButton = true
             )
         },
         floatingActionButton = {
@@ -551,43 +621,28 @@ fun SimpleEditorScreen(
                         )
                     }
                 }
-            } else {
-                HorizontalFloatingToolbar(
-                    expanded = true,
-                    // "Vibrant" toolbar colors tint the bar with primaryContainer instead of the
-                    // standard variant's surfaceContainer — matches the Bulk Editor's toolbar.
-                    colors = FloatingToolbarDefaults.vibrantFloatingToolbarColors(),
-                    floatingActionButton = {
-                        FloatingActionButton(onClick = { createCardState = blankEditorState() }) {
-                            Icon(Icons.Default.Add, contentDescription = getText(R.string.card_add))
-                        }
-                    }
-                ) {
-                    TooltipIconButton(
-                        description = getText(R.string.scroll_to_bottom),
-                        onClick = { coroutineScope.launch { lazyGridState.jumpThenAnimateTo((displayedCards.size - 1).coerceAtLeast(0), scrollOffset = Int.MAX_VALUE) } }
-                    ) {
-                        Icon(Icons.Default.ArrowDownward, contentDescription = getText(R.string.scroll_to_bottom))
-                    }
-                    TooltipIconButton(
-                        description = getText(R.string.scroll_to_top),
-                        onClick = { coroutineScope.launch { lazyGridState.jumpThenAnimateTo(0) } }
-                    ) {
-                        Icon(Icons.Default.ArrowUpward, contentDescription = getText(R.string.scroll_to_top))
-                    }
-                    TooltipIconButton(description = getText(R.string.cards_filter_), onClick = { showFilterOverlay = !showFilterOverlay }) {
-                        Icon(Icons.Default.Search, contentDescription = getText(R.string.cards_filter_))
-                    }
-                    TooltipIconButton(description = getText(R.string.deck_statistics), onClick = { showDeckInfo = true }) {
-                        Icon(Icons.Default.Info, contentDescription = getText(R.string.deck_statistics))
-                    }
-                    TooltipIconButton(description = getText(R.string.deck_settings), onClick = { showDeckOptions = true }) {
-                        Icon(Icons.Default.Settings, contentDescription = getText(R.string.deck_settings))
-                    }
-                }
             }
+            // Else-branch (the normal, non-selection floating toolbar) moved into the side sheet
+            // host's own content lambda below - Scaffold's floatingActionButton slot sits outside
+            // DeckEditorSheetHost entirely, so FabPosition.Center there always centers over the
+            // *whole* screen, docked panel included. Nesting the toolbar inside `content` instead
+            // means it naturally centers over only whatever width that lambda actually gets -
+            // the full screen when the sheet is closed/modal, or just the non-panel side when a
+            // standard (docked) panel is showing - with no extra width-tracking code needed.
         }
     ) { padding ->
+        net.ericclark.studiare.screens.UI_Components.DeckEditorSheetHost(
+            viewModel = viewModel,
+            screenId = ShortcutScreen.DECK_EDITOR,
+            sheetTab = deckEditorSheetTab,
+            onTabChange = { deckEditorSheetTab = it },
+            onDismiss = { deckEditorSheetTab = null },
+            padding = padding,
+            statisticsContent = deckEditorStatisticsContent,
+            sortContent = deckEditorSortContent,
+            settingsContent = deckEditorSettingsContent
+        ) { padding ->
+        Box(modifier = Modifier.fillMaxSize()) {
         Column(modifier = Modifier.fillMaxSize().padding(padding)) {
             if (filterQuery.isNotBlank()) {
                 Row(
@@ -662,6 +717,42 @@ fun SimpleEditorScreen(
                 }
                 }
             }
+        }
+        // The normal (non-selection) floating toolbar - see the comment where this used to sit in
+        // Scaffold's own floatingActionButton slot. Centered over this Box, which is exactly the
+        // width DeckEditorSheetHost's `content` lambda was given (full screen, or just the
+        // non-panel side when the standard/docked sheet is open).
+        if (!selection.inSelectionMode) {
+            HorizontalFloatingToolbar(
+                expanded = true,
+                // "Vibrant" toolbar colors tint the bar with primaryContainer instead of the
+                // standard variant's surfaceContainer — matches the Bulk Editor's toolbar.
+                colors = FloatingToolbarDefaults.vibrantFloatingToolbarColors(),
+                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = dimensions.paddingMedium),
+                floatingActionButton = {
+                    FloatingActionButton(onClick = { createCardState = blankEditorState() }) {
+                        Icon(Icons.Default.Add, contentDescription = getText(R.string.card_add))
+                    }
+                }
+            ) {
+                TooltipIconButton(
+                    description = getText(R.string.scroll_to_bottom),
+                    onClick = { coroutineScope.launch { lazyGridState.jumpThenAnimateTo((displayedCards.size - 1).coerceAtLeast(0), scrollOffset = Int.MAX_VALUE) } }
+                ) {
+                    Icon(Icons.Default.ArrowDownward, contentDescription = getText(R.string.scroll_to_bottom))
+                }
+                TooltipIconButton(
+                    description = getText(R.string.scroll_to_top),
+                    onClick = { coroutineScope.launch { lazyGridState.jumpThenAnimateTo(0) } }
+                ) {
+                    Icon(Icons.Default.ArrowUpward, contentDescription = getText(R.string.scroll_to_top))
+                }
+                TooltipIconButton(description = getText(R.string.cards_filter_), onClick = { showFilterOverlay = !showFilterOverlay }) {
+                    Icon(Icons.Default.Search, contentDescription = getText(R.string.cards_filter_))
+                }
+            }
+        }
+        }
         }
     }
 
@@ -805,18 +896,18 @@ fun SimpleEditorScreen(
             frontTemplates = deckWithCards.deck.frontNoteTemplates,
             backTemplates = deckWithCards.deck.backNoteTemplates,
             onDismiss = {
-                // Template Editor is reached either from Deck Options' "Open Template Editor"
+                // Template Editor is reached either from Deck Settings' "Open Template Editor"
                 // button, or from the Use Template dialog's own button of the same name — so
                 // cancelling here (via the Cancel button, back, or tap-outside) needs to reopen
                 // whichever of those it came from, or the user lands back on the editor screen
-                // with both dialogs gone.
+                // with both gone.
                 showTemplateEditor = false
                 val returnIds = pendingUseTemplateIds
                 if (returnIds != null) {
                     pendingUseTemplateIds = null
                     showUseTemplateDialogForSelection = returnIds
                 } else {
-                    showDeckOptions = true
+                    deckEditorSheetTab = net.ericclark.studiare.screens.UI_Components.DeckEditorSheetTab.SETTINGS
                 }
             },
             onSave = { newFront, newBack, templateId, _, applyToAll ->
@@ -827,7 +918,7 @@ fun SimpleEditorScreen(
                     pendingUseTemplateIds = null
                     showUseTemplateDialogForSelection = returnIds
                 } else {
-                    showDeckOptions = true
+                    deckEditorSheetTab = net.ericclark.studiare.screens.UI_Components.DeckEditorSheetTab.SETTINGS
                 }
             },
             initialTemplateName = savedTemplateSets.find { it.id == deckWithCards.deck.activeTemplateSetId }?.name ?: "",
@@ -855,10 +946,6 @@ fun SimpleEditorScreen(
         onDismiss = { showFilterOverlay = false }
     )
 
-    if (showDeckInfo && deckWithCards != null) {
-        DeckInfoDialog(deckWithCards = deckWithCards, onDismiss = { showDeckInfo = false })
-    }
-
     // Simple Editor has no deck-level batch save (every card edit already persists immediately
     // via saveSingleCard), so unlike Bulk Editor's deferred-to-Save linkageSettings, this applies
     // straight away.
@@ -873,42 +960,6 @@ fun SimpleEditorScreen(
         )
     }
 
-    if (showDeckOptions && deckWithCards != null) {
-        DeckSettingsDialog(
-            initialDeckName = deckWithCards.deck.name,
-            initialNormalizationType = deckWithCards.deck.normalizationType,
-            initialDeckSort = deckWithCards.deck.deckSortMode,
-            initialSortPinnedCardsFirst = deckWithCards.deck.sortPinnedCardsFirst,
-            initialDefaultPromptSide = deckWithCards.deck.defaultPromptSide,
-            initialFrontLanguage = deckWithCards.deck.frontLanguage,
-            initialBackLanguage = deckWithCards.deck.backLanguage,
-            initialTextCorrections = deckWithCards.deck.textCorrections,
-            onDismiss = { showDeckOptions = false },
-            onSave = { newName, newNorm, newSort, newPinnedFirst, newPromptSide, newFrontLang, newBackLang, newCorrections ->
-                viewModel.updateDeckOptions(deckWithCards, newName, newNorm, newSort, newPinnedFirst, newPromptSide, newFrontLang, newBackLang, newCorrections)
-                showDeckOptions = false
-            },
-            onOpenTemplateEditor = { _, _, _, _, _, _, _, _ ->
-                // Nothing to carry over here — this dialog always reflects the deck's actually
-                // persisted name/options (it has no separate in-progress "creating a new deck"
-                // draft of its own), so reopening it already shows the right values either way.
-                showDeckOptions = false
-                showTemplateEditor = true
-            },
-            canOpenTemplateEditor = !(isChildSet && deckWithCards.deck.linkageSettings.linkFieldConfig),
-            canEditLanguage = !(isChildSet && deckWithCards.deck.linkageSettings.linkFieldConfig),
-            canEditNormalization = !(isChildSet && deckWithCards.deck.linkageSettings.linkNormalization),
-            onOpenLinkageSettings = if (isChildSet) {
-                { showDeckOptions = false; showLinkageDialog = true }
-            } else null,
-            onClearReviewData = {
-                viewModel.clearDeckReviewData(deckWithCards.deck.id)
-                showDeckOptions = false
-            },
-            alwaysOpenBulkEditor = alwaysOpenBulkEditor,
-            onSetAlwaysOpenBulkEditor = { viewModel.setAlwaysOpenBulkEditor(it) }
-        )
-    }
 }
 
 /** A note's content as shown in [CardTile]'s preview text. Media notes (image/video/audio) hold a

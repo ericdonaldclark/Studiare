@@ -108,7 +108,12 @@ fun FlashcardQuizScreen(
     val mainContentReady = rememberMainContentReady()
     var showEditDialog by remember { mutableStateOf(false) }
     val windowWidthSizeClass = LocalWindowWidthSizeClass.current
-    var sheetTab by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf<net.ericclark.studiare.screens.UI_Components.SessionSheetTab?>(null) }
+    // Open by default (to Progress) on extended/desktop-sized displays, where the sheet docks
+    // as a standard, always-visible panel rather than a dismissible modal.
+    val isDesktopWidth = net.ericclark.studiare.LocalIsDesktopWidth.current
+    var sheetTab by androidx.compose.runtime.saveable.rememberSaveable {
+        mutableStateOf(if (isDesktopWidth) net.ericclark.studiare.screens.UI_Components.SessionSheetTab.PROGRESS else null)
+    }
 
     if (showEditDialog) {
         val currentCard = state.shuffledCards.getOrNull(state.currentCardIndex)
@@ -181,7 +186,7 @@ fun FlashcardQuizScreen(
             CustomTopAppBar(
                 viewModel = viewModel,
                 screenId = ShortcutScreen.LIST_QUIZ,
-                title = { AdaptiveSessionTitle(state, suppressTimerPill = sheetTab != null && windowWidthSizeClass >= WindowWidthSizeClass.Expanded) },
+                title = { AdaptiveSessionTitle(state, suppressTimerPill = sheetTab != null && net.ericclark.studiare.LocalIsDesktopWidth.current) },
                 onOpenSessionSheet = { sheetTab = it },
                 navigationIcon = {
                     TooltipIconButton(description = getText(R.string.back), onClick = {

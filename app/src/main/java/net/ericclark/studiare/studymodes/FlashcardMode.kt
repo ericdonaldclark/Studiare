@@ -110,7 +110,10 @@ fun FlashcardScreen(
     }
     val mainContentReady = rememberMainContentReady()
     var showEditDialog by remember { mutableStateOf(false) }
-    var sheetTab by rememberSaveable { mutableStateOf<SessionSheetTab?>(null) }
+    // Open by default (to Progress) on extended/desktop-sized displays, where the sheet docks as
+    // a standard, always-visible panel rather than a dismissible modal.
+    val isDesktopWidth = net.ericclark.studiare.LocalIsDesktopWidth.current
+    var sheetTab by rememberSaveable { mutableStateOf(if (isDesktopWidth) SessionSheetTab.PROGRESS else null) }
 
     ApplyAutoAdvance(state, viewModel)
 
@@ -148,7 +151,7 @@ fun FlashcardScreen(
             CustomTopAppBar(
                 viewModel = viewModel,
                 screenId = ShortcutScreen.FLASHCARD,
-                title = { AdaptiveSessionTitle(state, suppressTimerPill = sheetTab != null && windowWidthSizeClass >= WindowWidthSizeClass.Expanded) },
+                title = { AdaptiveSessionTitle(state, suppressTimerPill = sheetTab != null && net.ericclark.studiare.LocalIsDesktopWidth.current) },
                 onOpenSessionSheet = { sheetTab = it },
                 navigationIcon = {
                     TooltipIconButton(description = getText(R.string.back), onClick = {

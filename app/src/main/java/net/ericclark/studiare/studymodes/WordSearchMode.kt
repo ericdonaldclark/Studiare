@@ -87,7 +87,12 @@ fun WordSearchMode(
     var keyboardSelectionStart by remember { mutableStateOf<Pair<Int, Int>?>(null) }
 
     val sortedWords = remember(state.wordSearchWords) { state.wordSearchWords.sortedBy { it.clue.lowercase() } }
-    var sheetTab by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf<net.ericclark.studiare.screens.UI_Components.SessionSheetTab?>(null) }
+    // Open by default (to Progress) on extended/desktop-sized displays, where the sheet docks
+    // as a standard, always-visible panel rather than a dismissible modal.
+    val isDesktopWidth = net.ericclark.studiare.LocalIsDesktopWidth.current
+    var sheetTab by androidx.compose.runtime.saveable.rememberSaveable {
+        mutableStateOf(if (isDesktopWidth) net.ericclark.studiare.screens.UI_Components.SessionSheetTab.PROGRESS else null)
+    }
 
     if (state.isComplete) {
         StudyCompletionScreen(
@@ -103,7 +108,7 @@ fun WordSearchMode(
             CustomTopAppBar(
                 viewModel = viewModel,
                 screenId = ShortcutScreen.WORD_SEARCH,
-                title = { AdaptiveSessionTitle(state, suppressTimerPill = sheetTab != null && LocalWindowWidthSizeClass.current >= WindowWidthSizeClass.Expanded) },
+                title = { AdaptiveSessionTitle(state, suppressTimerPill = sheetTab != null && net.ericclark.studiare.LocalIsDesktopWidth.current) },
                 onOpenSessionSheet = { sheetTab = it },
                 navigationIcon = {
                     TooltipIconButton(description = getText(R.string.back), onClick = { viewModel.endStudySession(); navController.popBackStack() }) {

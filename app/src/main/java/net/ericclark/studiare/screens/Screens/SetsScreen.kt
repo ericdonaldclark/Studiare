@@ -92,10 +92,8 @@ import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.ui.draw.*
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.runtime.derivedStateOf
 import androidx.activity.compose.BackHandler
-import net.ericclark.studiare.screens.Dialogs.DeckSortDialog
 import net.ericclark.studiare.screens.Dialogs.ManualSetEditorDialog
 import net.ericclark.studiare.screens.Dialogs.SetCreationAction
 import net.ericclark.studiare.screens.Dialogs.SetCreationDialogHost
@@ -119,7 +117,7 @@ fun SetManagerScreen(
     var showDeleteDialog by remember { mutableStateOf<DeckSummary?>(null) }
     var setToEdit by remember { mutableStateOf<DeckSummary?>(null) }
     var creationAction by remember { mutableStateOf<SetCreationAction?>(null) }
-    var showSortDialog by remember { mutableStateOf(false) }
+    var sortShortcutsSheetTab by remember { mutableStateOf<net.ericclark.studiare.screens.UI_Components.SortShortcutsSheetTab?>(null) }
     var showBulkDeleteDialog by remember { mutableStateOf<List<DeckSummary>?>(null) }
     var showAdvancedSelectionDialog by remember { mutableStateOf(false) }
     val sessionActions = rememberDeckSessionActions(viewModel, navController)
@@ -201,11 +199,12 @@ fun SetManagerScreen(
             )
         }
 
-        if (showSortDialog) {
-            DeckSortDialog(
+        // The Sort tab's content for the Sort + Shortcuts side sheet below.
+        val deckSortContent: @Composable () -> Unit = {
+            net.ericclark.studiare.screens.Dialogs.DeckSortContent(
                 currentSortMode = deckSortMode,
                 showPinnedFirst = showPinnedFirst,
-                onDismiss = { showSortDialog = false },
+                onDismiss = { sortShortcutsSheetTab = null },
                 onSortModeSelected = { viewModel.setDeckSortMode(it) },
                 onShowPinnedFirstChange = { viewModel.setShowPinnedDecksFirst(it) }
             )
@@ -237,10 +236,11 @@ fun SetManagerScreen(
                     PaneChrome(
                         title = { Text(screenTitle, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                         actions = {
-                            TooltipIconButton(description = getText(R.string.sort_decks), onClick = { showSortDialog = true }) {
-                                Icon(Icons.AutoMirrored.Filled.Sort, contentDescription = getText(R.string.sort_decks))
-                            }
+                            net.ericclark.studiare.screens.UI_Components.SortShortcutsSheetButton(
+                                onClick = { sortShortcutsSheetTab = net.ericclark.studiare.screens.UI_Components.SortShortcutsSheetTab.SORT }
+                            )
                         },
+                        suppressShortcutsButton = true,
                         screenId = ShortcutScreen.SETS
                     )
                 )
@@ -911,7 +911,17 @@ fun SetManagerScreen(
 
         if (isPane) {
             // Title lives in the shared app bar (via PaneChrome), not in the pane.
-            Box(Modifier.fillMaxSize()) { paneContent(PaddingValues(0.dp)) }
+            Box(Modifier.fillMaxSize()) {
+                net.ericclark.studiare.screens.UI_Components.SortShortcutsSheetHost(
+                    viewModel = viewModel,
+                    screenId = ShortcutScreen.SETS,
+                    sheetTab = sortShortcutsSheetTab,
+                    onTabChange = { sortShortcutsSheetTab = it },
+                    onDismiss = { sortShortcutsSheetTab = null },
+                    padding = PaddingValues(0.dp),
+                    sortContent = deckSortContent
+                ) { innerPadding -> paneContent(innerPadding) }
+            }
         } else {
             Scaffold(
                 containerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
@@ -927,10 +937,11 @@ fun SetManagerScreen(
                                 }
                             },
                             actions = {
-                                TooltipIconButton(description = getText(R.string.sort_decks), onClick = { showSortDialog = true }) {
-                                    Icon(Icons.AutoMirrored.Filled.Sort, contentDescription = getText(R.string.sort_decks))
-                                }
-                            }
+                                net.ericclark.studiare.screens.UI_Components.SortShortcutsSheetButton(
+                                    onClick = { sortShortcutsSheetTab = net.ericclark.studiare.screens.UI_Components.SortShortcutsSheetTab.SORT }
+                                )
+                            },
+                            suppressShortcutsButton = true
                         )
                         BreadcrumbsBar(
                             currentDeck = parentDeck.deck,
@@ -949,7 +960,17 @@ fun SetManagerScreen(
                         )
                     }
                 }
-            ) { padding -> paneContent(padding) }
+            ) { padding ->
+                net.ericclark.studiare.screens.UI_Components.SortShortcutsSheetHost(
+                    viewModel = viewModel,
+                    screenId = ShortcutScreen.SETS,
+                    sheetTab = sortShortcutsSheetTab,
+                    onTabChange = { sortShortcutsSheetTab = it },
+                    onDismiss = { sortShortcutsSheetTab = null },
+                    padding = padding,
+                    sortContent = deckSortContent
+                ) { innerPadding -> paneContent(innerPadding) }
+            }
         }
     }
 }

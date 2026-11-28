@@ -112,7 +112,12 @@ fun HearMatchScreen(navController: NavController, viewModel: FlashcardViewModel)
 
     var armedIndex by remember(state.currentCardIndex) { mutableStateOf<Int?>(null) }
     var showEditDialog by remember { mutableStateOf(false) }
-    var sheetTab by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf<net.ericclark.studiare.screens.UI_Components.SessionSheetTab?>(null) }
+    // Open by default (to Progress) on extended/desktop-sized displays, where the sheet docks
+    // as a standard, always-visible panel rather than a dismissible modal.
+    val isDesktopWidth = net.ericclark.studiare.LocalIsDesktopWidth.current
+    var sheetTab by androidx.compose.runtime.saveable.rememberSaveable {
+        mutableStateOf(if (isDesktopWidth) net.ericclark.studiare.screens.UI_Components.SessionSheetTab.PROGRESS else null)
+    }
 
     if (showEditDialog) {
         card?.let { c -> EditCardDialog(cardToEdit = c, viewModel = viewModel, onDismiss = { showEditDialog = false }) }
@@ -150,7 +155,7 @@ fun HearMatchScreen(navController: NavController, viewModel: FlashcardViewModel)
             CustomTopAppBar(
                 viewModel = viewModel,
                 screenId = ShortcutScreen.HEAR_MATCH,
-                title = { AdaptiveSessionTitle(state, suppressTimerPill = sheetTab != null && LocalWindowWidthSizeClass.current >= WindowWidthSizeClass.Expanded) },
+                title = { AdaptiveSessionTitle(state, suppressTimerPill = sheetTab != null && net.ericclark.studiare.LocalIsDesktopWidth.current) },
                 onOpenSessionSheet = { sheetTab = it },
                 navigationIcon = {
                     TooltipIconButton(description = getText(R.string.back), onClick = {

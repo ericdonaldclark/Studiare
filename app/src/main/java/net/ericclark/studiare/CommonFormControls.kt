@@ -88,7 +88,14 @@ fun CustomTopAppBar(
     // Non-null only on screens hosting the study-session side sheet (SessionSheetHost) - redirects
     // the gear/keyboard buttons below to open a tab of that sheet instead of their own standalone
     // dialogs. Null (the default) on every other screen, where behavior is unchanged.
-    onOpenSessionSheet: ((net.ericclark.studiare.screens.UI_Components.SessionSheetTab) -> Unit)? = null
+    onOpenSessionSheet: ((net.ericclark.studiare.screens.UI_Components.SessionSheetTab) -> Unit)? = null,
+    // Same idea as [onOpenSessionSheet] but for a screen with its own, non-session side sheet
+    // (e.g. the Study Hub's sort/shortcuts sheet, StudyHubSheetHost) - suppresses the standalone
+    // keyboard-shortcuts button below entirely, since that screen supplies its own single
+    // side-navigation action (in its own `actions`) that opens the same Shortcuts tab instead of
+    // duplicating it as a second icon. Independent of onOpenSessionSheet since a screen only ever
+    // has one or the other.
+    suppressShortcutsButton: Boolean = false
 ) {
     var showShortcutsDialog by remember { mutableStateOf(false) }
     val configuration = androidx.compose.ui.platform.LocalConfiguration.current
@@ -103,7 +110,7 @@ fun CustomTopAppBar(
             // On a session screen (onOpenSessionSheet != null) this button is redundant - the
             // session sheet's own Keyboard tab, reachable via the gear/side-nav icon below, covers
             // the same shortcuts list - so it's left out there entirely rather than duplicating it.
-            if (onOpenSessionSheet == null && hasHardwareKeyboard && showShortcutsButton) {
+            if (onOpenSessionSheet == null && !suppressShortcutsButton && hasHardwareKeyboard && showShortcutsButton) {
                 TooltipIconButton(
                     description = getText(R.string.keyboard_shortcuts),
                     onClick = { showShortcutsDialog = true },
@@ -112,8 +119,10 @@ fun CustomTopAppBar(
                     Icon(Icons.Default.Keyboard, contentDescription = getText(R.string.keyboard_shortcuts))
                 }
             }
-            SessionOptionsAction(viewModel, screenId, onOpenSessionSheet)
+            // After the caller's own actions() (e.g. a study mode's edit-card pencil) so the side
+            // sheet's icon is always the rightmost action, not sandwiched before them.
             actions()
+            SessionOptionsAction(viewModel, screenId, onOpenSessionSheet)
         },
         colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
             containerColor = MaterialTheme.colorScheme.surface,
@@ -333,7 +342,11 @@ data class PaneChrome(
     val title: @Composable () -> Unit = {},
     val actions: @Composable RowScope.() -> Unit = {},
     val fab: @Composable () -> Unit = {},
-    val screenId: ShortcutScreen = ShortcutScreen.OTHER
+    val screenId: ShortcutScreen = ShortcutScreen.OTHER,
+    // Mirrors CustomTopAppBar's own suppressShortcutsButton param - true suppresses the shared
+    // app bar's standalone keyboard-shortcuts button, for a pane supplying its own combined action
+    // (e.g. the Study Hub's single side-navigation icon) in [actions] instead.
+    val suppressShortcutsButton: Boolean = false
 )
 
 /**

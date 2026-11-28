@@ -64,7 +64,6 @@ import net.ericclark.studiare.screens.Dialogs.CardEditDialogMode
 import net.ericclark.studiare.screens.Dialogs.ClearCardDataConfirmDialog
 import net.ericclark.studiare.screens.Dialogs.studyRouteFor
 import net.ericclark.studiare.screens.UI_Components.DeckListItem
-import net.ericclark.studiare.screens.UI_Components.PinnedSortDialog
 import net.ericclark.studiare.screens.UI_Components.SessionPresetCard
 import net.ericclark.studiare.screens.UI_Components.SessionTile
 import net.ericclark.studiare.screens.UI_Components.rememberDeckSessionActions
@@ -77,7 +76,8 @@ import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
  * across the app. Five fixed sections, in this order — Presets, Saved Sessions, Decks, Sets,
  * Cards — each its own horizontally-scrolling carousel with a position-indicator dot row, the
  * same look [SessionTileCarousel] (Study Hub) uses, via the shared [PinnedCarouselSection]. Decks
- * and sets sort together (one sort control, [PinnedSortDialog]) but display as two separate
+ * and sets sort together (one sort control, [net.ericclark.studiare.screens.UI_Components.PinnedSortContent])
+ * but display as two separate
  * carousels since they're visually distinct tiles. Reuses the same tiles their native screens
  * use — [DeckListItem] for both decks and sets (sets render full-size here, the same way the Set
  * Manager screen shows them, not the smaller [net.ericclark.studiare.screens.UI_Components.SetListItem]
@@ -144,7 +144,7 @@ fun PinnedScreen(navController: NavController, viewModel: FlashcardViewModel) {
         sortedTiles(activeSessions.filter { it.isPinned }, sessionSortMode, sessionSortDirection)
     }
 
-    var showSortDialog by remember { mutableStateOf(false) }
+    var sortShortcutsSheetTab by remember { mutableStateOf<net.ericclark.studiare.screens.UI_Components.SortShortcutsSheetTab?>(null) }
     var editingCard by remember { mutableStateOf<Card?>(null) }
     var showMoveDialogForCard by remember { mutableStateOf<Card?>(null) }
     var showUseTemplateDialogForCard by remember { mutableStateOf<Card?>(null) }
@@ -251,6 +251,25 @@ fun PinnedScreen(navController: NavController, viewModel: FlashcardViewModel) {
 
     val hasAnyPinnedContent = pinnedDeckSummaries.isNotEmpty() || sortedPinnedCards.isNotEmpty() || pinnedSessions.isNotEmpty() || presets.isNotEmpty()
 
+    // The Sort tab's content for the Sort + Shortcuts side sheet below.
+    val pinnedSortContent: @Composable () -> Unit = {
+        net.ericclark.studiare.screens.UI_Components.PinnedSortContent(
+            initialDeckSortMode = deckSortMode,
+            initialCardSortMode = cardSortMode,
+            initialSessionSortMode = sessionSortMode,
+            initialSessionSortDirection = sessionSortDirection,
+            sectionOrder = sectionOrder,
+            onSectionOrderChange = { viewModel.setPinnedScreenSectionOrder(it) },
+            onSave = { newDeckSort, newCardSort, newSessionSort, newSessionDirection ->
+                viewModel.setPinnedScreenDeckSortMode(newDeckSort)
+                viewModel.setPinnedScreenCardSortMode(newCardSort)
+                viewModel.setPinnedScreenSessionSortMode(newSessionSort)
+                viewModel.setPinnedScreenSessionSortDirection(newSessionDirection)
+            },
+            onDismiss = { sortShortcutsSheetTab = null }
+        )
+    }
+
     Scaffold(
         containerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
         topBar = {
@@ -258,10 +277,11 @@ fun PinnedScreen(navController: NavController, viewModel: FlashcardViewModel) {
                 viewModel = viewModel,
                 title = { Text(getText(R.string.pinned), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold) },
                 actions = {
-                    TooltipIconButton(description = getText(R.string.sort), onClick = { showSortDialog = true }) {
-                        Icon(Icons.Default.Sort, contentDescription = getText(R.string.sort))
-                    }
-                }
+                    net.ericclark.studiare.screens.UI_Components.SortShortcutsSheetButton(
+                        onClick = { sortShortcutsSheetTab = net.ericclark.studiare.screens.UI_Components.SortShortcutsSheetTab.SORT }
+                    )
+                },
+                suppressShortcutsButton = true
             )
         },
         snackbarHost = { SnackbarHost(snackbarHostState) },
@@ -315,6 +335,15 @@ fun PinnedScreen(navController: NavController, viewModel: FlashcardViewModel) {
             }
         }
     ) { padding ->
+        net.ericclark.studiare.screens.UI_Components.SortShortcutsSheetHost(
+            viewModel = viewModel,
+            screenId = ShortcutScreen.OTHER,
+            sheetTab = sortShortcutsSheetTab,
+            onTabChange = { sortShortcutsSheetTab = it },
+            onDismiss = { sortShortcutsSheetTab = null },
+            padding = padding,
+            sortContent = pinnedSortContent
+        ) { padding ->
         if (!hasAnyPinnedContent) {
             Box(modifier = Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -556,27 +585,8 @@ fun PinnedScreen(navController: NavController, viewModel: FlashcardViewModel) {
                 }
             }
         }
+        }
     }
-
-    if (showSortDialog) {
-        PinnedSortDialog(
-            initialDeckSortMode = deckSortMode,
-            initialCardSortMode = cardSortMode,
-            initialSessionSortMode = sessionSortMode,
-            initialSessionSortDirection = sessionSortDirection,
-            initialSectionOrder = sectionOrder,
-            onSave = { newDeckSort, newCardSort, newSessionSort, newSessionDirection, newSectionOrder ->
-                viewModel.setPinnedScreenDeckSortMode(newDeckSort)
-                viewModel.setPinnedScreenCardSortMode(newCardSort)
-                viewModel.setPinnedScreenSessionSortMode(newSessionSort)
-                viewModel.setPinnedScreenSessionSortDirection(newSessionDirection)
-                viewModel.setPinnedScreenSectionOrder(newSectionOrder)
-                showSortDialog = false
-            },
-            onDismiss = { showSortDialog = false }
-        )
-    }
-
 
     showRestartDialog?.let { session ->
         ConfirmationDialog(

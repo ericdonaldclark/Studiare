@@ -34,8 +34,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.Button
@@ -100,9 +98,6 @@ import net.ericclark.studiare.screens.Dialogs.UnsavedChangesDialog
 import net.ericclark.studiare.screens.UI_Components.CardEditor
 import net.ericclark.studiare.screens.UI_Components.CardSelectionTable
 import net.ericclark.studiare.screens.UI_Components.CustomVerticalScrollbar
-import net.ericclark.studiare.screens.UI_Components.DeckSettingsDialog
-import net.ericclark.studiare.screens.UI_Components.DeckInfoDialog
-import net.ericclark.studiare.screens.UI_Components.DeckStats
 import net.ericclark.studiare.screens.UI_Components.LinkageSettingsDialog
 import net.ericclark.studiare.screens.UI_Components.SelectionAction
 import net.ericclark.studiare.screens.UI_Components.SelectionActionBar
@@ -240,12 +235,21 @@ fun DeckEditorScreen(
 
     // State for the duplicate card warning dialog
     val editorDuplicateResult by viewModel.editorDuplicateResult.collectAsState()
-    // State for showing the deck info dialog (compact layout only — opened from the bottom toolbar)
-    var showDeckInfo by remember { mutableStateOf(false) }
-    // State for showing the settings dialog
-    // New decks open straight into Deck Options so the user sets a name (and other properties)
-    // before landing on the empty card list.
-    var showSettingsDialog by remember { mutableStateOf(deckWithCards == null || cameFromMerge) }
+    // The side sheet replacing the old standalone Deck Info/Deck Settings dialogs - same tabs
+    // (Statistics/Sort/Settings/Shortcuts) as the Simple Editor's own sheet. New decks open
+    // straight into the Settings tab so the user sets a name (and other properties) before
+    // landing on the empty card list; otherwise it still opens by default (to Statistics) on
+    // extended displays, where it docks as a standard, always-visible panel rather than a
+    // dismissible modal.
+    var deckEditorSheetTab by remember {
+        mutableStateOf(
+            when {
+                deckWithCards == null || cameFromMerge -> net.ericclark.studiare.screens.UI_Components.DeckEditorSheetTab.SETTINGS
+                windowWidthSizeClass != WindowWidthSizeClass.Compact -> net.ericclark.studiare.screens.UI_Components.DeckEditorSheetTab.STATISTICS
+                else -> null
+            }
+        )
+    }
     var showTagDialogForSelection by remember { mutableStateOf<Set<String>?>(null) }
     var showMoveDialogForSelection by remember { mutableStateOf<Set<String>?>(null) }
     // Null hides the confirmation dialog; non-null is the captured id(s) to clear once confirmed.
@@ -733,15 +737,38 @@ fun DeckEditorScreen(
         }
     }
 
-    // --- Dialogs ---
-    if (showSettingsDialog) {
-        DeckSettingsDialog(
+    // --- Side sheet content (Statistics/Sort/Settings tabs - Shortcuts is built in, generic) ---
+    // Same tab set as the Simple Editor's own sheet, but Settings/Sort write into this screen's
+    // own local editor state (deckName/sortType/etc.) rather than straight to the ViewModel —
+    // Bulk Editor defers everything to its own explicit Save action, so there's nothing to persist
+    // here until then. Sort is the one exception worth calling out: it applies live (immediately
+    // re-sorting the in-memory `cards` via applySorting), matching the Simple Editor's Sort tab's
+    // own live-apply behavior, even though nothing is actually saved to the database until Save.
+    val deckEditorStatisticsContent: @Composable () -> Unit = {
+        deckWithCards?.let { net.ericclark.studiare.screens.UI_Components.DeckStats(deckWithCards = it) }
+    }
+    val deckEditorSortContent: @Composable () -> Unit = {
+        net.ericclark.studiare.screens.UI_Components.DeckCardOrderContent(
+            currentSortMode = sortType,
+            sortPinnedCardsFirst = sortPinnedCardsFirst,
+            onSortModeSelected = { newSort ->
+                sortType = newSort
+                applySorting(newSort, sortPinnedCardsFirst)
+            },
+            onSortPinnedCardsFirstChange = { newPinnedFirst ->
+                sortPinnedCardsFirst = newPinnedFirst
+                applySorting(sortType, newPinnedFirst)
+            }
+        )
+    }
+    val deckEditorSettingsContent: @Composable () -> Unit = {
+        net.ericclark.studiare.screens.UI_Components.DeckSettingsContent(
             initialDeckName = deckName,
             initialNormalizationType = normalizationType,
             initialDeckSort = sortType,
             initialSortPinnedCardsFirst = sortPinnedCardsFirst,
             initialDefaultPromptSide = defaultPromptSide,
-            initialFrontLanguage = frontLanguage, // NEW: Pass initial languages
+            initialFrontLanguage = frontLanguage,
             initialBackLanguage = backLanguage,
             initialTextCorrections = textCorrections,
             isCreatingNewDeck = deckWithCards == null,
@@ -749,10 +776,10 @@ fun DeckEditorScreen(
                 if (isInitialNewDeckDialog) {
                     navController.popBackStack()
                 } else {
-                    showSettingsDialog = false
+                    deckEditorSheetTab = null
                 }
             },
-            onSave = { newName, newNorm, newSort, newPinnedFirst, newPromptSide, newFrontLang, newBackLang, newCorrections -> // NEW: Receive updated languages
+            onSave = { newName, newNorm, newSort, newPinnedFirst, newPromptSide, newFrontLang, newBackLang, newCorrections ->
                 deckName = newName
                 normalizationType = newNorm
                 sortType = newSort
@@ -764,7 +791,7 @@ fun DeckEditorScreen(
                 applyNormalization(newNorm, newCorrections)
                 applySorting(newSort, newPinnedFirst)
                 isInitialNewDeckDialog = false
-                showSettingsDialog = false
+                deckEditorSheetTab = null
             },
             onOpenTemplateEditor = { newName, newNorm, newSort, newPinnedFirst, newPromptSide, newFrontLang, newBackLang, newCorrections ->
                 deckName = newName
@@ -775,14 +802,14 @@ fun DeckEditorScreen(
                 frontLanguage = newFrontLang
                 backLanguage = newBackLang
                 textCorrections = newCorrections
-                showSettingsDialog = false
+                deckEditorSheetTab = null
                 showAdvancedEditor = true
             },
             canOpenTemplateEditor = !(isChildSet && linkageSettings.linkFieldConfig),
             canEditLanguage = !(isChildSet && linkageSettings.linkFieldConfig),
             canEditNormalization = !(isChildSet && linkageSettings.linkNormalization),
             onOpenLinkageSettings = if (isChildSet) {
-                { showSettingsDialog = false; showLinkageDialog = true }
+                { deckEditorSheetTab = null; showLinkageDialog = true }
             } else null,
             onClearReviewData = {
                 // 1. Call ViewModel to reset persistent data (if deck exists)
@@ -797,7 +824,7 @@ fun DeckEditorScreen(
                     card.incorrectAttempts.value = emptyList()
                     card.reviewLogs.value = emptyList()
                 }
-                showSettingsDialog = false
+                deckEditorSheetTab = null
             },
             alwaysOpenBulkEditor = alwaysOpenBulkEditor,
             onSetAlwaysOpenBulkEditor = { viewModel.setAlwaysOpenBulkEditor(it) },
@@ -806,7 +833,9 @@ fun DeckEditorScreen(
                     viewModel.revertLastMerge()
                     navController.popBackStack()
                 }
-            } else null
+            } else null,
+            showTitle = false,
+            showCardOrderSection = false
         )
     }
 
@@ -843,7 +872,7 @@ fun DeckEditorScreen(
                     pendingUseTemplateIds = null
                     showUseTemplateDialogForSelection = returnIds
                 } else {
-                    showSettingsDialog = true
+                    deckEditorSheetTab = net.ericclark.studiare.screens.UI_Components.DeckEditorSheetTab.SETTINGS
                 }
             },
             onSave = { newFront, newBack, resolvedTemplateSetId, _, applyToAll ->
@@ -895,7 +924,7 @@ fun DeckEditorScreen(
                     pendingUseTemplateIds = null
                     showUseTemplateDialogForSelection = returnIds
                 } else {
-                    showSettingsDialog = true
+                    deckEditorSheetTab = net.ericclark.studiare.screens.UI_Components.DeckEditorSheetTab.SETTINGS
                 }
             },
             initialTemplateName = savedTemplateSets.find { it.id == activeTemplateSetId }?.name ?: "",
@@ -944,10 +973,6 @@ fun DeckEditorScreen(
                 showLinkageDialog = false
             }
         )
-    }
-
-    if (showDeckInfo && deckWithCards != null) {
-        DeckInfoDialog(deckWithCards = deckWithCards, onDismiss = { showDeckInfo = false })
     }
 
     if (richTextCardIndex != null && richTextEditorTarget != null) {
@@ -1133,6 +1158,15 @@ fun DeckEditorScreen(
         sortCardStates(knownFiltered, selectionSortType, selectionSortPinnedCardsFirst)
     }
 
+    // Adding cards is automatic now (see the trailing-blank-card effect above) — the floating
+    // toolbar's trailing action is Save instead. Keeps the old top-bar Save button's
+    // enabled/disabled color change (FABs have no built-in `enabled`, so that's done manually
+    // here) - hoisted out of the floating toolbar itself (now inside the side sheet host's
+    // content lambda, see below) since Scaffold's own floatingActionButton slot no longer needs it.
+    val canSave = deckName.isNotBlank() && cards.any { it.front.value.isNotBlank() && it.back.value.isNotBlank() }
+    val fabContainerColor = if (canSave) FloatingActionButtonDefaults.containerColor else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)
+    val fabContentColor = if (canSave) contentColorFor(fabContainerColor) else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+
     Scaffold(
         snackbarHost = { androidx.compose.material3.SnackbarHost(snackbarHostState) },
         floatingActionButtonPosition = if (windowWidthSizeClass == WindowWidthSizeClass.Compact) FabPosition.Center else FabPosition.End,
@@ -1207,21 +1241,16 @@ fun DeckEditorScreen(
                             Text(getText(R.string.simple_editor))
                         }
                     }
-                }
+                    net.ericclark.studiare.screens.UI_Components.DeckEditorSheetButton(
+                        onClick = {
+                            deckEditorSheetTab = if (deckEditorSheetTab != null) null else net.ericclark.studiare.screens.UI_Components.DeckEditorSheetTab.STATISTICS
+                        }
+                    )
+                },
+                suppressShortcutsButton = true
             )
         },
         floatingActionButton = {
-            // Adding cards is automatic now (see the trailing-blank-card effect above) — this FAB is
-            // Save. It keeps the old top-bar Save button's enabled/disabled color change (FABs have
-            // no built-in `enabled`, so that's done manually here) and reuses its keyboard shortcut.
-            // Template Editor and Deck Options moved here from the top app bar, alongside new
-            // scroll-to-top/scroll-to-bottom actions and (compact layout only) Deck Info, which
-            // replaces the old inline stats-toggle arrow with the same dialog Simple Editor uses.
-            val canSave = deckName.isNotBlank() && cards.any { it.front.value.isNotBlank() && it.back.value.isNotBlank() }
-            val fabContainerColor = if (canSave) FloatingActionButtonDefaults.containerColor else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)
-            val fabContentColor = if (canSave) contentColorFor(fabContainerColor) else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
-            val isCompactLayout = windowWidthSizeClass == WindowWidthSizeClass.Compact
-
             if (selection.inSelectionMode) {
                 // Ordered least- to most-important, left to right — the end of this list sits
                 // immediately next to Close on the right, so the most-used actions are the ones
@@ -1414,54 +1443,26 @@ fun DeckEditorScreen(
                         }
                     }
                 }
-            } else {
-                HorizontalFloatingToolbar(
-                    expanded = true,
-                    // "Vibrant" toolbar colors tint the bar with primaryContainer instead of the
-                    // standard variant's surfaceContainer — the latter sat too close in tone to the
-                    // cards behind it in dark mode; this stays theme/dynamic-color-aware either way.
-                    colors = FloatingToolbarDefaults.vibrantFloatingToolbarColors(),
-                    floatingActionButton = {
-                        FloatingActionButton(
-                            onClick = { if (canSave) saveAction() },
-                            modifier = Modifier.withShortcut(Key.N, "N", id = "deck_editor.add_card") { if (canSave) saveAction() },
-                            containerColor = fabContainerColor,
-                            contentColor = fabContentColor
-                        ) {
-                            Icon(Icons.Default.Check, contentDescription = getText(R.string.save))
-                        }
-                    }
-                ) {
-                    TooltipIconButton(
-                        description = getText(R.string.scroll_to_bottom),
-                        onClick = { coroutineScope.launch { lazyListState.jumpThenAnimateTo((filteredCards.size - 1).coerceAtLeast(0), scrollOffset = Int.MAX_VALUE) } }
-                    ) {
-                        Icon(Icons.Default.ArrowDownward, contentDescription = getText(R.string.scroll_to_bottom))
-                    }
-                    TooltipIconButton(
-                        description = getText(R.string.scroll_to_top),
-                        onClick = { coroutineScope.launch { lazyListState.jumpThenAnimateTo(0) } }
-                    ) {
-                        Icon(Icons.Default.ArrowUpward, contentDescription = getText(R.string.scroll_to_top))
-                    }
-                    if (isCompactLayout && deckWithCards != null) {
-                        TooltipIconButton(description = getText(R.string.deck_statistics), onClick = { showDeckInfo = true }) {
-                            Icon(Icons.Default.Info, contentDescription = getText(R.string.deck_statistics))
-                        }
-                    }
-                    TooltipIconButton(description = getText(R.string.cards_filter_), onClick = { showFilterOverlay = !showFilterOverlay }) {
-                        Icon(Icons.Default.Search, contentDescription = getText(R.string.cards_filter_))
-                    }
-                    TooltipIconButton(description = getText(R.string.select_cards), onClick = { selection.enter() }) {
-                        Icon(Icons.Default.Checklist, contentDescription = getText(R.string.select_cards))
-                    }
-                    TooltipIconButton(description = getText(R.string.deck_settings), onClick = { showSettingsDialog = true }) {
-                        Icon(Icons.Default.Settings, getText(R.string.deck_settings))
-                    }
-                }
             }
+            // Else-branch (the normal, non-selection floating toolbar) moved into the side sheet
+            // host's own content lambda below - see the comment there for why.
         }
     ) { padding ->
+        net.ericclark.studiare.screens.UI_Components.DeckEditorSheetHost(
+            viewModel = viewModel,
+            screenId = ShortcutScreen.DECK_EDITOR,
+            sheetTab = deckEditorSheetTab,
+            onTabChange = { deckEditorSheetTab = it },
+            onDismiss = { deckEditorSheetTab = null },
+            padding = padding,
+            statisticsContent = deckEditorStatisticsContent,
+            sortContent = deckEditorSortContent,
+            settingsContent = deckEditorSettingsContent,
+            // Looser than the Simple Editor's own LocalIsDesktopWidth default - docks starting at
+            // the same width this screen's old inline wide-screen stats column already appeared
+            // at, so Deck Statistics stays visible under the same circumstances as before.
+            isWideLayout = windowWidthSizeClass != WindowWidthSizeClass.Compact
+        ) { padding ->
         Box(modifier = Modifier.padding(padding).fillMaxSize()) {
             // Gated on mainContentReady (see its declaration above) so the card list's genuinely
             // expensive first composition happens after, not during, the NavHost transition into
@@ -1534,21 +1535,15 @@ fun DeckEditorScreen(
                         }
                     }
                 } else if (windowWidthSizeClass != WindowWidthSizeClass.Compact) {
-                    // WIDE SCREEN LAYOUT
+                    // WIDE SCREEN LAYOUT — Deck Statistics used to show here as a left-hand column;
+                    // it now lives in the side sheet's own Statistics tab (docked at this same
+                    // width threshold via DeckEditorSheetHost's isWideLayout), so this is just the
+                    // card list, full width.
                     Row(
                         modifier = Modifier.padding(dimensions.paddingMedium),
                         horizontalArrangement = Arrangement.spacedBy(dimensions.spacingMedium)
                     ) {
-                        Column(modifier = Modifier
-                            .weight(1f)
-                            .verticalScroll(rememberScrollState())
-                            .padding(bottom = 100.dp)) {
-                            if (deckWithCards != null) {
-                                DeckStats(deckWithCards = deckWithCards)
-                            }
-                        }
-                        // Right column for the list of cards
-                        Column(modifier = Modifier.weight(1.75f)) {
+                        Column(modifier = Modifier.weight(1f)) {
                             Box(modifier = Modifier.weight(1f)) {
                                 LazyColumn(
                                     state = lazyListState,
@@ -1733,6 +1728,54 @@ fun DeckEditorScreen(
                 }
                 }
             }
+            // The normal (non-selection) floating toolbar - moved out of Scaffold's own
+            // floatingActionButton slot (which sits outside DeckEditorSheetHost entirely, so
+            // FabPosition there always centers/ends over the *whole* screen, docked panel
+            // included) and into this content lambda instead, so it's centered over exactly the
+            // width this lambda was given - the full screen when the sheet is closed/modal, or
+            // just the non-panel side when a standard (docked) panel is showing. Previously
+            // right-aligned (FabPosition.End) on wide screens; now always centered, per the
+            // explicit ask to move it to center on extended screens.
+            if (!selection.inSelectionMode) {
+                HorizontalFloatingToolbar(
+                    expanded = true,
+                    // "Vibrant" toolbar colors tint the bar with primaryContainer instead of the
+                    // standard variant's surfaceContainer — the latter sat too close in tone to the
+                    // cards behind it in dark mode; this stays theme/dynamic-color-aware either way.
+                    colors = FloatingToolbarDefaults.vibrantFloatingToolbarColors(),
+                    modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = dimensions.paddingMedium),
+                    floatingActionButton = {
+                        FloatingActionButton(
+                            onClick = { if (canSave) saveAction() },
+                            modifier = Modifier.withShortcut(Key.N, "N", id = "deck_editor.add_card") { if (canSave) saveAction() },
+                            containerColor = fabContainerColor,
+                            contentColor = fabContentColor
+                        ) {
+                            Icon(Icons.Default.Check, contentDescription = getText(R.string.save))
+                        }
+                    }
+                ) {
+                    TooltipIconButton(
+                        description = getText(R.string.scroll_to_bottom),
+                        onClick = { coroutineScope.launch { lazyListState.jumpThenAnimateTo((filteredCards.size - 1).coerceAtLeast(0), scrollOffset = Int.MAX_VALUE) } }
+                    ) {
+                        Icon(Icons.Default.ArrowDownward, contentDescription = getText(R.string.scroll_to_bottom))
+                    }
+                    TooltipIconButton(
+                        description = getText(R.string.scroll_to_top),
+                        onClick = { coroutineScope.launch { lazyListState.jumpThenAnimateTo(0) } }
+                    ) {
+                        Icon(Icons.Default.ArrowUpward, contentDescription = getText(R.string.scroll_to_top))
+                    }
+                    TooltipIconButton(description = getText(R.string.cards_filter_), onClick = { showFilterOverlay = !showFilterOverlay }) {
+                        Icon(Icons.Default.Search, contentDescription = getText(R.string.cards_filter_))
+                    }
+                    TooltipIconButton(description = getText(R.string.select_cards), onClick = { selection.enter() }) {
+                        Icon(Icons.Default.Checklist, contentDescription = getText(R.string.select_cards))
+                    }
+                }
+            }
+        }
         }
     }
 

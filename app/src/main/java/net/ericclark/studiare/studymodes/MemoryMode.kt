@@ -103,7 +103,6 @@ import net.ericclark.studiare.autoFocusable
 import net.ericclark.studiare.quizButtonTransitionSpec
 import net.ericclark.studiare.ShortcutScreen
 import net.ericclark.studiare.LocalWindowHeightSizeClass
-import net.ericclark.studiare.LocalWindowWidthSizeClass
 import net.ericclark.studiare.screens.Screens.StudyCompletionScreen
 
 @Composable
@@ -111,7 +110,6 @@ fun MemoryScreen(
     navController: NavController,
     viewModel: FlashcardViewModel
 ) {
-    val windowWidthSizeClass = LocalWindowWidthSizeClass.current
     val windowHeightSizeClass = LocalWindowHeightSizeClass.current
     val dimensions = LocalStudiareDimensions.current
     val state = viewModel.studyState ?: return
@@ -120,7 +118,12 @@ fun MemoryScreen(
     val toastMessage = viewModel.toastMessage
     // Used to be its own option (MemoryFlipAnimation); removed in favor of the global Reduce Motion setting.
     val reduceMotion by viewModel.reduceMotion.collectAsState()
-    var sheetTab by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf<net.ericclark.studiare.screens.UI_Components.SessionSheetTab?>(null) }
+    // Open by default (to Progress) on extended/desktop-sized displays, where the sheet docks
+    // as a standard, always-visible panel rather than a dismissible modal.
+    val isDesktopWidth = net.ericclark.studiare.LocalIsDesktopWidth.current
+    var sheetTab by androidx.compose.runtime.saveable.rememberSaveable {
+        mutableStateOf(if (isDesktopWidth) net.ericclark.studiare.screens.UI_Components.SessionSheetTab.PROGRESS else null)
+    }
 
     // A wrong pair flips back by itself, and a correct pair locks in by itself, after their chosen
     // delay (0 = stays until the user taps/submits). Neither auto-resolves when MemorySubmitAnswer
@@ -180,7 +183,7 @@ fun MemoryScreen(
                 CustomTopAppBar(
                     viewModel = viewModel,
                     screenId = ShortcutScreen.MEMORY,
-                    title = { AdaptiveSessionTitle(state, suppressTimerPill = sheetTab != null && windowWidthSizeClass >= WindowWidthSizeClass.Expanded) },
+                    title = { AdaptiveSessionTitle(state, suppressTimerPill = sheetTab != null && net.ericclark.studiare.LocalIsDesktopWidth.current) },
                     onOpenSessionSheet = { sheetTab = it },
                     navigationIcon = {
                         TooltipIconButton(description = getText(R.string.back), onClick = { viewModel.endStudySession(); navController.popBackStack() }) {

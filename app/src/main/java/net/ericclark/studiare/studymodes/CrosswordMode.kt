@@ -104,7 +104,12 @@ fun CrosswordScreen(
     val state = viewModel.studyState ?: return
     val mainContentReady = rememberMainContentReady()
     val inputController = net.ericclark.studiare.components.rememberLetterInputController()
-    var sheetTab by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf<net.ericclark.studiare.screens.UI_Components.SessionSheetTab?>(null) }
+    // Open by default (to Progress) on extended/desktop-sized displays, where the sheet docks
+    // as a standard, always-visible panel rather than a dismissible modal.
+    val isDesktopWidth = net.ericclark.studiare.LocalIsDesktopWidth.current
+    var sheetTab by androidx.compose.runtime.saveable.rememberSaveable {
+        mutableStateOf(if (isDesktopWidth) net.ericclark.studiare.screens.UI_Components.SessionSheetTab.PROGRESS else null)
+    }
 
     val isCompact = windowWidthSizeClass == WindowWidthSizeClass.Compact || windowHeightSizeClass == WindowHeightSizeClass.Compact
     val isImeVisible = WindowInsets.isImeVisible
@@ -155,7 +160,7 @@ fun CrosswordScreen(
             CustomTopAppBar(
                 viewModel = viewModel,
                 screenId = ShortcutScreen.CROSSWORD,
-                title = { AdaptiveSessionTitle(state, suppressTimerPill = sheetTab != null && windowWidthSizeClass >= WindowWidthSizeClass.Expanded) },
+                title = { AdaptiveSessionTitle(state, suppressTimerPill = sheetTab != null && net.ericclark.studiare.LocalIsDesktopWidth.current) },
                 onOpenSessionSheet = { sheetTab = it },
                 navigationIcon = {
                     TooltipIconButton(description = getText(R.string.back), onClick = { viewModel.endStudySession(); navController.popBackStack() }) {

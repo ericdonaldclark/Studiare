@@ -730,7 +730,8 @@ fun SettingsScreen(
                     ) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = getText(R.string.back))
                     }
-                }
+                },
+                suppressShortcutsButton = true
             )
         },
         snackbarHost = { SnackbarHost(snackbarHostState) }

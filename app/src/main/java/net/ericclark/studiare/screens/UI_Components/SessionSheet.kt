@@ -10,7 +10,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Insights
 import androidx.compose.material.icons.filled.Keyboard
@@ -27,11 +26,16 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.MutableTransitionState
+import androidx.compose.animation.expandHorizontally
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
@@ -39,14 +43,13 @@ import net.ericclark.studiare.AnimatedDialog
 import net.ericclark.studiare.CarouselDotsIndicator
 import net.ericclark.studiare.FlashcardViewModel
 import net.ericclark.studiare.KeyboardShortcutsContent
-import net.ericclark.studiare.LocalWindowWidthSizeClass
+import net.ericclark.studiare.LocalIsDesktopWidth
 import net.ericclark.studiare.DetailedTimedSessionCard
 import net.ericclark.studiare.R
 import net.ericclark.studiare.ShortcutScreen
 import net.ericclark.studiare.components.getText
 import net.ericclark.studiare.data.*
 import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
-import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import kotlin.math.roundToInt
 
 /** Which tab of the study-session side sheet is showing, and the order they appear in. */
@@ -60,11 +63,14 @@ private val StatCardHeight = 112.dp
 
 /**
  * The single integration point a study-mode screen wraps its existing `Scaffold { padding -> ... }`
- * body in to get the side sheet: a *standard* (persistent, docked, no scrim) panel on expanded
- * width, or a *modal* (overlay + scrim, dismissible) panel otherwise — mirroring every other
- * adaptive surface in this app (e.g. `SettingsScreen.kt`'s `isWideLayout` check) rather than
- * inventing a new width threshold. [sheetTab] is `null` when the sheet is closed, in which case
- * [content] renders exactly as it did before this wrapper existed.
+ * body in to get the side sheet: a *standard* (persistent, docked, no scrim) panel on desktop-
+ * sized width, or a *modal* (overlay + scrim, dismissible) panel otherwise. Deliberately uses the
+ * app's `LocalIsDesktopWidth` breakpoint (`DESKTOP_MIN_WIDTH_DP`), not the looser
+ * `WindowWidthSizeClass.Expanded` check most other adaptive surfaces use — an unfolded foldable's
+ * inner display can already qualify as Expanded while still being far too cramped to dock a
+ * persistent panel in legibly, so a docked panel there looked awful; this panel needs the
+ * stricter "is this actually desktop-sized" signal instead. [sheetTab] is `null` when the sheet is
+ * closed, in which case [content] renders exactly as it did before this wrapper existed.
  */
 @Composable
 fun SessionSheetHost(
@@ -77,17 +83,54 @@ fun SessionSheetHost(
     padding: PaddingValues,
     content: @Composable (PaddingValues) -> Unit
 ) {
-    val isWideLayout = LocalWindowWidthSizeClass.current >= WindowWidthSizeClass.Expanded
+    val isWideLayout = LocalIsDesktopWidth.current
 
-    if (isWideLayout && sheetTab != null) {
+    if (isWideLayout) {
+        // AnimatedVisibility's exit transition keeps composing its content for the duration of the
+        // animation, even after `sheetTab` itself has already gone back to null - so without this,
+        // the panel would vanish instantly (before the shrink/fade finishes) instead of animating
+        // out. Remembering the last non-null tab keeps something valid to render throughout.
+        var lastSheetTab by remember { mutableStateOf(sheetTab ?: SessionSheetTab.entries.first()) }
+        LaunchedEffect(sheetTab) { sheetTab?.let { lastSheetTab = it } }
+        val motionScheme = MaterialTheme.motionScheme
+        // Starts at false regardless of sheetTab's actual initial value (e.g. already open by
+        // default on a desktop-sized display) so the enter transition still plays on this
+        // screen's very first composition instead of the panel just appearing fully-sized - a
+        // plain `visible = sheetTab != null` skips animating whenever true is also the initial
+        // value, since AnimatedVisibility treats that as "was already visible."
+        val panelVisibleState = remember { MutableTransitionState(false) }
+        panelVisibleState.targetState = sheetTab != null
+
         Row(modifier = Modifier.padding(padding).fillMaxSize()) {
             Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
                 content(PaddingValues(0.dp))
             }
-            VerticalDivider()
-            SessionSheetPanel(state, viewModel, screenId, sheetTab, onTabChange, onDismiss)
+            AnimatedVisibility(
+                visibleState = panelVisibleState,
+                enter = expandHorizontally(animationSpec = motionScheme.defaultSpatialSpec(), expandFrom = Alignment.End) +
+                    fadeIn(animationSpec = motionScheme.defaultEffectsSpec()),
+                exit = shrinkHorizontally(animationSpec = motionScheme.defaultSpatialSpec(), shrinkTowards = Alignment.End) +
+                    fadeOut(animationSpec = motionScheme.fastEffectsSpec())
+            ) {
+                Row {
+                    VerticalDivider()
+                    SessionSheetPanel(state, viewModel, screenId, lastSheetTab, onTabChange, onDismiss)
+                }
+            }
         }
     } else {
+        // The modal sheet covers the study screen with a scrim, so the user can't actually work
+        // the session while it's open - pause the same clocks the app already pauses when the
+        // whole app backgrounds or the user navigates away (StudySessionScreenLifecycle in
+        // MainActivity.kt), rather than letting elapsed/timed-session time run while they're stuck
+        // behind the scrim. The docked panel (above) doesn't do this since its content stays live
+        // and interactive alongside it. Keyed on the open/closed transition itself, not sheetTab's
+        // value, so this is a no-op on first composition (nothing was paused yet to resume).
+        val modalOpen = sheetTab != null
+        DisposableEffect(modalOpen) {
+            if (modalOpen) viewModel.pauseSessionClock()
+            onDispose { if (modalOpen) viewModel.resumeSessionClock() }
+        }
         content(padding)
         if (sheetTab != null) {
             SessionSheetModal(state, viewModel, screenId, sheetTab, onTabChange, onDismiss)
@@ -126,7 +169,6 @@ private fun SessionSheetModal(
                 sheetTab = sheetTab,
                 onTabChange = onTabChange,
                 onClose = onDismiss,
-                closeIcon = Icons.Default.Close,
                 modifier = Modifier.fillMaxSize().padding(dimensions.paddingLarge)
             )
         }
@@ -155,7 +197,6 @@ private fun SessionSheetPanel(
             sheetTab = sheetTab,
             onTabChange = onTabChange,
             onClose = onDismiss,
-            closeIcon = Icons.AutoMirrored.Filled.ArrowBack,
             modifier = Modifier.fillMaxSize().padding(dimensions.paddingLarge)
         )
     }
@@ -170,7 +211,6 @@ private fun SessionSheetBody(
     sheetTab: SessionSheetTab,
     onTabChange: (SessionSheetTab) -> Unit,
     onClose: () -> Unit,
-    closeIcon: androidx.compose.ui.graphics.vector.ImageVector,
     modifier: Modifier = Modifier
 ) {
     val dimensions = LocalStudiareDimensions.current
@@ -192,27 +232,43 @@ private fun SessionSheetBody(
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
             Text(getText(R.string.session_sheet_title), style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
             IconButton(onClick = onClose) {
-                Icon(closeIcon, contentDescription = getText(R.string.close_capitalized))
+                Icon(Icons.Default.Close, contentDescription = getText(R.string.close_capitalized))
             }
         }
         Spacer(Modifier.height(dimensions.spacingMedium))
 
-        // Scrollable rather than a fixed TabRow: a fixed TabRow divides the available width evenly
-        // among tabs, so a narrow sheet with a long label (or all 3 tabs' icon+label) can force a
-        // tab's content onto a second line. Scrolling keeps every tab on one line regardless of width.
-        ScrollableTabRow(
-            selectedTabIndex = visibleTabs.indexOf(sheetTab).coerceAtLeast(0),
-            edgePadding = 0.dp
-        ) {
-            Tab(selected = sheetTab == SessionSheetTab.PROGRESS, onClick = { onTabChange(SessionSheetTab.PROGRESS) }) {
-                SessionSheetTabLabel(Icons.Default.Insights, getText(R.string.session_sheet_tab_progress))
-            }
-            Tab(selected = sheetTab == SessionSheetTab.MODE_OPTIONS, onClick = { onTabChange(SessionSheetTab.MODE_OPTIONS) }) {
-                SessionSheetTabLabel(Icons.Default.Settings, getText(R.string.session_sheet_tab_options))
-            }
-            if (hasHardwareKeyboard) {
-                Tab(selected = sheetTab == SessionSheetTab.SHORTCUTS, onClick = { onTabChange(SessionSheetTab.SHORTCUTS) }) {
-                    SessionSheetTabLabel(Icons.Default.Keyboard, getText(R.string.session_sheet_tab_keyboard))
+        // ScrollableTabRow so a tab's content never wraps to a second line, but each tab is given
+        // an explicit minimum width of (container width / tab count) so with few/short tabs they
+        // still stretch to fill the row evenly instead of bunching up at the start; it only
+        // actually scrolls once a tab's content needs more room than that even split provides.
+        BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+            val tabMinWidth = with(LocalDensity.current) { (constraints.maxWidth / visibleTabs.size).toDp() }
+            ScrollableTabRow(
+                selectedTabIndex = visibleTabs.indexOf(sheetTab).coerceAtLeast(0),
+                edgePadding = 0.dp
+            ) {
+                Tab(
+                    selected = sheetTab == SessionSheetTab.PROGRESS,
+                    onClick = { onTabChange(SessionSheetTab.PROGRESS) },
+                    modifier = Modifier.widthIn(min = tabMinWidth)
+                ) {
+                    SideSheetTabLabel(Icons.Default.Insights, getText(R.string.session_sheet_tab_progress))
+                }
+                Tab(
+                    selected = sheetTab == SessionSheetTab.MODE_OPTIONS,
+                    onClick = { onTabChange(SessionSheetTab.MODE_OPTIONS) },
+                    modifier = Modifier.widthIn(min = tabMinWidth)
+                ) {
+                    SideSheetTabLabel(Icons.Default.Settings, getText(R.string.session_sheet_tab_options))
+                }
+                if (hasHardwareKeyboard) {
+                    Tab(
+                        selected = sheetTab == SessionSheetTab.SHORTCUTS,
+                        onClick = { onTabChange(SessionSheetTab.SHORTCUTS) },
+                        modifier = Modifier.widthIn(min = tabMinWidth)
+                    ) {
+                        SideSheetTabLabel(Icons.Default.Keyboard, getText(R.string.session_sheet_tab_keyboard))
+                    }
                 }
             }
         }
@@ -290,16 +346,19 @@ private fun SessionSheetBody(
 
 /** A tab's icon-then-label content — [Tab]'s own `text`+`icon` params stack them vertically
  *  (icon above text), which isn't what's wanted here, so this builds the leading-icon layout
- *  directly as the tab's plain content lambda instead. */
+ *  directly as the tab's plain content lambda instead. Shared with [StudyHubSheetHost]'s tab row. */
 @Composable
-private fun SessionSheetTabLabel(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String) {
+internal fun SideSheetTabLabel(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp),
-        modifier = Modifier.padding(vertical = 12.dp)
+        // Horizontal padding too, not just vertical - with no spacing between Tabs themselves in
+        // the ScrollableTabRow, adjacent tabs' content otherwise touch edge-to-edge (confirmed on
+        // a real sheet: one tab's label ran straight into the next tab's icon).
+        modifier = Modifier.padding(horizontal = 12.dp, vertical = 12.dp)
     ) {
         Icon(icon, contentDescription = null, modifier = Modifier.size(18.dp))
-        Text(label)
+        Text(label, maxLines = 1)
     }
 }
 

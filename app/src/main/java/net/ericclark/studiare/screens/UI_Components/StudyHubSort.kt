@@ -6,7 +6,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -130,28 +129,18 @@ internal fun parseModeOrder(stored: String?, sections: List<SessionSection>): Ma
 }
 
 /**
- * The Study Hub's app bar sort button — only shown when the deck has active sessions. Used to
- * live behind an overflow menu alongside "Delete all sessions"; both the menu and that action
- * were removed (user-requested — "we will add that back in later"), leaving just this direct
- * button.
+ * The Study Hub's in-depth sort/customization controls — the [StudyHubSheetTab.SORT] tab's body
+ * in the Study Hub side sheet ([net.ericclark.studiare.screens.UI_Components.StudyHubSheetHost]).
+ * Covers all three nesting levels of the populated grid view: whether categories/modes get their
+ * own collapsible header at all (`groupBy*`), and how categories, modes, and session tiles are
+ * each ordered. Edits are staged locally and only committed (globally, for every deck) when Save
+ * is pressed — Cancel discards them, and Reset reverts the staged values to defaults without
+ * saving, so Save still has to be pressed to persist a reset. [onDismiss] closes the sheet, called
+ * after a successful Save as well as directly from Cancel, matching this content's previous home
+ * in a standalone dialog (Save used to close that dialog too).
  */
 @Composable
-internal fun StudyHubSortButton(onClick: () -> Unit) {
-    TooltipIconButton(description = getText(R.string.sort), onClick = onClick) {
-        Icon(Icons.Default.Sort, contentDescription = getText(R.string.sort))
-    }
-}
-
-/**
- * The Study Hub's in-depth sort/customization dialog (opened from [StudyHubOverflowMenu]'s "Sort"
- * item). Covers all three nesting levels of the populated grid view: whether categories/modes get
- * their own collapsible header at all (`groupBy*`), and how categories, modes, and session tiles
- * are each ordered. Edits are staged locally and only committed (globally, for every deck) when
- * Save is pressed — Cancel/the close icon discard them, and Reset reverts the staged values to
- * defaults without saving, so Save still has to be pressed to persist a reset.
- */
-@Composable
-internal fun SessionSortDialog(
+internal fun SessionSortContent(
     initialGroupByCategory: Boolean,
     initialGroupByMode: Boolean,
     initialCategorySortMode: GroupSortMode,
@@ -171,7 +160,7 @@ internal fun SessionSortDialog(
 ) {
     val dimensions = LocalStudiareDimensions.current
     // Same look as the Study Hub's own mode-section headers (modeHeaderItem, StudyScreens.kt) -
-    // titleMedium/bold/primary instead of DialogSection's plain default, so this dialog's section
+    // titleMedium/bold/primary instead of DialogSection's plain default, so this content's section
     // titles read consistently with the screen it's customizing.
     val sectionTitleColor = MaterialTheme.colorScheme.primary
     val sectionTitleWeight = FontWeight.Bold
@@ -208,127 +197,110 @@ internal fun SessionSortDialog(
         customModeOrder = parseModeOrder(null, sections)
     }
 
-    AnimatedDialog(
-        onDismissRequest = onDismiss,
-        properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)
-    ) {
-        Card(
-            shape = RoundedCornerShape(dimensions.cornerRadiusDialog),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
-            modifier = Modifier.widthIn(min = 280.dp, max = 560.dp).heightIn(max = 700.dp)
-        ) {
-            Column(modifier = Modifier.padding(24.dp)) {
-                Text(
-                    text = getText(R.string.sort_sessions_title),
-                    style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.fillMaxWidth()
+    Column(modifier = Modifier.fillMaxSize()) {
+        // Every section lives in this one scrollable Column - including Preset
+        // Position/Custom Category Order, which used to sit above it as fixed, unscrollable
+        // content and could squeeze the rest of the sections down to zero height on short
+        // screens (or whenever Custom Category Order's reorder list was expanded), leaving
+        // Categories/Modes/Sessions unreachable.
+        Column(modifier = Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState())) {
+            DialogSection(title = getText(R.string.sort_section_preset_position), titleColor = sectionTitleColor, titleFontWeight = sectionTitleWeight) {
+                ConnectedButtonGroup(
+                    items = listOf(PresetPosition.HIDE, PresetPosition.FIRST, PresetPosition.LAST),
+                    selected = presetPosition,
+                    onSelected = { presetPosition = it },
+                    labelFor = { it.asString() },
+                    modifier = Modifier.fillMaxWidth(),
+                    equalWidth = false
                 )
+            }
+            DialogSection(title = getText(R.string.sort_section_custom_category_order), titleColor = sectionTitleColor, titleFontWeight = sectionTitleWeight) {
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                    Text(getText(R.string.use_custom_category_order_label), modifier = Modifier.weight(1f))
+                    StudiareSwitch(checked = useCustomCategoryOrder, onCheckedChange = { useCustomCategoryOrder = it })
+                }
+                if (useCustomCategoryOrder) {
+                    Spacer(Modifier.height(dimensions.spacingSmall))
+                    ReorderableList(
+                        items = customCategoryOrder,
+                        onReorder = { customCategoryOrder = it },
+                        key = { it }
+                    ) { category ->
+                        Text(category.asString(), style = MaterialTheme.typography.bodyLarge)
+                    }
+                }
+            }
+            DialogSection(title = getText(R.string.sort_section_custom_mode_order), titleColor = sectionTitleColor, titleFontWeight = sectionTitleWeight) {
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                    Text(getText(R.string.use_custom_mode_order_label), modifier = Modifier.weight(1f))
+                    StudiareSwitch(checked = useCustomModeOrder, onCheckedChange = { useCustomModeOrder = it })
+                }
+                if (useCustomModeOrder) {
+                    Spacer(Modifier.height(dimensions.spacingSmall))
+                    // Same "pick a chip, edit the list below it" shape as Settings' Mode
+                    // Defaults category/mode chip rows.
+                    TypedChipRow(
+                        items = StudyCategory.DEFAULT_ORDER,
+                        selected = modeOrderCategory,
+                        labelFor = { it.asString() },
+                        onSelected = { modeOrderCategory = it }
+                    )
+                    Spacer(Modifier.height(dimensions.spacingSmall))
+                    val orderedSections = customModeOrder[modeOrderCategory].orEmpty().mapNotNull { sectionsByKey[it] }
+                    ReorderableList(
+                        items = orderedSections,
+                        onReorder = { newOrder -> customModeOrder = customModeOrder + (modeOrderCategory to newOrder.map { it.key }) },
+                        key = { it.key }
+                    ) { section ->
+                        Text(section.title, style = MaterialTheme.typography.bodyLarge)
+                    }
+                }
+            }
+            DialogSection(title = getText(R.string.sort_section_categories), titleColor = sectionTitleColor, titleFontWeight = sectionTitleWeight) {
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                    Text(getText(R.string.group_by_category_label), modifier = Modifier.weight(1f))
+                    StudiareSwitch(checked = groupByCategory, onCheckedChange = { groupByCategory = it })
+                }
                 Spacer(Modifier.height(dimensions.spacingSmall))
-                // Every section lives in this one scrollable Column - including Preset
-                // Position/Custom Category Order, which used to sit above it as fixed, unscrollable
-                // content and could squeeze the rest of the sections down to zero height on short
-                // screens (or whenever Custom Category Order's reorder list was expanded), leaving
-                // Categories/Modes/Sessions unreachable.
-                Column(modifier = Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState())) {
-                    DialogSection(title = getText(R.string.sort_section_preset_position), titleColor = sectionTitleColor, titleFontWeight = sectionTitleWeight) {
-                        ConnectedButtonGroup(
-                            items = listOf(PresetPosition.HIDE, PresetPosition.FIRST, PresetPosition.LAST),
-                            selected = presetPosition,
-                            onSelected = { presetPosition = it },
-                            labelFor = { it.asString() },
-                            modifier = Modifier.fillMaxWidth(),
-                            equalWidth = false
-                        )
-                    }
-                    DialogSection(title = getText(R.string.sort_section_custom_category_order), titleColor = sectionTitleColor, titleFontWeight = sectionTitleWeight) {
-                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                            Text(getText(R.string.use_custom_category_order_label), modifier = Modifier.weight(1f))
-                            StudiareSwitch(checked = useCustomCategoryOrder, onCheckedChange = { useCustomCategoryOrder = it })
-                        }
-                        if (useCustomCategoryOrder) {
-                            Spacer(Modifier.height(dimensions.spacingSmall))
-                            ReorderableList(
-                                items = customCategoryOrder,
-                                onReorder = { customCategoryOrder = it },
-                                key = { it }
-                            ) { category ->
-                                Text(category.asString(), style = MaterialTheme.typography.bodyLarge)
-                            }
-                        }
-                    }
-                    DialogSection(title = getText(R.string.sort_section_custom_mode_order), titleColor = sectionTitleColor, titleFontWeight = sectionTitleWeight) {
-                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                            Text(getText(R.string.use_custom_mode_order_label), modifier = Modifier.weight(1f))
-                            StudiareSwitch(checked = useCustomModeOrder, onCheckedChange = { useCustomModeOrder = it })
-                        }
-                        if (useCustomModeOrder) {
-                            Spacer(Modifier.height(dimensions.spacingSmall))
-                            // Same "pick a chip, edit the list below it" shape as Settings' Mode
-                            // Defaults category/mode chip rows.
-                            TypedChipRow(
-                                items = StudyCategory.DEFAULT_ORDER,
-                                selected = modeOrderCategory,
-                                labelFor = { it.asString() },
-                                onSelected = { modeOrderCategory = it }
-                            )
-                            Spacer(Modifier.height(dimensions.spacingSmall))
-                            val orderedSections = customModeOrder[modeOrderCategory].orEmpty().mapNotNull { sectionsByKey[it] }
-                            ReorderableList(
-                                items = orderedSections,
-                                onReorder = { newOrder -> customModeOrder = customModeOrder + (modeOrderCategory to newOrder.map { it.key }) },
-                                key = { it.key }
-                            ) { section ->
-                                Text(section.title, style = MaterialTheme.typography.bodyLarge)
-                            }
-                        }
-                    }
-                    DialogSection(title = getText(R.string.sort_section_categories), titleColor = sectionTitleColor, titleFontWeight = sectionTitleWeight) {
-                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                            Text(getText(R.string.group_by_category_label), modifier = Modifier.weight(1f))
-                            StudiareSwitch(checked = groupByCategory, onCheckedChange = { groupByCategory = it })
-                        }
-                        Spacer(Modifier.height(dimensions.spacingSmall))
-                        GroupSortRow(categorySortMode, { categorySortMode = it }, categorySortDirection, { categorySortDirection = it })
-                    }
-                    DialogSection(title = getText(R.string.sort_section_modes), titleColor = sectionTitleColor, titleFontWeight = sectionTitleWeight) {
-                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                            Text(getText(R.string.group_by_mode_label), modifier = Modifier.weight(1f))
-                            StudiareSwitch(checked = groupByMode, onCheckedChange = { groupByMode = it })
-                        }
-                        Spacer(Modifier.height(dimensions.spacingSmall))
-                        GroupSortRow(modeSortMode, { modeSortMode = it }, modeSortDirection, { modeSortDirection = it })
-                    }
-                    // No divider here - the dialog's own HorizontalDivider right below the
-                    // scrollable content already separates the last section from the button row.
-                    DialogSection(title = getText(R.string.sort_section_cards), showDivider = false, titleColor = sectionTitleColor, titleFontWeight = sectionTitleWeight) {
-                        TileSortRow(tileSortMode, { tileSortMode = it }, tileSortDirection, { tileSortDirection = it })
-                    }
+                GroupSortRow(categorySortMode, { categorySortMode = it }, categorySortDirection, { categorySortDirection = it })
+            }
+            DialogSection(title = getText(R.string.sort_section_modes), titleColor = sectionTitleColor, titleFontWeight = sectionTitleWeight) {
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                    Text(getText(R.string.group_by_mode_label), modifier = Modifier.weight(1f))
+                    StudiareSwitch(checked = groupByMode, onCheckedChange = { groupByMode = it })
                 }
+                Spacer(Modifier.height(dimensions.spacingSmall))
+                GroupSortRow(modeSortMode, { modeSortMode = it }, modeSortDirection, { modeSortDirection = it })
+            }
+            // No divider here - the content's own HorizontalDivider right below the
+            // scrollable content already separates the last section from the button row.
+            DialogSection(title = getText(R.string.sort_section_cards), showDivider = false, titleColor = sectionTitleColor, titleFontWeight = sectionTitleWeight) {
+                TileSortRow(tileSortMode, { tileSortMode = it }, tileSortDirection, { tileSortDirection = it })
+            }
+        }
 
-                Spacer(Modifier.height(dimensions.spacingMedium))
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-                Spacer(Modifier.height(dimensions.spacingMedium))
+        Spacer(Modifier.height(dimensions.spacingMedium))
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+        Spacer(Modifier.height(dimensions.spacingMedium))
 
-                // Pinned to the bottom, below the scrollable content — none of these need a
-                // confirmation prompt, and nothing above is applied until Save is pressed.
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    TextButton(onClick = { resetToDefaults() }) { Text(getText(R.string.reset)) }
-                    Row(horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)) {
-                        TextButton(onClick = onDismiss) { Text(getText(R.string.cancel)) }
-                        Button(onClick = {
-                            onSave(
-                                groupByCategory, groupByMode,
-                                categorySortMode, categorySortDirection,
-                                modeSortMode, modeSortDirection,
-                                tileSortMode, tileSortDirection,
-                                useCustomCategoryOrder, customCategoryOrder,
-                                presetPosition,
-                                useCustomModeOrder, customModeOrder
-                            )
-                        }) { Text(getText(R.string.save)) }
-                    }
-                }
+        // Pinned to the bottom, below the scrollable content — none of these need a
+        // confirmation prompt, and nothing above is applied until Save is pressed.
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            TextButton(onClick = { resetToDefaults() }) { Text(getText(R.string.reset)) }
+            Row(horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)) {
+                TextButton(onClick = onDismiss) { Text(getText(R.string.cancel)) }
+                Button(onClick = {
+                    onSave(
+                        groupByCategory, groupByMode,
+                        categorySortMode, categorySortDirection,
+                        modeSortMode, modeSortDirection,
+                        tileSortMode, tileSortDirection,
+                        useCustomCategoryOrder, customCategoryOrder,
+                        presetPosition,
+                        useCustomModeOrder, customModeOrder
+                    )
+                    onDismiss()
+                }) { Text(getText(R.string.save)) }
             }
         }
     }
@@ -341,14 +313,15 @@ internal fun GroupSortRow(
 ) {
     val dimensions = LocalStudiareDimensions.current
     Column {
-        // 3 options: a ConnectedButtonGroup forces an even 1/3 split regardless of label length,
-        // which truncates the longest one on narrow phones. TypedChipGrid sizes each chip to its
-        // own label and wraps to a new line instead.
+        // Filter chips, same checkmark-chip look as Create Study Session's Category/Mode chips
+        // (CreateStudySessionDialog.kt) - this is the single-select group being matched to that
+        // style, not the ascending/descending toggle below it.
         TypedChipGrid(
             items = GroupSortMode.entries,
             selected = mode,
             labelFor = { it.asString() },
-            onSelected = onModeChange
+            onSelected = onModeChange,
+            showCheckmarkWhenSelected = true
         )
         Spacer(Modifier.height(dimensions.spacingSmall))
         ConnectedButtonGroup(
@@ -372,7 +345,8 @@ internal fun TileSortRow(
             items = SessionTileSortMode.entries,
             selected = mode,
             labelFor = { it.asString() },
-            onSelected = onModeChange
+            onSelected = onModeChange,
+            showCheckmarkWhenSelected = true
         )
         Spacer(Modifier.height(dimensions.spacingSmall))
         ConnectedButtonGroup(

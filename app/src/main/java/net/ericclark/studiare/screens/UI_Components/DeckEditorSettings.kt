@@ -1,9 +1,12 @@
 package net.ericclark.studiare.screens.UI_Components
 
 import net.ericclark.studiare.AnimatedDialog
+import net.ericclark.studiare.SelectableDialogItem
 import net.ericclark.studiare.StudiareSwitch
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -58,8 +61,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
-import net.ericclark.studiare.LocalWindowWidthSizeClass
 import net.ericclark.studiare.components.*
 import net.ericclark.studiare.DialogSection
 import java.text.SimpleDateFormat
@@ -313,7 +314,8 @@ fun DeckStats(deckWithCards: DeckWithCards) {
     }
 }
 
-/** [DeckStats] in a dialog with a Close button — shared by Simple Editor and the Bulk Editor's toolbar. */
+/** [DeckStats] in a dialog with a Close button — used by the Bulk Editor's toolbar (Simple Editor
+ *  shows the bare [DeckStats] directly as its side sheet's Statistics tab instead). */
 @Composable
 fun DeckInfoDialog(deckWithCards: DeckWithCards, onDismiss: () -> Unit) {
     val dimensions = LocalStudiareDimensions.current
@@ -321,7 +323,7 @@ fun DeckInfoDialog(deckWithCards: DeckWithCards, onDismiss: () -> Unit) {
     // in the chain, so the platform's own dialog window chrome (different corner radius than the
     // rest of the app) showed through, and content taller than the dialog was just hard-clipped
     // with nothing to scroll. Matches the Card + fillMaxHeight(0.85f) + scrollable-column pattern
-    // used by DeckSettingsDialog/AdvancedDeckEditorDialog/RichTextEditorDialog.
+    // used by AdvancedDeckEditorDialog/RichTextEditorDialog.
     AnimatedDialog(
         onDismissRequest = onDismiss,
         properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)
@@ -352,6 +354,41 @@ fun DeckInfoDialog(deckWithCards: DeckWithCards, onDismiss: () -> Unit) {
     }
 }
 
+/**
+ * The Simple Editor's Sort tab — the deck's own card-order settings (previously the "Card Order"
+ * section inline in Deck Settings; see [DeckSettingsContent]'s `showCardOrderSection`), restyled
+ * as a list of [SelectableDialogItem]s instead of a dropdown, matching the look of the Decks
+ * screen's own Sort tab ([net.ericclark.studiare.screens.Dialogs.DeckSortContent]). Live-apply,
+ * same as that one — no Save/Cancel, each tap takes effect immediately.
+ */
+@Composable
+fun DeckCardOrderContent(
+    currentSortMode: DeckSortMode,
+    sortPinnedCardsFirst: Boolean,
+    onSortModeSelected: (DeckSortMode) -> Unit,
+    onSortPinnedCardsFirstChange: (Boolean) -> Unit
+) {
+    val dimensions = LocalStudiareDimensions.current
+    Column(modifier = Modifier.fillMaxSize()) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth().padding(bottom = dimensions.spacingMedium)
+        ) {
+            Text(getText(R.string.show_pinned_cards_first), modifier = Modifier.weight(1f))
+            StudiareSwitch(checked = sortPinnedCardsFirst, onCheckedChange = onSortPinnedCardsFirstChange)
+        }
+        LazyColumn(verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)) {
+            items(DeckSortMode.entries) { mode ->
+                SelectableDialogItem(
+                    text = mode.asString(),
+                    isSelected = mode == currentSortMode,
+                    onClick = { onSortModeSelected(mode) }
+                )
+            }
+        }
+    }
+}
+
 /** Shown under a section disabled because its value is currently linked to the parent set/deck
  * (see [net.ericclark.studiare.data.LinkageSettings] / [net.ericclark.studiare.components.DeckLinkageResolver])
  * — editing it here would be silently overwritten the next time decks recombine, so the control
@@ -372,8 +409,17 @@ private fun LinkedFieldNotice(onOpenLinkageSettings: () -> Unit) {
     }
 }
 
+/**
+ * The deck's settings (name, card order, prompt side, language, normalization, template editor,
+ * default editor, review data) — the Settings tab's body in both the Simple Editor's and Bulk
+ * Editor's side sheet ([net.ericclark.studiare.screens.UI_Components.DeckEditorSheetHost]).
+ * Self-contained (its own outer `Column(fillMaxSize())`) so it works embedded in a sheet's tab
+ * body without needing an ambient `ColumnScope`. [showTitle] is false whenever the host sheet
+ * already shows its own tab title (every current caller); kept as a param rather than removed
+ * outright in case a future bare/dialog-style caller needs its own heading again.
+ */
 @Composable
-fun DeckSettingsDialog(
+fun DeckSettingsContent(
     initialDeckName: String,
     initialNormalizationType: NormalizationType,
     initialDeckSort: DeckSortMode,
@@ -386,11 +432,11 @@ fun DeckSettingsDialog(
     onDismiss: () -> Unit,
     onSave: (String, NormalizationType, DeckSortMode, Boolean, CardSide, String, String, TextCorrectionSettings) -> Unit,
     onClearReviewData: () -> Unit,
-    /** Carries this dialog's current (possibly-unsaved) draft values out before it's torn down to
+    /** Carries this content's current (possibly-unsaved) draft values out before it's torn down to
      * open the Template Editor — otherwise, for a deck that hasn't been saved/created yet, nothing
-     * here has landed anywhere else, and this dialog's own `remember`ed state (including whatever
-     * the user just typed) is simply lost when it's no longer composed. The caller is expected to
-     * stash these into whatever it hands back as `initialX` next time this dialog reopens. */
+     * here has landed anywhere else, and this composable's own `remember`ed state (including
+     * whatever the user just typed) is simply lost when it's no longer composed. The caller is
+     * expected to stash these into whatever it hands back as `initialX` next time this reopens. */
     onOpenTemplateEditor: (
         deckName: String,
         normalizationType: NormalizationType,
@@ -414,10 +460,16 @@ fun DeckSettingsDialog(
     // doesn't need its own trip to Settings.
     alwaysOpenBulkEditor: Boolean = false,
     onSetAlwaysOpenBulkEditor: (Boolean) -> Unit = {},
-    // Non-null only when this dialog was auto-opened right after a multi-select Merge — shows a
-    // one-tap "put it back" section at the top, since this is the one moment undoing is simple
-    // (nothing else has touched the survivor deck yet).
-    onRevertMerge: (() -> Unit)? = null
+    // Non-null only when this was auto-opened right after a multi-select Merge — shows a one-tap
+    // "put it back" section at the top, since this is the one moment undoing is simple (nothing
+    // else has touched the survivor deck yet).
+    onRevertMerge: (() -> Unit)? = null,
+    showTitle: Boolean = true,
+    // False only for the Simple Editor's side sheet, which moved Card Order into its own Sort tab
+    // ([DeckCardOrderContent]) - the standalone dialog (Bulk Editor) has no such tab, so it keeps
+    // this section inline as before.
+    showCardOrderSection: Boolean = true,
+    modifier: Modifier = Modifier
 ) {
     val dimensions = LocalStudiareDimensions.current
     var deckName by remember { mutableStateOf(initialDeckName) }
@@ -460,10 +512,10 @@ fun DeckSettingsDialog(
     // column instead of scrolling away with the rest of the content, matching the
     // "always-visible nav rail" pattern used elsewhere in the app for wide layouts (e.g.
     // NavigationDrawerTree).
-    val navItems = remember {
-        listOf(
+    val navItems = remember(showCardOrderSection) {
+        listOfNotNull(
             "deckName" to R.string.deck_name,
-            "cardOrder" to R.string.sort_card_order,
+            ("cardOrder" to R.string.sort_card_order).takeIf { showCardOrderSection },
             "promptSide" to R.string.default_prompt_side,
             "language" to R.string.language_set,
             "normalization" to R.string.case_normalization,
@@ -473,7 +525,6 @@ fun DeckSettingsDialog(
         )
     }
     val navColors = navItems.indices.map { alternatingSectionColors(it) }
-    val isWideScreen = LocalWindowWidthSizeClass.current != WindowWidthSizeClass.Compact
 
     // Moved from the old LanguageSelectionDialog
     val availableLanguages = remember {
@@ -518,27 +569,11 @@ fun DeckSettingsDialog(
         }
     }
 
-    AnimatedDialog(onDismissRequest = onDismiss, properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)) {
-        Card(
-            // A fixed dp cap here (what this had before) doesn't adapt to the device's actual
-            // available height — on a screen shorter than that cap, the dialog window itself gets
-            // clipped by the screen before the cap is ever reached, which is the same underlying
-            // problem as before, just at a different threshold. A fraction of the available space
-            // (matching AdvancedDeckEditorDialog/RichTextEditorDialog's own sizing) scales with
-            // the actual screen instead. On wide screens the cap is raised so the pinned nav
-            // rail (a third of this width — see the Row below) has room without squeezing the
-            // section content into something cramped.
-            modifier = Modifier.widthIn(min = 280.dp, max = if (isWideScreen) 700.dp else 560.dp).fillMaxHeight(0.9f),
-            shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(dimensions.paddingLarge)
-            ) {
-                Text(getText(R.string.deck_options), style = MaterialTheme.typography.headlineSmall, modifier = Modifier.fillMaxWidth())
-                Spacer(Modifier.height(dimensions.spacingSmall))
+    Column(modifier = modifier.fillMaxSize()) {
+                if (showTitle) {
+                    Text(getText(R.string.deck_options), style = MaterialTheme.typography.headlineSmall, modifier = Modifier.fillMaxWidth())
+                    Spacer(Modifier.height(dimensions.spacingSmall))
+                }
 
                 // Each section-jump button alternates between two theme container roles
                 // (navColors) so they read as distinct destinations rather than a row of
@@ -604,7 +639,10 @@ fun DeckSettingsDialog(
                     }
                     }
 
-                    // Sorting Section (Card Order)
+                    // Sorting Section (Card Order) - moved into its own Sort tab
+                    // ([DeckCardOrderContent]) on the Simple Editor's side sheet, so this inline
+                    // version only renders for the standalone dialog (Bulk Editor).
+                    if (showCardOrderSection) {
                     Column(modifier = trackSection("cardOrder")) {
                     DialogSection(title = stringResource(R.string.sort_card_order), contentTopSpacing = 0.dp, titleColor = MaterialTheme.colorScheme.primary) {
                         Text(
@@ -627,6 +665,7 @@ fun DeckSettingsDialog(
                             Text(getText(R.string.show_pinned_cards_first), modifier = Modifier.weight(1f))
                             StudiareSwitch(checked = sortPinnedCardsFirst, onCheckedChange = { sortPinnedCardsFirst = it })
                         }
+                    }
                     }
                     }
 
@@ -815,51 +854,30 @@ fun DeckSettingsDialog(
                 }
                 }
 
-                if (isWideScreen) {
-                    Row(modifier = Modifier.weight(1f, fill = false)) {
-                        Column(
-                            modifier = Modifier
-                                .width(200.dp)
-                                .verticalScroll(rememberScrollState()),
-                            verticalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)
-                        ) {
-                            navItems.indices.forEach { index ->
-                                sectionNavButton(index, Modifier.fillMaxWidth())
-                            }
-                        }
-                        Spacer(Modifier.width(dimensions.spacingMedium))
-                        Column(
-                            modifier = Modifier
-                                .weight(1f)
-                                .verticalScroll(mainScrollState)
-                                .onGloballyPositioned { containerCoordinates[0] = it }
-                        ) {
-                            sectionsContent()
-                        }
-                    }
-                } else {
-                    Column(
+                // Always the horizontal section-jump row at the top, scrolling with the rest of
+                // the content (not pinned) and scrolling horizontally itself since the section
+                // names don't all fit — the vertical left-hand rail this used to switch to on
+                // extended displays (LocalWindowWidthSizeClass >= Expanded) was dropped per the
+                // user's own call, so this one layout now covers every width.
+                Column(
+                    modifier = Modifier
+                        .weight(1f, fill = false) // Allows scrolling without forcing full screen height
+                        .verticalScroll(mainScrollState)
+                        .onGloballyPositioned { containerCoordinates[0] = it }
+                ) {
+                    Row(
                         modifier = Modifier
-                            .weight(1f, fill = false) // Allows scrolling without forcing full screen height
-                            .verticalScroll(mainScrollState)
-                            .onGloballyPositioned { containerCoordinates[0] = it }
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)
                     ) {
-                        // Section-jump row — scrolls with the rest of the content (not pinned),
-                        // and scrolls horizontally itself since the section names don't all fit.
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .horizontalScroll(rememberScrollState()),
-                            horizontalArrangement = Arrangement.spacedBy(dimensions.spacingSmall)
-                        ) {
-                            navItems.indices.forEach { index ->
-                                sectionNavButton(index, Modifier)
-                            }
+                        navItems.indices.forEach { index ->
+                            sectionNavButton(index, Modifier)
                         }
-                        Spacer(Modifier.height(dimensions.spacingSmall))
-
-                        sectionsContent()
                     }
+                    Spacer(Modifier.height(dimensions.spacingSmall))
+
+                    sectionsContent()
                 }
                 Spacer(Modifier.height(dimensions.spacingMedium))
 
@@ -881,8 +899,6 @@ fun DeckSettingsDialog(
                         }
                     }
                 }
-            }
-        }
     }
 }
 
@@ -978,7 +994,7 @@ fun LinkageSettingsDialog(
 }
 
 /**
- * Just the Card Order section of [DeckSettingsDialog], standalone — used by the Bulk Editor's
+ * Just the Card Order section of [DeckSettingsContent], standalone — used by the Bulk Editor's
  * multi-select table, where sorting only reorders that table (applies while the selection mode is
  * open, never the deck's own saved sort) rather than the deck's actual [DeckSortMode].
  */

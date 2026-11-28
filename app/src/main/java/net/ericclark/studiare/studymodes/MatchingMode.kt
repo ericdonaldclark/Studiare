@@ -82,7 +82,6 @@ fun MatchingScreen(
     navController: NavController,
     viewModel: FlashcardViewModel
 ) {
-    val windowWidthSizeClass = LocalWindowWidthSizeClass.current
     val dimensions = LocalStudiareDimensions.current
     val state = viewModel.studyState ?: return
     val mainContentReady = rememberMainContentReady()
@@ -162,7 +161,12 @@ fun MatchingScreen(
     val focusRequester = remember { FocusRequester() }
     var focusedIndex by remember { mutableStateOf(0) }
     var focusedSide by remember { mutableStateOf("front") }
-    var sheetTab by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf<net.ericclark.studiare.screens.UI_Components.SessionSheetTab?>(null) }
+    // Open by default (to Progress) on extended/desktop-sized displays, where the sheet docks
+    // as a standard, always-visible panel rather than a dismissible modal.
+    val isDesktopWidth = net.ericclark.studiare.LocalIsDesktopWidth.current
+    var sheetTab by androidx.compose.runtime.saveable.rememberSaveable {
+        mutableStateOf(if (isDesktopWidth) net.ericclark.studiare.screens.UI_Components.SessionSheetTab.PROGRESS else null)
+    }
 
     LaunchedEffect(state.matchingCardsOnScreen) {
         if (state.matchingCardsOnScreen.isNotEmpty()) {
@@ -183,7 +187,7 @@ fun MatchingScreen(
             CustomTopAppBar(
                 viewModel = viewModel,
                 screenId = ShortcutScreen.MATCHING,
-                title = { AdaptiveSessionTitle(state, suppressTimerPill = sheetTab != null && windowWidthSizeClass >= WindowWidthSizeClass.Expanded) },
+                title = { AdaptiveSessionTitle(state, suppressTimerPill = sheetTab != null && net.ericclark.studiare.LocalIsDesktopWidth.current) },
                 onOpenSessionSheet = { sheetTab = it },
                 navigationIcon = {
                     TooltipIconButton(description = getText(R.string.back), onClick = {

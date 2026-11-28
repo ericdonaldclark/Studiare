@@ -104,7 +104,12 @@ fun ListenModeShell(
     val state = viewModel.studyState ?: return
     val mainContentReady = rememberMainContentReady()
     var showEditDialog by remember { mutableStateOf(false) }
-    var sheetTab by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf<net.ericclark.studiare.screens.UI_Components.SessionSheetTab?>(null) }
+    // Open by default (to Progress) on extended/desktop-sized displays, where the sheet docks
+    // as a standard, always-visible panel rather than a dismissible modal.
+    val isDesktopWidth = net.ericclark.studiare.LocalIsDesktopWidth.current
+    var sheetTab by androidx.compose.runtime.saveable.rememberSaveable {
+        mutableStateOf(if (isDesktopWidth) net.ericclark.studiare.screens.UI_Components.SessionSheetTab.PROGRESS else null)
+    }
 
     if (state.isComplete) {
         StudyCompletionScreen(navController = navController, viewModel = viewModel)
@@ -124,7 +129,7 @@ fun ListenModeShell(
                 viewModel = viewModel,
                 screenId = screenId,
                 title = {
-                    AdaptiveSessionTitle(state, suppressTimerPill = sheetTab != null && LocalWindowWidthSizeClass.current >= WindowWidthSizeClass.Expanded)
+                    AdaptiveSessionTitle(state, suppressTimerPill = sheetTab != null && net.ericclark.studiare.LocalIsDesktopWidth.current)
                 },
                 onOpenSessionSheet = { sheetTab = it },
                 navigationIcon = {

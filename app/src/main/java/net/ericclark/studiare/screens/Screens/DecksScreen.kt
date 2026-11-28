@@ -64,7 +64,6 @@ import net.ericclark.studiare.components.*
 import net.ericclark.studiare.ui.theme.*
 import net.ericclark.studiare.data.*
 import androidx.compose.ui.platform.LocalConfiguration
-import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material3.MaterialTheme.shapes
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
@@ -77,7 +76,6 @@ import androidx.compose.animation.core.MutableTransitionState
 import kotlinx.coroutines.delay
 import net.ericclark.studiare.screens.Dialogs.AnkiFieldMappingDialog
 import net.ericclark.studiare.screens.Dialogs.AnkiMappingConfig
-import net.ericclark.studiare.screens.Dialogs.DeckSortDialog
 import net.ericclark.studiare.screens.Dialogs.DuplicateWarningDialog
 import net.ericclark.studiare.screens.Dialogs.ExportDecksDialog
 import net.ericclark.studiare.screens.Dialogs.ImportSelectionDialog
@@ -113,7 +111,7 @@ fun DeckListScreen(
     var showBulkDeleteDialog by remember { mutableStateOf<List<DeckSummary>?>(null) }
     var showAdvancedSelectionDialog by remember { mutableStateOf(false) }
     var showExportDialog by remember { mutableStateOf(false) }
-    var showSortDialog by remember { mutableStateOf(false) }
+    var sortShortcutsSheetTab by remember { mutableStateOf<net.ericclark.studiare.screens.UI_Components.SortShortcutsSheetTab?>(null) }
     var fabMenuExpanded by rememberSaveable { mutableStateOf(false) }
     BackHandler(fabMenuExpanded) { fabMenuExpanded = false }
 
@@ -187,12 +185,13 @@ fun DeckListScreen(
     val dimensions = LocalStudiareDimensions.current
 
     // --- Dialogs ---
-    if (showSortDialog) {
+    // The Sort tab's content for the Sort + Shortcuts side sheet below.
+    val deckSortContent: @Composable () -> Unit = {
         val showPinnedFirst by viewModel.showPinnedDecksFirst.collectAsState()
-        DeckSortDialog(
+        net.ericclark.studiare.screens.Dialogs.DeckSortContent(
             currentSortMode = deckSortMode,
             showPinnedFirst = showPinnedFirst,
-            onDismiss = { showSortDialog = false },
+            onDismiss = { sortShortcutsSheetTab = null },
             onSortModeSelected = { viewModel.setDeckSortMode(it) },
             onShowPinnedFirstChange = { viewModel.setShowPinnedDecksFirst(it) }
         )
@@ -565,7 +564,8 @@ fun DeckListScreen(
                                 Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = getText(R.string.back))
                             }
                         },
-                        actions = activePaneChrome.actions
+                        actions = activePaneChrome.actions,
+                        suppressShortcutsButton = activePaneChrome.suppressShortcutsButton
                     )
                 } else {
                     CustomTopAppBar(
@@ -640,24 +640,31 @@ fun DeckListScreen(
                             }
                         },
                         actions = {
-                            // Import/Export moved into the Add Deck FAB's menu; Sort and Settings stay
-                            // directly in the app bar on every layout (no more overflow menu).
-                            TooltipIconButton(
-                                description = getText(R.string.sort_decks),
-                                onClick = { showSortDialog = true },
-                                modifier = Modifier.withShortcut(Key.A, "A", id = "decks.sort") { showSortDialog = true }
-                            ) {
-                                Icon(
-                                    imageVector = Icons.AutoMirrored.Filled.Sort,
-                                    contentDescription = getText(R.string.sort_decks)
-                                )
-                            }
-                        }
+                            // Import/Export moved into the Add Deck FAB's menu; the combined
+                            // Sort + Shortcuts side sheet button stays directly in the app bar on
+                            // every layout (no more overflow menu).
+                            net.ericclark.studiare.screens.UI_Components.SortShortcutsSheetButton(
+                                onClick = { sortShortcutsSheetTab = net.ericclark.studiare.screens.UI_Components.SortShortcutsSheetTab.SORT },
+                                modifier = Modifier.withShortcut(Key.A, "A", id = "decks.sort") {
+                                    sortShortcutsSheetTab = net.ericclark.studiare.screens.UI_Components.SortShortcutsSheetTab.SORT
+                                }
+                            )
+                        },
+                        suppressShortcutsButton = true
                     )
                 }
             }
         }
     ) { padding ->
+        net.ericclark.studiare.screens.UI_Components.SortShortcutsSheetHost(
+            viewModel = viewModel,
+            screenId = ShortcutScreen.DECKS,
+            sheetTab = sortShortcutsSheetTab,
+            onTabChange = { sortShortcutsSheetTab = it },
+            onDismiss = { sortShortcutsSheetTab = null },
+            padding = padding,
+            sortContent = deckSortContent
+        ) { padding ->
         val createDeckKey = resolveShortcutKey(LocalShortcutRemaps.current, "decks.create_new", Key.N)
         Column(
             modifier = Modifier
@@ -1452,6 +1459,7 @@ fun DeckListScreen(
                     )
                 }
             }
+        }
         }
     }
 

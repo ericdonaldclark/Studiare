@@ -45,7 +45,7 @@ import net.ericclark.studiare.ui.theme.LocalStudiareDimensions
  * (which also previews the reorder live by sliding the other rows out of the way) and a pair of
  * up/down arrow buttons (disabled at the respective end of the list) for a precise one-step move
  * without needing to drag. No external reorderable-list library — built for lists short enough
- * that a hand-rolled, non-lazy implementation is simpler than pulling one in (e.g. [PinnedSortDialog]'s
+ * that a hand-rolled, non-lazy implementation is simpler than pulling one in (e.g. [PinnedSectionOrderDialog]'s
  * 4-row section-order editor).
  *
  * Three increasingly subtle bugs came out of earlier versions of this, all eventually traced to
