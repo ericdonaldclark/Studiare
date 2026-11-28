@@ -1293,6 +1293,10 @@ class FlashcardViewModel(application: Application) : AndroidViewModel(applicatio
         audioServiceManager.updateAudioDelays(answerDelaySeconds, nextCardDelaySeconds)
     }
 
+    fun setAudioPromptSide(promptSide: CardSide, resolvedAutoByDeckSide: CardSide) {
+        audioServiceManager.setAudioPromptSide(promptSide, resolvedAutoByDeckSide)
+    }
+
     // --- Delegation to ImportExportManager ---
 
     fun getDecksAsString(decksToExport: List<DeckWithCards>, format: String, includeMetadata: Boolean = true): String {

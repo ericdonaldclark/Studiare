@@ -104,6 +104,12 @@ fun ListenModeShell(
     val state = viewModel.studyState ?: return
     val mainContentReady = rememberMainContentReady()
     var showEditDialog by remember { mutableStateOf(false) }
+    // Open by default (to Progress) on extended/desktop-sized displays, where the sheet docks
+    // as a standard, always-visible panel rather than a dismissible modal.
+    val isDesktopWidth = net.ericclark.studiare.LocalIsDesktopWidth.current
+    var sheetTab by androidx.compose.runtime.saveable.rememberSaveable {
+        mutableStateOf(if (isDesktopWidth) net.ericclark.studiare.screens.UI_Components.SessionSheetTab.PROGRESS else null)
+    }
 
     if (state.isComplete) {
         StudyCompletionScreen(navController = navController, viewModel = viewModel)
@@ -123,8 +129,9 @@ fun ListenModeShell(
                 viewModel = viewModel,
                 screenId = screenId,
                 title = {
-                    AdaptiveSessionTitle(state)
+                    AdaptiveSessionTitle(state, suppressTimerPill = sheetTab != null && net.ericclark.studiare.LocalIsDesktopWidth.current)
                 },
+                onOpenSessionSheet = { sheetTab = it },
                 navigationIcon = {
                     TooltipIconButton(description = getText(R.string.back), onClick = {
                         viewModel.endStudySession()
@@ -144,13 +151,23 @@ fun ListenModeShell(
             )
         }
     ) { padding ->
+        net.ericclark.studiare.screens.UI_Components.SessionSheetHost(
+            state = state,
+            viewModel = viewModel,
+            screenId = screenId,
+            sheetTab = sheetTab,
+            onTabChange = { sheetTab = it },
+            onDismiss = { sheetTab = null },
+            padding = padding
+        ) { innerPadding ->
         AnimatedVisibility(
             visible = mainContentReady,
             enter = fadeIn(),
             exit = ExitTransition.None,
             modifier = Modifier.fillMaxSize()
         ) {
-            content(state, padding)
+            content(state, innerPadding)
+        }
         }
     }
 }

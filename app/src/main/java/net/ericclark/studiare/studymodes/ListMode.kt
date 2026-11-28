@@ -108,6 +108,12 @@ fun FlashcardQuizScreen(
     val mainContentReady = rememberMainContentReady()
     var showEditDialog by remember { mutableStateOf(false) }
     val windowWidthSizeClass = LocalWindowWidthSizeClass.current
+    // Open by default (to Progress) on extended/desktop-sized displays, where the sheet docks
+    // as a standard, always-visible panel rather than a dismissible modal.
+    val isDesktopWidth = net.ericclark.studiare.LocalIsDesktopWidth.current
+    var sheetTab by androidx.compose.runtime.saveable.rememberSaveable {
+        mutableStateOf(if (isDesktopWidth) net.ericclark.studiare.screens.UI_Components.SessionSheetTab.PROGRESS else null)
+    }
 
     if (showEditDialog) {
         val currentCard = state.shuffledCards.getOrNull(state.currentCardIndex)
@@ -180,7 +186,8 @@ fun FlashcardQuizScreen(
             CustomTopAppBar(
                 viewModel = viewModel,
                 screenId = ShortcutScreen.LIST_QUIZ,
-                title = { AdaptiveSessionTitle(state) },
+                title = { AdaptiveSessionTitle(state, suppressTimerPill = sheetTab != null && net.ericclark.studiare.LocalIsDesktopWidth.current) },
+                onOpenSessionSheet = { sheetTab = it },
                 navigationIcon = {
                     TooltipIconButton(description = getText(R.string.back), onClick = {
                         viewModel.endStudySession()
@@ -199,6 +206,15 @@ fun FlashcardQuizScreen(
             )
         }
     ) { padding ->
+        net.ericclark.studiare.screens.UI_Components.SessionSheetHost(
+            state = state,
+            viewModel = viewModel,
+            screenId = ShortcutScreen.LIST_QUIZ,
+            sheetTab = sheetTab,
+            onTabChange = { sheetTab = it },
+            onDismiss = { sheetTab = null },
+            padding = padding
+        ) { padding ->
         Box(
             modifier = Modifier
                 .padding(padding)
@@ -333,6 +349,7 @@ fun FlashcardQuizScreen(
                 )
             }
             }
+        }
         }
     }
 }

@@ -12,6 +12,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Keyboard
 import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.RestartAlt
 import androidx.compose.material.icons.filled.SelectAll
@@ -87,6 +88,10 @@ fun RecentsScreen(
     val dimensions = LocalStudiareDimensions.current
     val context = androidx.compose.ui.platform.LocalContext.current
 
+    var shortcutsSheetOpen by remember { mutableStateOf(false) }
+    val hasHardwareKeyboard = androidx.compose.ui.platform.LocalConfiguration.current.keyboard == android.content.res.Configuration.KEYBOARD_QWERTY
+    val showShortcutsButton by viewModel.showShortcutsButton.collectAsState()
+
     var showRestartDialog by remember { mutableStateOf<ActiveSession?>(null) }
     var showDeleteDialog by remember { mutableStateOf<ActiveSession?>(null) }
     var showBulkRestartDialog by remember { mutableStateOf<List<ActiveSession>?>(null) }
@@ -125,10 +130,22 @@ fun RecentsScreen(
                             )
                         }
                     }
+                    // Replaces CustomTopAppBar's own standalone keyboard-shortcuts button
+                    // (suppressed below) - opens the shortcuts-only side sheet instead of the old
+                    // centered dialog, same gating (hardware keyboard attached, setting enabled).
+                    if (hasHardwareKeyboard && showShortcutsButton) {
+                        TooltipIconButton(
+                            description = getText(R.string.keyboard_shortcuts),
+                            onClick = { shortcutsSheetOpen = true }
+                        ) {
+                            Icon(Icons.Default.Keyboard, contentDescription = getText(R.string.keyboard_shortcuts))
+                        }
+                    }
                 },
                 title = {
                     Text(getText(R.string.recent_sessions), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
-                }
+                },
+                suppressShortcutsButton = true
             )
         },
         floatingActionButton = {
@@ -222,6 +239,13 @@ fun RecentsScreen(
             }
         }
     ) { padding ->
+        net.ericclark.studiare.screens.UI_Components.ShortcutsSheetHost(
+            viewModel = viewModel,
+            screenId = net.ericclark.studiare.ShortcutScreen.RECENTS,
+            isOpen = shortcutsSheetOpen,
+            onDismiss = { shortcutsSheetOpen = false },
+            padding = padding
+        ) { padding ->
         // Gated on mainContentReady (see the comment above) so this screen's first composition
         // happens after, not during, the NavHost transition into it — a plain fade covers its
         // otherwise-abrupt appearance.
@@ -323,6 +347,7 @@ fun RecentsScreen(
             }
         }
         }
+    }
     }
 
     showRestartDialog?.let { session ->

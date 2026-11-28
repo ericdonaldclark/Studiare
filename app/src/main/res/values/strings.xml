@@ -285,7 +285,6 @@
     <string name="tile_sort_last_accessed">Last Accessed</string>
     <string name="tile_sort_date_created">Date Created</string>
     <string name="tile_sort_progress">Progress</string>
-    <string name="sort_sessions_title">Sort &amp; Organize Sessions</string>
     <string name="sort_section_categories">Categories</string>
     <string name="sort_section_modes">Modes</string>
     <string name="sort_section_cards">Sessions</string>
@@ -626,6 +625,36 @@
 
     <!-- StudySessionDialog: Timed Session -->
     <string name="timed_session">Timed Session</string>
+    <string name="elapsed_time_label">elapsed</string>
+
+    <!-- Sort + Shortcuts side sheet (Study Hub, Decks, Set Manager) -->
+    <string name="sort_shortcuts_sheet_title">Sort &amp; Shortcuts</string>
+    <string name="sort_shortcuts_sheet_tab_sort">Sort</string>
+
+    <!-- Study session side sheet -->
+    <string name="session_sheet_title">Study Session</string>
+    <string name="session_sheet_tab_progress">Progress</string>
+    <string name="session_sheet_tab_options">Options</string>
+    <string name="session_sheet_tab_keyboard">Keyboard</string>
+    <string name="session_sheet_correct">Correct</string>
+    <string name="session_sheet_incorrect">Incorrect</string>
+    <string name="session_sheet_remaining">Remaining</string>
+    <string name="session_sheet_completed">Completed</string>
+    <string name="session_sheet_accuracy">accuracy</string>
+    <string name="session_sheet_avg_time_per_card">Avg. time / card</string>
+    <string name="session_sheet_deck_size">In this session</string>
+    <string name="session_sheet_known_in_deck">Known in deck</string>
+    <string name="session_sheet_first_try">First try / retried</string>
+    <string name="session_sheet_next_review">Next review</string>
+    <string name="session_sheet_words_solved">Words solved</string>
+    <string name="session_sheet_words_found">Words found</string>
+    <string name="session_sheet_pairs_matched">Pairs matched</string>
+    <string name="session_sheet_guesses_left">Guesses left</string>
+    <string name="session_sheet_difficulty_breakdown">Difficulty</string>
+    <string name="session_sheet_previous_card">Previous</string>
+    <string name="session_sheet_next_card">Next</string>
+    <string name="session_sheet_show_more">Show more</string>
+    <string name="session_sheet_show_less">Show less</string>
     <string name="timed_session_desc">Set a time limit for the session - it ends automatically when time runs out.</string>
     <string name="timed_session_duration">Duration</string>
     <string name="timed_session_duration_desc">How long the session has to be completed.</string>
@@ -763,7 +792,6 @@
     <string name="duplicate_item_format">• \"%1$s\" (%2$d)</string>
     <string name="remove_and_save">Remove &amp; Save</string>
     <string name="save_anyway">Save Anyway</string>
-    <string name="sort_decks">Sort Decks</string>
     <string name="sort">Sort</string>
 
     <!-- ExportDecksDialog -->
@@ -1301,8 +1329,8 @@
     <string name="unpin_all">Unpin All</string>
     <string name="unpin_all_title">Unpin everything?</string>
     <string name="unpin_all_desc">This will unpin every pinned deck, set, card, and saved session. This cannot be undone.</string>
-    <string name="sort_pinned_title">Sort Pinned</string>
     <string name="section_order_title">Section Order</string>
+    <string name="edit_section_order">Edit order</string>
     <string name="drag_to_reorder">Drag to reorder</string>
     <string name="move_up">Move up</string>
     <string name="move_down">Move down</string>

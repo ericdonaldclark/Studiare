@@ -432,16 +432,21 @@ fun DuplicateWarningDialog(
     }
 }
 
+/**
+ * The Decks/Set Manager screens' deck sort controls — the Sort tab's body in their shared
+ * [net.ericclark.studiare.screens.UI_Components.SortShortcutsSheetHost] sheet. Live-apply, not
+ * staged: picking a sort mode both applies it and closes the sheet immediately (matching this
+ * content's previous home in a standalone dialog, where picking an item closed it the same way);
+ * only the "show pinned first" switch doesn't close it, since it's not a one-shot pick.
+ */
 @Composable
-fun DeckSortDialog(
+fun DeckSortContent(
     currentSortMode: DeckSortMode,
     showPinnedFirst: Boolean,
     onDismiss: () -> Unit,
     onSortModeSelected: (DeckSortMode) -> Unit,
     onShowPinnedFirstChange: (Boolean) -> Unit
 ) {
-    val dimensions = LocalStudiareDimensions.current
-
     // Filter out the difficulty sort options for Decks
     val options = listOf(
         DeckSortMode.A_TO_Z,
@@ -452,53 +457,27 @@ fun DeckSortDialog(
         DeckSortMode.DATE_MODIFIED_OLD_TO_NEW
     )
 
-    AnimatedDialog(onDismissRequest = onDismiss, properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)) {
-        Card(
-            shape = RoundedCornerShape(dimensions.cornerRadiusDialog), // M3 Expressive Dialog Shape
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
-            modifier = Modifier
-                .widthIn(min = 280.dp, max = 560.dp)
-                .heightIn(max = 600.dp)
+    Column(modifier = Modifier.fillMaxSize()) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)
         ) {
-            Column(modifier = Modifier.padding(24.dp)) {
-                Text(
-                    text = getText(R.string.sort_decks),
-                    style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.padding(bottom = 16.dp)
+            Text(getText(R.string.show_pinned_first), modifier = Modifier.weight(1f))
+            StudiareSwitch(checked = showPinnedFirst, onCheckedChange = onShowPinnedFirstChange)
+        }
+        LazyColumn(
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.weight(1f, fill = false)
+        ) {
+            items(options) { mode ->
+                SelectableDialogItem(
+                    text = mode.asString(),
+                    isSelected = mode == currentSortMode,
+                    onClick = {
+                        onSortModeSelected(mode)
+                        onDismiss()
+                    }
                 )
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)
-                ) {
-                    Text(getText(R.string.show_pinned_first), modifier = Modifier.weight(1f))
-                    StudiareSwitch(checked = showPinnedFirst, onCheckedChange = onShowPinnedFirstChange)
-                }
-                LazyColumn(
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier.weight(1f, fill = false)
-                ) {
-                    items(options) { mode ->
-                        SelectableDialogItem(
-                            text = mode.asString(),
-                            isSelected = mode == currentSortMode,
-                            onClick = {
-                                onSortModeSelected(mode)
-                                onDismiss()
-                            }
-                        )
-                    }
-                }
-                Spacer(modifier = Modifier.height(24.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End
-                ) {
-                    TextButton(onClick = onDismiss, shape = RoundedCornerShape(dimensions.cornerRadiusButton)) {
-                        Text(getText(R.string.cancel))
-                    }
-                }
             }
         }
     }

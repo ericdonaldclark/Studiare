@@ -262,7 +262,8 @@ fun UnsavedChangesDialog(onDismiss: () -> Unit, onDiscard: () -> Unit, onSave: (
 }
 
 /**
- * Same warning [DeckSettingsDialog]'s "Clear Review Data" confirms, scoped down to the card(s)
+ * Same warning [net.ericclark.studiare.screens.UI_Components.DeckSettingsContent]'s "Clear Review
+ * Data" confirms, scoped down to the card(s)
  * this was invoked on — the per-card overflow menu's and multi-select's own "Clear Data" action,
  * in both deck editors. [cardCount] only changes the message's wording (singular/plural); it
  * never resets anything outside the specific card id(s) the caller already captured before

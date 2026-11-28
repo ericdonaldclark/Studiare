@@ -38,7 +38,7 @@ private data class PendingApply(val fields: Set<DeckOptionField>, val scope: Dec
  * Settings → Deck Options: configure Card Order, Default Prompt Side, Deck Language, and Text
  * Normalization, each independently applicable (its own scrollable row of "apply to" buttons
  * right below it), plus a bottom section that applies all four together. Reuses the same controls
- * [net.ericclark.studiare.screens.UI_Components.DeckSettingsDialog] already renders per-deck
+ * [net.ericclark.studiare.screens.UI_Components.DeckSettingsContent] already renders per-deck
  * ([ExpressiveDropdownMenuField], [LanguageDropdown], the shared
  * [net.ericclark.studiare.screens.Dialogs.TextNormalizationDialog]). "Future" scopes merge into
  * the stored [DefaultDeckOptions] via [FlashcardViewModel.setDefaultDeckOptions]; "current"/
@@ -192,7 +192,7 @@ internal fun DeckOptionsCategoryContent(viewModel: FlashcardViewModel, snackbarH
             shape = RoundedCornerShape(dimensions.cornerRadiusButton)
         ) {
             // Text centered on the full button width, icon pinned to the trailing edge — matches
-            // DeckSettingsDialog's own Text Normalization/Template Editor buttons, which use this
+            // DeckSettingsContent's own Text Normalization/Template Editor buttons, which use this
             // exact layout to signal "opens in its own dialog" without crowding the label.
             Box(modifier = Modifier.fillMaxWidth()) {
                 Text(getText(R.string.case_normalization), modifier = Modifier.align(Alignment.Center))

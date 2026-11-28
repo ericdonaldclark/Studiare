@@ -93,6 +93,12 @@ fun AnagramScreen(
     ApplyAutoAdvance(state, viewModel)
     val inputController = net.ericclark.studiare.components.rememberLetterInputController()
     var showEditDialog by remember { mutableStateOf(false) }
+    // Open by default (to Progress) on extended/desktop-sized displays, where the sheet docks
+    // as a standard, always-visible panel rather than a dismissible modal.
+    val isDesktopWidth = net.ericclark.studiare.LocalIsDesktopWidth.current
+    var sheetTab by androidx.compose.runtime.saveable.rememberSaveable {
+        mutableStateOf(if (isDesktopWidth) net.ericclark.studiare.screens.UI_Components.SessionSheetTab.PROGRESS else null)
+    }
 
     if (showEditDialog) {
         val currentCard = state.shuffledCards.getOrNull(state.currentCardIndex)
@@ -130,7 +136,8 @@ fun AnagramScreen(
             CustomTopAppBar(
                 viewModel = viewModel,
                 screenId = ShortcutScreen.ANAGRAM,
-                title = { AdaptiveSessionTitle(state) },
+                title = { AdaptiveSessionTitle(state, suppressTimerPill = sheetTab != null && net.ericclark.studiare.LocalIsDesktopWidth.current) },
+                onOpenSessionSheet = { sheetTab = it },
                 navigationIcon = {
                     TooltipIconButton(description = getText(R.string.back), onClick = {
                         viewModel.endStudySession()
@@ -148,6 +155,15 @@ fun AnagramScreen(
             )
         }
     ) { padding ->
+        net.ericclark.studiare.screens.UI_Components.SessionSheetHost(
+            state = state,
+            viewModel = viewModel,
+            screenId = ShortcutScreen.ANAGRAM,
+            sheetTab = sheetTab,
+            onTabChange = { sheetTab = it },
+            onDismiss = { sheetTab = null },
+            padding = padding
+        ) { padding ->
         val rootFocusRequester = remember { FocusRequester() }
 
         AnimatedVisibility(
@@ -200,6 +216,7 @@ fun AnagramScreen(
             } else {
                 PortraitAnagramLayout(state = state, viewModel = viewModel, inputController = inputController)
             }
+        }
         }
         }
     }

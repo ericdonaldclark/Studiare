@@ -411,7 +411,19 @@ class StudySessionManager(
         scheduleTimeoutCheck()
     }
 
-    fun endStudySession() { cancelTimeoutCheck(); setStudyState(null) }
+    /**
+     * Leaves the active session in memory (just clears the ViewModel's current-session pointer -
+     * the row itself stays in the DB, same as it always has). [pauseSessionClock] MUST run first:
+     * every back/navigation-away handler in the study screens calls this *before*
+     * `navController.popBackStack()`, which is what eventually tears down [StudySessionScreenLifecycle]'s
+     * `DisposableEffect` and fires its own `onDispose { pauseSessionClock() }` - by then `getStudyState()`
+     * would already return null from the `setStudyState(null)` below, so that later call would silently
+     * no-op before folding or persisting anything. Confirmed via logging: every back-out-and-resume
+     * cycle showed `accumulatedTimeSeconds` stuck at 0 forever, with no `pauseSessionClock` log line
+     * appearing at all between resumes - this is why. Folding it here, before the state is nulled,
+     * is what actually gets the elapsed run banked and saved to the DB.
+     */
+    fun endStudySession() { pauseSessionClock(); cancelTimeoutCheck(); setStudyState(null) }
 
     /** Folds whatever's run since [StudyState.sessionResumedAt] into [StudyState.accumulatedTimeSeconds]
      * and stops Time Tracking's clock - called both when the whole app backgrounds (the

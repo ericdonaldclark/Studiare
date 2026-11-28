@@ -119,37 +119,7 @@ internal fun SessionTileCarousel(
 
         // Scroll Indicator
         if (sessions.size > 1) {
-            val currentIndex by rememberCarouselIndicatorIndex(listState)
-
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(top = dimensions.paddingSmall),
-                horizontalArrangement = Arrangement.Center,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                sessions.indices.forEach { index ->
-                    val isSelected = index == currentIndex
-                    val width by androidx.compose.animation.core.animateDpAsState(
-                        targetValue = if (isSelected) 24.dp else 8.dp,
-                        animationSpec = spring(
-                            dampingRatio = Spring.DampingRatioMediumBouncy,
-                            stiffness = Spring.StiffnessLow
-                        ),
-                        label = "dotWidth"
-                    )
-                    val color by androidx.compose.animation.animateColorAsState(
-                        targetValue = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f),
-                        label = "dotColor"
-                    )
-
-                    Box(
-                        modifier = Modifier
-                            .padding(horizontal = 4.dp)
-                            .size(width = width, height = 8.dp)
-                            .clip(CircleShape)
-                            .background(color)
-                    )
-                }
-            }
+            CarouselDotsIndicator(sessions.size, listState, Modifier.padding(top = dimensions.paddingSmall))
         }
     }
 }
@@ -271,37 +241,7 @@ internal fun PresetCarousel(
         }
 
         if (presets.size > 1) {
-            val currentIndex by rememberCarouselIndicatorIndex(listState)
-
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(top = dimensions.paddingSmall),
-                horizontalArrangement = Arrangement.Center,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                presets.indices.forEach { index ->
-                    val isSelected = index == currentIndex
-                    val width by androidx.compose.animation.core.animateDpAsState(
-                        targetValue = if (isSelected) 24.dp else 8.dp,
-                        animationSpec = spring(
-                            dampingRatio = Spring.DampingRatioMediumBouncy,
-                            stiffness = Spring.StiffnessLow
-                        ),
-                        label = "dotWidth"
-                    )
-                    val color by androidx.compose.animation.animateColorAsState(
-                        targetValue = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f),
-                        label = "dotColor"
-                    )
-
-                    Box(
-                        modifier = Modifier
-                            .padding(horizontal = 4.dp)
-                            .size(width = width, height = 8.dp)
-                            .clip(CircleShape)
-                            .background(color)
-                    )
-                }
-            }
+            CarouselDotsIndicator(presets.size, listState, Modifier.padding(top = dimensions.paddingSmall))
         }
     }
 }

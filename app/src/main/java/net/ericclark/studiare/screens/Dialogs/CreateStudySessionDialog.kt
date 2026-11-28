@@ -542,7 +542,7 @@ fun CreateStudySessionDialog(
 
     AnimatedDialog(onDismissRequest = onDismiss, properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)) {
         Card(
-            modifier = Modifier.widthIn(min = 280.dp, max = 560.dp).fillMaxHeight(0.9f),
+            modifier = Modifier.widthIn(min = 280.dp, max = 560.dp).fillMaxHeight(0.95f),
             shape = RoundedCornerShape(dimensions.cornerRadiusMedium),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
             elevation = CardDefaults.cardElevation(defaultElevation = dimensions.cardElevation)

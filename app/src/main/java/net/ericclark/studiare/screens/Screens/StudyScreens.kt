@@ -56,12 +56,10 @@ import net.ericclark.studiare.screens.UI_Components.CategoryPickerContent
 import net.ericclark.studiare.screens.UI_Components.categoryIcon
 import net.ericclark.studiare.screens.UI_Components.PresetCarousel
 import net.ericclark.studiare.screens.UI_Components.SessionSection
-import net.ericclark.studiare.screens.UI_Components.SessionSortDialog
 import net.ericclark.studiare.screens.UI_Components.modeOrderToStoredString
 import net.ericclark.studiare.screens.UI_Components.parseModeOrder
 import net.ericclark.studiare.screens.UI_Components.SessionTileCarousel
 import net.ericclark.studiare.screens.UI_Components.SessionTileGrid
-import net.ericclark.studiare.screens.UI_Components.StudyHubSortButton
 import net.ericclark.studiare.screens.UI_Components.sortedCategories
 import net.ericclark.studiare.screens.UI_Components.sortedSections
 import net.ericclark.studiare.screens.UI_Components.sortedTiles
@@ -181,7 +179,7 @@ fun StudyModeSelectionScreen(
     // Dialog States
     var showRestartDialog by remember { mutableStateOf<ActiveSession?>(null) }
     var showDeleteDialog by remember { mutableStateOf<ActiveSession?>(null) }
-    var showSortDialog by remember { mutableStateOf(false) }
+    var studyHubSheetTab by remember { mutableStateOf<net.ericclark.studiare.screens.UI_Components.SortShortcutsSheetTab?>(null) }
     var showUnpinPresetDialog by remember { mutableStateOf<SessionPreset?>(null) }
 
     var expandedStates by remember { mutableStateOf(mapOf<String, Boolean>()) }
@@ -275,8 +273,10 @@ fun StudyModeSelectionScreen(
     }
 
 
-    if (showSortDialog) {
-        SessionSortDialog(
+    // The Sort tab's content for the Study Hub side sheet below - built here (rather than inline
+    // in that call) since it closes over all the sort/grouping state collected above.
+    val studyHubSortContent: @Composable () -> Unit = {
+        net.ericclark.studiare.screens.UI_Components.SessionSortContent(
             initialGroupByCategory = groupByCategory,
             initialGroupByMode = groupByMode,
             initialCategorySortMode = categorySortMode,
@@ -305,9 +305,8 @@ fun StudyModeSelectionScreen(
                 viewModel.setPresetPosition(newPresetPosition)
                 viewModel.setUseCustomModeOrder(newUseCustomModeOrder)
                 viewModel.setCustomModeOrder(modeOrderToStoredString(newCustomModeOrder))
-                showSortDialog = false
             },
-            onDismiss = { showSortDialog = false }
+            onDismiss = { studyHubSheetTab = null }
         )
     }
 
@@ -372,10 +371,11 @@ fun StudyModeSelectionScreen(
             onChromeChanged(PaneChrome(
                 title = { Text(deck.deck.name, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                 actions = {
-                    if (activeSessions.isNotEmpty()) {
-                        StudyHubSortButton(onClick = { showSortDialog = true })
-                    }
+                    net.ericclark.studiare.screens.UI_Components.SortShortcutsSheetButton(
+                        onClick = { studyHubSheetTab = net.ericclark.studiare.screens.UI_Components.SortShortcutsSheetTab.SORT }
+                    )
                 },
+                suppressShortcutsButton = true,
                 screenId = ShortcutScreen.STUDY_HUB
             ))
         }
@@ -901,7 +901,17 @@ fun StudyModeSelectionScreen(
 
     if (isPane) {
         // Title lives in the shared app bar (via PaneChrome), not in the pane.
-        Box(Modifier.fillMaxSize()) { paneContent(PaddingValues(0.dp)) }
+        Box(Modifier.fillMaxSize()) {
+            net.ericclark.studiare.screens.UI_Components.SortShortcutsSheetHost(
+                viewModel = viewModel,
+                screenId = ShortcutScreen.STUDY_HUB,
+                sheetTab = studyHubSheetTab,
+                onTabChange = { studyHubSheetTab = it },
+                onDismiss = { studyHubSheetTab = null },
+                padding = PaddingValues(0.dp),
+                sortContent = studyHubSortContent
+            ) { innerPadding -> paneContent(innerPadding) }
+        }
     } else {
         Scaffold(
             containerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
@@ -918,10 +928,11 @@ fun StudyModeSelectionScreen(
                             }
                         },
                         actions = {
-                            if (activeSessions.isNotEmpty()) {
-                                StudyHubSortButton(onClick = { showSortDialog = true })
-                            }
-                        }
+                            net.ericclark.studiare.screens.UI_Components.SortShortcutsSheetButton(
+                                onClick = { studyHubSheetTab = net.ericclark.studiare.screens.UI_Components.SortShortcutsSheetTab.SORT }
+                            )
+                        },
+                        suppressShortcutsButton = true
                     )
                     BreadcrumbsBar(
                         currentDeck = deck.deck,
@@ -936,7 +947,17 @@ fun StudyModeSelectionScreen(
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                 }
             }
-        ) { padding -> paneContent(padding) }
+        ) { padding ->
+            net.ericclark.studiare.screens.UI_Components.SortShortcutsSheetHost(
+                viewModel = viewModel,
+                screenId = ShortcutScreen.STUDY_HUB,
+                sheetTab = studyHubSheetTab,
+                onTabChange = { studyHubSheetTab = it },
+                onDismiss = { studyHubSheetTab = null },
+                padding = padding,
+                sortContent = studyHubSortContent
+            ) { innerPadding -> paneContent(innerPadding) }
+        }
     }
 }
 
